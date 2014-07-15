@@ -106,6 +106,7 @@ int main(int argc, char * argv[])
     fprintf(stderr, " nTotal= %lld \n", nFirst + nSecond);
   }
 
+#if 0
   const int nPtcl = nFirstLocal + nSecondLocal;
   RendererData rData(nPtcl);
   for (int i = 0; i < nFirstLocal; i++)
@@ -138,6 +139,25 @@ int main(int argc, char * argv[])
           data.secondVel[i].y*data.secondVel[i].y +
           data.secondVel[i].z*data.secondVel[i].z);
   }
+#else
+  const int nPtcl = nSecondLocal;
+  RendererData rData(nPtcl);
+  for (int i = 0; i < nSecondLocal; i++)
+  {
+    const int ip = i;
+    rData.posx(ip) = data.secondPos[i].x;
+    rData.posy(ip) = data.secondPos[i].y;
+    rData.posz(ip) = data.secondPos[i].z;
+    rData.ID  (ip) = data.secondID[i];
+    rData.type(ip) = 1;
+    rData.attribute(RendererData::MASS, ip) = data.secondPos[i].w;
+    rData.attribute(RendererData::VEL,  ip) =
+      std::sqrt(
+          data.secondVel[i].x*data.secondVel[i].x +
+          data.secondVel[i].y*data.secondVel[i].y +
+          data.secondVel[i].z*data.secondVel[i].z);
+  }
+#endif
   rData.computeMinMax();
 
   initAppRenderer(argc, argv, rData);
