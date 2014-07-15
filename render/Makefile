@@ -1,16 +1,16 @@
-CXX = g++
-CC  = gcc
-LD  = g++
-F90  = gfortran
+CXX = mpic++
+CC  = mpicc
+LD  = mpic++
+F90  = mpif90
 
 CUDA_TK  = /usr/local/cuda
-CXXFLAGS = -O3 -g -Wall -openmp
+CXXFLAGS = -O3 -g -Wall -openmp -std=c++11
 CFLAGS = -O3 -g -Wall
 
-CXXFLAGS=-I ./vfx
+INCLUDE_FLAGS=-I ./vfx
 LDFLAGS = -lGL -lGLU -lglut
 
-OBJ = main.o renderloop.o anyoption.cpp
+OBJ = main.o renderloop.o anyoption.o
 
 PROG= renderer
 
