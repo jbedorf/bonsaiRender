@@ -80,9 +80,31 @@ int main(int argc, char * argv[])
 #undef ADDUSAGE
   }
 
+
+  ReadTipsy data(
+      fileName, 
+      rank, nranks,
+      nDomains, 
+      reduceFactor,
+      reduceFactor);
+
+  long long nFirstLocal = data.firstID.size();
+  long long nSecondLocal = data.secondID.size();
+
+  long long nFirst, nSecond;
+  MPI_Allreduce(&nFirstLocal, &nFirst, 1, MPI_LONG, MPI_SUM, comm);
+  MPI_Allreduce(&nSecondLocal, &nSecond, 1, MPI_LONG, MPI_SUM, comm);
+
+  if (rank == 0)
+  {
+    fprintf(stderr, " nFirst = %lld \n", nFirst);
+    fprintf(stderr, " nSecond= %lld \n", nSecond);
+    fprintf(stderr, " nTotal= %lld \n", nFirst + nSecond);
+  }
+
   initGL(argc, argv, fullScreenMode.c_str(), stereo);  
   fprintf(stderr, " -- Done -- \n");
-  sleep(1000);
+  while(1) {}
   return 0;
 }
 
