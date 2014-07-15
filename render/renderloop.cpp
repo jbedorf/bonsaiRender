@@ -308,18 +308,20 @@ void glPrintf(float x, float y, const char* format, ...)
 }
 
 // reducing to improve perf
-#define MAX_PARTICLES 700000
+#define MAX_PARTICLES 10000000
 
-#if 0
-class BonsaiDemo
+class Demo
 {
 public:
-  BonsaiDemo(octree *tree, octree::IterationData &idata) 
-    : m_tree(tree), m_idata(idata), iterationsRemaining(true),
+  Demo(RendererData &data) 
+    :  m_idata(data), iterationsRemaining(true),
 //       m_renderer(tree->localTree.n + tree->localTree.n_dust),
-      m_renderer(tree->localTree.n + tree->localTree.n_dust, MAX_PARTICLES),
-      //m_displayMode(ParticleRenderer::PARTICLE_SPRITES_COLOR),
+      m_renderer(data.n()),
+#if 1
+      m_displayMode(ParticleRenderer::PARTICLE_SPRITES_COLOR),
+#else
 	    m_displayMode(SmokeRenderer::VOLUMETRIC),
+#endif
       m_ox(0), m_oy(0), m_buttonState(0), m_inertia(0.2f),
       m_paused(false),
       m_renderingEnabled(true),
@@ -341,7 +343,7 @@ public:
 	    m_stereoEnabled(false), //SV TODO Must be false, never make it true
       m_supernova(false),
       m_overBright(1.0f),
-      m_params(m_renderer.getParams()),
+      m_params(NULL),
       m_brightFreq(100),
       m_displayBodiesSec(true),
       m_cameraRollHome(0.0f),
@@ -389,24 +391,30 @@ public:
     StartTimer();
   }
 
-  ~BonsaiDemo() {
+  ~Demo() {
     m_tree->iterate_teardown(m_idata);
     delete m_tree;
     delete [] m_particleColors;
   }
 
   void cycleDisplayMode() {
-    //m_displayMode = (ParticleRenderer::DisplayMode) ((m_displayMode + 1) % ParticleRenderer::PARTICLE_NUM_MODES);
+#if 0
+    m_displayMode = (ParticleRenderer::DisplayMode) ((m_displayMode + 1) % ParticleRenderer::PARTICLE_NUM_MODES);
+#else
 	  m_displayMode = (SmokeRenderer::DisplayMode) ((m_displayMode + 1) % SmokeRenderer::NUM_MODES);
+#endif
 	  m_renderer.setDisplayMode(m_displayMode);
+#if 0
       if (m_displayMode == SmokeRenderer::SPRITES) {
         //m_renderer.setAlpha(0.1f);
       } else {
         //m_renderer.setAlpha(1.0f);
       }
+#else
     // MJH todo: add body color support and remove this
-    //if (ParticleRenderer::PARTICLE_SPRITES_COLOR == m_displayMode)
-    //  cycleDisplayMode();
+    if (ParticleRenderer::PARTICLE_SPRITES_COLOR == m_displayMode)
+      cycleDisplayMode();
+#endif
   }
 
   void toggleRendering() { m_renderingEnabled = !m_renderingEnabled; }
@@ -1385,14 +1393,16 @@ public:
 
   }
 
-  octree *m_tree;
-  octree::IterationData &m_idata;
+  RendererData &m_idata;
   bool iterationsRemaining;
 
-  //ParticleRenderer m_renderer;
-  //ParticleRenderer::DisplayMode m_displayMode; 
+#if 1
+  ParticleRenderer m_renderer;
+  ParticleRenderer::DisplayMode m_displayMode; 
+#else
   SmokeRenderer m_renderer;
   SmokeRenderer ::DisplayMode m_displayMode; 
+#endif
   int m_octreeMinDepth;
   int m_octreeMaxDepth;
 
@@ -1520,8 +1530,7 @@ public:
   }
 };
 
-BonsaiDemo *theDemo = NULL;
-#endif
+Demo *theDemo = NULL;
 
 void onexit() {
 //  if (theDemo) delete theDemo;
@@ -1887,14 +1896,14 @@ void initGL(int argc, char** argv, const char *fullScreenMode, bool &stereo)
 }
 
 
-#if 0
-void initAppRenderer(int argc, char** argv, octree *tree, 
-                     octree::IterationData &idata, bool showFPS, bool stereo) {
+void initAppRenderer(int argc, char** argv, 
+    RendererData &data, bool showFPS, bool stereo) 
+{
+  assert(data.n < MAX_PARTICLES)
   displayFps = showFPS;
   //initGL(argc, argv);
-  theDemo = new BonsaiDemo(tree, idata);
+  theDemo = new Demo(data);
   if (stereo)
     theDemo->toggleStereo(); //SV assuming stereo is set to disable by default.
   glutMainLoop();
 }
-#endif
