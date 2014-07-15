@@ -9,8 +9,8 @@
 *
 */
 
-#include "render_particles.h"
 #include <GL/glew.h>
+#include "render_particles.h"
 
 //#include <cuda_runtime.h>
 //#include <cuda_gl_interop.h>
@@ -54,6 +54,7 @@ ParticleRenderer::ParticleRenderer()
   m_bFp64Positions(false)
 {
   _initGL();
+  initParams();
 }
 
 ParticleRenderer::~ParticleRenderer()
@@ -383,4 +384,11 @@ void ParticleRenderer::_createTexture(int resolution)
   glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, resolution, resolution, 0, 
     GL_RGBA, GL_UNSIGNED_BYTE, data);
 
+}
+
+void ParticleRenderer::initParams()
+{
+    m_params = new ParamListGL("render_params");
+
+    m_params->AddParam(new Param<float>("test", m_testParam, 0.0f, 1.0f, 0.01f, &m_testParam));
 }

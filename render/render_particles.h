@@ -12,6 +12,7 @@
 #ifndef __RENDER_PARTICLES__
 #define __RENDER_PARTICLES__
 
+#include "paramgl.h"
 void checkGLErrors(const char *s);
 
 class ParticleRenderer
@@ -40,11 +41,13 @@ public:
     void setSpriteSize(float size) { m_spriteSize = size; }
 
     void resetPBO();
+    ParamListGL *getParams() { return m_params; }
 
 protected: // methods
     void _initGL();
     void _createTexture(int resolution);
     void _drawPoints(bool color = false);
+    void initParams();
     
 
 protected: // data
@@ -67,6 +70,8 @@ protected: // data
     float m_baseColor[4];
 
     bool m_bFp64Positions;
+    ParamListGL         *m_params;
+    float m_testParam;
 };
 
 #endif //__ RENDER_PARTICLES__

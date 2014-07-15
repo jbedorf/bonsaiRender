@@ -84,7 +84,8 @@ public:
       m_buttonState(0), 
       m_inertia(0.1f),
       m_paused(false), 
-      m_displayBoxes(false)
+      m_displayBoxes(false),
+      m_params(m_renderer.getParams())
   {
     m_windowDims = make_int2(720, 480);
     m_cameraTrans = make_float3(0, -2, -10);
@@ -114,6 +115,7 @@ public:
 
   void togglePause() { m_paused = !m_paused; }
   void toggleBoxes() { m_displayBoxes = !m_displayBoxes; }
+  void toggleSliders() { m_displaySliders = !m_displaySliders; }                        
   void incrementOctreeDisplayLevel(int inc) { 
     m_octreeDisplayLevel += inc;
     m_octreeDisplayLevel = std::max(0, std::min(m_octreeDisplayLevel, 30));
@@ -148,6 +150,10 @@ public:
 //      displayOctree();  
     }
 
+    if (m_displaySliders)
+    {
+      m_params->Render(0, 0);    
+    }
     m_renderer.display(m_displayMode);
   }
 
@@ -179,6 +185,12 @@ public:
   {
     float dx = (float)(x - m_ox);
     float dy = (float)(y - m_oy);
+
+    if (m_displaySliders)
+    {
+      if (m_params->Motion(x, y))                                                       
+        return;                                                                         
+    }       
 
     if (m_buttonState == 3) {
       // left+middle = zoom
@@ -318,6 +330,8 @@ private:
 
   bool m_paused;
   bool m_displayBoxes;
+  bool m_displaySliders;
+  ParamListGL *m_params;
 };
 
 Demo *theDemo = NULL;
@@ -393,6 +407,11 @@ void key(unsigned char key, int /*x*/, int /*y*/)
   case '.':
   case '>':
     theDemo->incrementOctreeDisplayLevel(+1);
+    break;
+  case 'h':
+  case 'H':
+    theDemo->toggleSliders();
+//    m_enableStats = !m_displaySliders;
     break;
   }
 
