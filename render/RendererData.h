@@ -4,15 +4,15 @@ struct float3 { float x, y, z; };
 struct float4 { float x,y,z,w; };
 struct int2   { int x, y; };
 
-static int2 make_int2(int _x, int _y) 
+inline static int2 make_int2(int _x, int _y) 
 { 
   int2 v; v.x = _x; v.y = _y;; return v;
 }
-static float3 make_float3(float x, float y, float z)
+inline static float3 make_float3(float x, float y, float z)
 {
   float3 v; v.x = x; v.y = y; v.z=z; return v;
 }
-static float4 make_float4(float x, float y, float z, float w)
+inline static float4 make_float4(float x, float y, float z, float w)
 {
   float4 v; v.x = x; v.y = y; v.z=z; v.w=w; return v;
 }

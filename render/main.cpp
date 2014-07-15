@@ -108,23 +108,39 @@ int main(int argc, char * argv[])
 
   const int nPtcl = nFirstLocal + nSecondLocal;
   RendererData rData(nPtcl);
-  for (int i = 0; i < nPtcl; i++)
+  for (int i = 0; i < nFirstLocal; i++)
   {
-    rData.posx(i) = data.firstPos[i].x;
-    rData.posy(i) = data.firstPos[i].y;
-    rData.posz(i) = data.firstPos[i].z;
-    rData.ID  (i) = data.firstID[i];
-    rData.type(i) = i < nFirstLocal ? 0 : 1;
-    rData.attribute(RendererData::MASS, i) = data.firstPos[i].w;
-    rData.attribute(RendererData::VEL,  i) =
+    const int ip = i;
+    rData.posx(ip) = data.firstPos[i].x;
+    rData.posy(ip) = data.firstPos[i].y;
+    rData.posz(ip) = data.firstPos[i].z;
+    rData.ID  (ip) = data.firstID[i];
+    rData.type(ip) = 0;
+    rData.attribute(RendererData::MASS, ip) = data.firstPos[i].w;
+    rData.attribute(RendererData::VEL,  ip) =
       std::sqrt(
           data.firstVel[i].x*data.firstVel[i].x +
           data.firstVel[i].y*data.firstVel[i].y +
           data.firstVel[i].z*data.firstVel[i].z);
   }
+  for (int i = 0; i < nSecondLocal; i++)
+  {
+    const int ip = i + nFirstLocal;
+    rData.posx(ip) = data.secondPos[i].x;
+    rData.posy(ip) = data.secondPos[i].y;
+    rData.posz(ip) = data.secondPos[i].z;
+    rData.ID  (ip) = data.secondID[i];
+    rData.type(ip) = 1;
+    rData.attribute(RendererData::MASS, ip) = data.secondPos[i].w;
+    rData.attribute(RendererData::VEL,  ip) =
+      std::sqrt(
+          data.secondVel[i].x*data.secondVel[i].x +
+          data.secondVel[i].y*data.secondVel[i].y +
+          data.secondVel[i].z*data.secondVel[i].z);
+  }
 
-  initGL(argc, argv, fullScreenMode.c_str(), stereo);  
-  initAppRenderer(argc, argv, rData, displayFPS, stereo);
+ // initGL(argc, argv, fullScreenMode.c_str(), stereo);  
+//  initAppRenderer(argc, argv, rData, displayFPS, stereo);
 
   fprintf(stderr, " -- Done -- \n");
   while(1) {}

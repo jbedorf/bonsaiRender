@@ -310,6 +310,7 @@ void glPrintf(float x, float y, const char* format, ...)
 // reducing to improve perf
 #define MAX_PARTICLES 10000000
 
+#if 0
 class Demo
 {
 public:
@@ -1531,6 +1532,7 @@ public:
 };
 
 Demo *theDemo = NULL;
+#endif
 
 void onexit() {
 //  if (theDemo) delete theDemo;
@@ -1896,6 +1898,7 @@ void initGL(int argc, char** argv, const char *fullScreenMode, bool &stereo)
 }
 
 
+#if 0
 void initAppRenderer(int argc, char** argv, 
     RendererData &data, bool showFPS, bool stereo) 
 {
@@ -1907,3 +1910,4 @@ void initAppRenderer(int argc, char** argv,
     theDemo->toggleStereo(); //SV assuming stereo is set to disable by default.
   glutMainLoop();
 }
+#endif
