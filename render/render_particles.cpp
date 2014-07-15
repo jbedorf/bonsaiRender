@@ -54,6 +54,7 @@ ParticleRenderer::ParticleRenderer()
   m_bFp64Positions(false)
 {
   _initGL();
+  m_testParam = 0.5;
   initParams();
 }
 

@@ -23,6 +23,61 @@
 #include "renderloop.h"
 #include "render_particles.h"
 #include "vector_math.h"
+#include <cstdarg>
+
+
+#include <sys/time.h>
+static inline double rtc(void)
+{
+  struct timeval Tvalue;
+  double etime;
+  struct timezone dummy;
+
+  gettimeofday(&Tvalue,&dummy);
+  etime =  (double) Tvalue.tv_sec +
+    1.e-6*((double) Tvalue.tv_usec);
+  return etime;
+}
+
+unsigned long long fpsCount;
+double timeBegin;
+
+void beginDeviceCoords(void)
+{
+    glMatrixMode(GL_PROJECTION);
+    glPushMatrix();
+    glLoadIdentity();
+    glOrtho(0, glutGet(GLUT_WINDOW_WIDTH), 0, glutGet(GLUT_WINDOW_HEIGHT), -1, 1);
+
+    glMatrixMode(GL_MODELVIEW);
+    glPushMatrix();
+    glLoadIdentity();
+}
+
+void glutStrokePrint(float x, float y, const char *s, void *font)
+{
+  glPushMatrix();
+  glTranslatef(x, y, 0.0f);
+  int len = (int) strlen(s);
+  for (int i = 0; i < len; i++) {
+    glutStrokeCharacter(font, s[i]);
+  }
+  glPopMatrix();
+}
+
+
+
+void glPrintf(float x, float y, const char* format, ...)                                
+{                                                                                       
+  //void *font = GLUT_STROKE_ROMAN;                                                     
+  void *font = GLUT_STROKE_MONO_ROMAN;                                                  
+  char buffer[256];                                                                     
+  va_list args;                                                                         
+  va_start (args, format);                                                              
+  vsnprintf (buffer, 255, format, args);                                                
+  glutStrokePrint(x, y, buffer, font);                                                  
+  va_end(args);                                                                         
+} 
 
 void drawWireBox(float3 boxMin, float3 boxMax) 
 {
@@ -85,6 +140,8 @@ public:
       m_inertia(0.1f),
       m_paused(false), 
       m_displayBoxes(false),
+      m_displayFps(true),
+      m_displaySliders(true),
       m_params(m_renderer.getParams())
   {
     m_windowDims = make_int2(720, 480);
@@ -116,6 +173,7 @@ public:
   void togglePause() { m_paused = !m_paused; }
   void toggleBoxes() { m_displayBoxes = !m_displayBoxes; }
   void toggleSliders() { m_displaySliders = !m_displaySliders; }                        
+  void toggleFps() { m_displayFps = !m_displayFps; }                        
   void incrementOctreeDisplayLevel(int inc) { 
     m_octreeDisplayLevel += inc;
     m_octreeDisplayLevel = std::max(0, std::min(m_octreeDisplayLevel, 30));
@@ -130,8 +188,72 @@ public:
 #endif
   }
 
+  void drawStats()
+  {
+#if 0
+    if (!m_enableStats)
+      return;
+#endif
+
+    const float fps = fpsCount/(rtc() - timeBegin);
+    if (fpsCount > 10*fps)
+    {
+      fpsCount = 0;
+      timeBegin = rtc();
+    }
+
+//    int bodies = m_tree->localTree.n;
+//    int dust = m_tree->localTree.n_dust;
+
+    beginDeviceCoords();
+    glScalef(0.25f, 0.25f, 1.0f);
+
+    glEnable(GL_LINE_SMOOTH);
+    //glBlendFunc(GL_SRC_ALPHA, GL_ONE);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    glEnable(GL_BLEND);
+    glDisable(GL_DEPTH_TEST);
+    glColor4f(0.0f, 1.0f, 0.0f, 1.0f);
+
+    float x = 100.0f;
+    //float y = 50.0f;
+    float y = glutGet(GLUT_WINDOW_HEIGHT)*4.0f - 200.0f;
+	const float lineSpacing = 140.0f;
+
+#if 0
+    float Myr = m_tree->get_t_current() * 9.78f;
+    glPrintf(x, y, "MYears:    %.2f", Myr);
+    y -= lineSpacing;
+
+    glPrintf(x, y, "BODIES:    %d", bodies + dust);
+    y -= lineSpacing;
+
+    if (m_displayBodiesSec) {
+	  double frameTime = 1.0 / fps;
+      glPrintf(x, y, "BODIES/SEC:%.0f", bodies / frameTime);
+	  y -= lineSpacing;
+    }
+#endif
+
+    if (m_displayFps)
+    {
+      glPrintf(x, y, "FPS:       %.2f", fps);
+      y -= lineSpacing;
+    }
+
+    glDisable(GL_BLEND);
+    endWinCoords();
+
+    char str[256];
+    sprintf(str, "N-Body Renderer: %0.1f fps",
+            fps);
+
+    glutSetWindowTitle(str);
+  }
+
   void display() { 
     getBodyData();
+    fpsCount++;
 
     // view transform
     {
@@ -154,6 +276,8 @@ public:
     {
       m_params->Render(0, 0);    
     }
+
+    drawStats();
     m_renderer.display(m_displayMode);
   }
 
@@ -273,7 +397,6 @@ private:
       pos[i] = make_float4(m_idata.posx(i), m_idata.posy(i), m_idata.posz(i),0);
       colors[i] = color;
     }
-    fprintf(stderr, " -- get body data --\n");
 
     m_renderer.setPositions((float*)pos, n);
     m_renderer.setColors((float*)colors, n);
@@ -330,6 +453,7 @@ private:
 
   bool m_paused;
   bool m_displayBoxes;
+  bool m_displayFps;
   bool m_displaySliders;
   ParamListGL *m_params;
 };
@@ -413,6 +537,9 @@ void key(unsigned char key, int /*x*/, int /*y*/)
     theDemo->toggleSliders();
 //    m_enableStats = !m_displaySliders;
     break;
+  case '0':
+    theDemo->toggleFps();
+    break;
   }
 
   glutPostRedisplay();
@@ -488,5 +615,7 @@ void initAppRenderer(
 {
   initGL(argc, argv);
   theDemo = new Demo(idata);
+  fpsCount = 0;
+  timeBegin = rtc();
   glutMainLoop();
 }
