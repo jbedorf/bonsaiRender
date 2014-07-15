@@ -87,7 +87,7 @@ public:
       m_displayBoxes(false)
   {
     m_windowDims = make_int2(720, 480);
-    m_cameraTrans = make_float3(0, -2, -100);
+    m_cameraTrans = make_float3(0, -2, -10);
     m_cameraTransLag = m_cameraTrans;
     m_cameraRot = make_float3(0, 0, 0);
     m_cameraRotLag = m_cameraRot;
@@ -236,8 +236,9 @@ private:
 
     int n = m_idata.n();
 
-    float4 darkMatterColor = make_float4(1.0f, 0.5f, 1.0f, 1.0f);
-    float4 starColor =       make_float4(0.1f, 0.5f, 1.0f, 0.5f);
+    float4 darkMatterColor = make_float4(1.0f, 0.5f, 0.1f, 0.1f);
+    darkMatterColor = make_float4(0.0f, 0.0f, 0.9f, 0.4f);
+    float4 starColor =       make_float4(0.1f, 0.5f, 1.0f, 0.2f);
 
     float4 *colors = new float4[n];
     float4 *pos    = new float4[n];
