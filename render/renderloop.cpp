@@ -374,13 +374,17 @@ private:
 
     float4 darkMatterColor = make_float4(1.0f, 0.5f, 0.1f, 0.1f);
     darkMatterColor = make_float4(0.0f, 0.0f, 0.9f, 0.4f);
-    float4 starColor =       make_float4(0.1f, 0.5f, 1.0f, 0.2f);
+    float4 starColor =       make_float4(0.1f, 0.0f, 1.0f, 0.2f);
 
     float4 *colors = new float4[n];
     float4 *pos    = new float4[n];
 
+    const float velMin = m_idata.attributeMin(RendererData::VEL);
+    const float velMax = m_idata.attributeMax(RendererData::VEL);
     for (int i = 0; i < n; i++) {
       int type = m_idata.type(i); //m_tree->localTree.bodies_ids[i];
+      const float vel = m_idata.attribute(RendererData::VEL,i);
+      const float f = (vel - velMin)/velMax;
       float4 color;
       switch(type)
       {
@@ -388,7 +392,11 @@ private:
           color = darkMatterColor;
           break;
         case 1:
+//          color = starColor;
           color = starColor;
+//          color.x = 0;
+          color.y = f;
+//          color.z = 0;
           break;
         default:
           assert(0);
