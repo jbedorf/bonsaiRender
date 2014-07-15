@@ -27,4 +27,6 @@ clean:
 	/bin/rm -rf $(OBJ) $(PROG)
 
 
+$(OBJ): anyoption.h  paramgl.h  param.h  read_tipsy.h  RendererData.h  renderloop.h  render_particles.h  tipsydefs.h  vector_math.h
+
 

@@ -87,6 +87,8 @@ class ReadTipsy
 
       for (int domain = domainsBegEnd[rank].first ; domain < domainsBegEnd[rank].second; domain++)
       {
+        if (rank == 0)
+          fprintf(stderr, " reading domain %d [ %d %d ] \n", domain, domainsBegEnd[rank].first, domainsBegEnd[rank].second);
         const std::string fullFileName = baseFileName + std::to_string(domain);
 
         std::ifstream inputFile(fullFileName, std::ios::in | std::ios::binary);
