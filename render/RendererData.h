@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cassert>
 #if 0
 struct float2 { float x, y; };
 struct float3 { float x, y, z; };
@@ -88,7 +89,7 @@ class RendererData
     long_t  ID(const long_t i) const { return _ID[i]; }
     long_t& ID(const long_t i)       { return _ID[i]; }
 
-    void computeBoundaries()
+    void computeMinMax()
     {
       _xmin=_ymin=_zmin=_rmin = +HUGE;
       _xmax=_ymax=_zmax=_rmax = -HUGE;

@@ -9,6 +9,7 @@ CFLAGS = -O3 -g -Wall
 
 INCLUDE_FLAGS=
 LDFLAGS = -lGL -lGLU -lglut -lGLEW
+#-L$(PWD)/lib/linux -lGLEW_x86_64
 
 OBJ = main.o renderloop.o anyoption.o render_particles.o
 

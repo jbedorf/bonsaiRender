@@ -236,7 +236,7 @@ private:
 
     int n = m_idata.n();
 
-    float4 darkMatterColor = make_float4(1.0f, 0.5f, 0.1f, 0.1f);
+    float4 darkMatterColor = make_float4(1.0f, 0.5f, 1.0f, 1.0f);
     float4 starColor =       make_float4(0.1f, 0.5f, 1.0f, 0.5f);
 
     float4 *colors = new float4[n];
@@ -244,19 +244,23 @@ private:
 
     for (int i = 0; i < n; i++) {
       int type = m_idata.type(i); //m_tree->localTree.bodies_ids[i];
+      float4 color;
       switch(type)
       {
         case 0:
-          colors[i] = darkMatterColor;
+          color = darkMatterColor;
           break;
         case 1:
-          colors[i] = starColor;
+          color = starColor;
           break;
         default:
-          colors[i] = make_float4(0, 0, 0, 0); // dust -- not used yet
+          assert(0);
+          color = make_float4(0, 0, 0, 0); // dust -- not used yet
       }
       pos[i] = make_float4(m_idata.posx(i), m_idata.posy(i), m_idata.posz(i),0);
+      colors[i] = color;
     }
+    fprintf(stderr, " -- get body data --\n");
 
     m_renderer.setPositions((float*)pos, n);
     m_renderer.setColors((float*)colors, n);

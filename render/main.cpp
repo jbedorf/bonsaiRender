@@ -138,6 +138,7 @@ int main(int argc, char * argv[])
           data.secondVel[i].y*data.secondVel[i].y +
           data.secondVel[i].z*data.secondVel[i].z);
   }
+  rData.computeMinMax();
 
   initAppRenderer(argc, argv, rData);
 
