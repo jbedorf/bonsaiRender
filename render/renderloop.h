@@ -3,8 +3,6 @@
 
 #include "RendererData.h"
 
-void initGL(int argc, char** argv, const char *fullScreenMode, bool &stereo);
 void initAppRenderer(int argc, char** argv, 
-                     RendererData &data,
-                     bool showFPS, bool stereo);
+                     RendererData &data);
 #endif // _RENDERLOOP_H_

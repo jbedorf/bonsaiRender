@@ -12,8 +12,8 @@
 #include "render_particles.h"
 #include <GL/glew.h>
 
-#include <cuda_runtime.h>
-#include <cuda_gl_interop.h>
+//#include <cuda_runtime.h>
+//#include <cuda_gl_interop.h>
 
 #if defined(__APPLE__) || defined(MACOSX)
 #include <GLUT/glut.h>

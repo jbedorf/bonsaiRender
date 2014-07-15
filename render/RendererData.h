@@ -1,12 +1,17 @@
 #pragma once
 
+#if 0
+struct float2 { float x, y; };
 struct float3 { float x, y, z; };
 struct float4 { float x,y,z,w; };
 struct int2   { int x, y; };
-
 inline static int2 make_int2(int _x, int _y) 
 { 
   int2 v; v.x = _x; v.y = _y;; return v;
+}
+inline static float2 make_float2(float _x, float _y) 
+{ 
+  float2 v; v.x = _x; v.y = _y;; return v;
 }
 inline static float3 make_float3(float x, float y, float z)
 {
@@ -16,6 +21,9 @@ inline static float4 make_float4(float x, float y, float z, float w)
 {
   float4 v; v.x = x; v.y = y; v.z=z; v.w=w; return v;
 }
+#endif
+
+#include <algorithm>
 
 class RendererData
 {
@@ -31,6 +39,12 @@ class RendererData
     long_t *_ID;
     int   *_type;
     float *_attribute[NPROP];
+
+    float _xmin, _ymin, _zmin, _rmin;
+    float _xmax, _ymax, _zmax, _rmax;
+
+    float _attributeMin[NPROP];
+    float _attributeMax[NPROP];
 
   public:
     RendererData(const int __n) : _n(__n)
@@ -73,4 +87,48 @@ class RendererData
 
     long_t  ID(const long_t i) const { return _ID[i]; }
     long_t& ID(const long_t i)       { return _ID[i]; }
+
+    void computeBoundaries()
+    {
+      _xmin=_ymin=_zmin=_rmin = +HUGE;
+      _xmax=_ymax=_zmax=_rmax = -HUGE;
+      for (int p = 0; p < NPROP; p++)
+      {
+        _attributeMin[p] = +HUGE;
+        _attributeMax[p] = -HUGE;
+      }
+      for (int i = 0; i < _n; i++)
+      {
+        _xmin = std::min(_xmin, _posx[i]);
+        _ymin = std::min(_ymin, _posy[i]);
+        _zmin = std::min(_zmin, _posz[i]);
+        _xmax = std::max(_xmax, _posx[i]);
+        _ymax = std::max(_ymax, _posy[i]);
+        _zmax = std::max(_zmax, _posz[i]);
+        for (int p = 0; p < NPROP; p++)
+        {
+          _attributeMin[p] = std::min(_attributeMin[p], _attribute[p][i]);
+          _attributeMax[p] = std::max(_attributeMax[p], _attribute[p][i]);
+        }
+      }
+      _rmin = std::min(_rmin, _xmin);
+      _rmin = std::min(_rmin, _ymin);
+      _rmin = std::min(_rmin, _zmin);
+      _rmax = std::max(_rmax, _xmax);
+      _rmax = std::max(_rmax, _ymax);
+      _rmax = std::max(_rmax, _zmax);
+    }
+
+    float xmin() const { return _xmin;} 
+    float ymin() const { return _ymin;} 
+    float zmin() const { return _zmin;} 
+    float rmin() const { return _rmin;} 
+    
+    float xmax() const { return _xmax;} 
+    float ymax() const { return _ymax;} 
+    float zmax() const { return _zmax;} 
+    float rmax() const { return _rmax;} 
+
+    float attributeMin(const Attribute_t p) const { return _attributeMin[p]; }
+    float attributeMax(const Attribute_t p) const { return _attributeMax[p]; }
 };

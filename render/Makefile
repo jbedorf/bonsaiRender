@@ -7,10 +7,10 @@ CUDA_TK  = /usr/local/cuda
 CXXFLAGS = -O3 -g -Wall -openmp -std=c++11
 CFLAGS = -O3 -g -Wall
 
-INCLUDE_FLAGS=-I ./vfx
-LDFLAGS = -lGL -lGLU -lglut
+INCLUDE_FLAGS=
+LDFLAGS = -lGL -lGLU -lglut -lGLEW
 
-OBJ = main.o renderloop.o anyoption.o
+OBJ = main.o renderloop.o anyoption.o render_particles.o
 
 PROG= renderer
 

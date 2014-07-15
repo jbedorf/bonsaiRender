@@ -139,8 +139,7 @@ int main(int argc, char * argv[])
           data.secondVel[i].z*data.secondVel[i].z);
   }
 
- // initGL(argc, argv, fullScreenMode.c_str(), stereo);  
-//  initAppRenderer(argc, argv, rData, displayFPS, stereo);
+  initAppRenderer(argc, argv, rData);
 
   fprintf(stderr, " -- Done -- \n");
   while(1) {}
