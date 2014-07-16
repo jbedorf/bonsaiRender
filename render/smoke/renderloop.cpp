@@ -1172,7 +1172,7 @@ public:
     int n = m_idata.n();
     //Above is safe since it is 0 if we dont use dust
 
-    darkMatterColor = make_float4(0.0f, 0.2f, 0.4f, 1.0f);      // blue
+//    darkMatterColor = make_float4(0.0f, 1.0f, 1.0f, 0.0f);      // blue
     fprintf(stderr, "%g %g %g \n",
         darkMatterColor.x, darkMatterColor.y, darkMatterColor.z);
 
@@ -1191,7 +1191,7 @@ public:
         const float  Mstar = sSampler.sampleMass();
         const float4 Cstar = sSampler.getColour(Mstar);
         colors[i] = Cstar;
-        colors[i] = make_float4(0);
+  //      colors[i] = make_float4(0);
       }
     }
 
