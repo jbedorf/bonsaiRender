@@ -1172,6 +1172,9 @@ public:
     int n = m_idata.n();
     //Above is safe since it is 0 if we dont use dust
 
+    darkMatterColor = make_float4(0.0f, 0.2f, 0.4f, 1.0f);      // blue
+    fprintf(stderr, "%g %g %g \n",
+        darkMatterColor.x, darkMatterColor.y, darkMatterColor.z);
 
     const float slope = +1.35; // reversed MF, low mass depleted
     StarSampler sSampler (slope-1);
@@ -1179,6 +1182,7 @@ public:
     float4 *pos = m_particlePos;
     for (int i = 0; i < n; i++)
     {
+      pos[i] = make_float4(m_idata.posx(i), m_idata.posy(i), m_idata.posz(i),0);
       int type =  m_idata.type(i);
       if (type == 0)
         colors[i] = darkMatterColor;
@@ -1187,7 +1191,7 @@ public:
         const float  Mstar = sSampler.sampleMass();
         const float4 Cstar = sSampler.getColour(Mstar);
         colors[i] = Cstar;
-        pos[i] = make_float4(m_idata.posx(i), m_idata.posy(i), m_idata.posz(i),0);
+        colors[i] = make_float4(0);
       }
     }
 
