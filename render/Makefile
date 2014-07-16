@@ -4,20 +4,24 @@ LD  = mpic++
 F90  = mpif90
 
 CUDA_TK  = /usr/local/cuda
+CUDA_TK = $(HOME)/usr/local/cuda-5.5
 CXXFLAGS = -O3 -g -Wall -openmp -std=c++11
+CXXFLAGS += -Wno-reorder
+CXXFLAGS += -Wno-write-strings
 CFLAGS = -O3 -g -Wall
 
 ENGINE=particles
-#ENGINE=smoke
+ENGINE=smoke
 
 
 INCLUDE_FLAGS= -I./ -I./$(ENGINE)/
+INCLUDE_FLAGS += -I$(CUDA_TK)/include
 LDFLAGS = -lGL -lGLU -lglut -lGLEW
 #-L$(PWD)/lib/linux -lGLEW_x86_64
 
 OBJ = main.o $(ENGINE)/renderloop.o anyoption.o $(ENGINE)/renderer.o paramgl.o
 ifeq ($(ENGINE),smoke)
-	OBJ += crap.o
+	OBJ += tr.o
 endif
 
 PROG= renderer
@@ -29,6 +33,9 @@ $(PROG): $(OBJ)
 
 %.o: %.cpp
 	$(CXX) $(CXXFLAGS) $(INCLUDE_FLAGS) -c $< -o $@
+
+%.o: %.c
+	$(CC) $(CFLAGS) $(INCLUDE_FLAGS) -c $< -o $@
 
 clean:
 	/bin/rm -rf $(OBJ) $(PROG)

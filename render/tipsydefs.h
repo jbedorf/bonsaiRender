@@ -54,25 +54,36 @@ struct dark_particleV2 {
   private:
     int _ID[2]; //replaces phi and eps
   public:
-    unsigned long long getID() const {return *(unsigned long long*)_ID;}
-    void setID(unsigned  long long ID) { *(unsigned long long*)_ID = ID; }
+    unsigned long long getID() const 
+    {
+      union
+      {
+        int ID[2];
+        unsigned long long IDl;
+      } t;
+      t.ID[0] = _ID[0];
+      t.ID[1] = _ID[1];
+      return t.IDl;
+    }
+    void setID(unsigned  long long ID) 
+    { 
+      union
+      {
+        int ID[2];
+        unsigned long long IDl;
+      } t;
+      t.IDl = ID;
+      _ID[0] = t.ID[0];
+      _ID[1] = t.ID[1];
+    }
     int getID_V1() const {return _ID[1];}
 //    Real eps;
 } ;
-struct star_particleV2 {
-    Real mass;
-    Real pos[MAXDIM];
-    Real vel[MAXDIM];
+struct star_particleV2 : public dark_particleV2 {
     Real metals ;
     Real tform ;
 private:
-  int _ID[2]; //replaces phi and eps
 public:
-  unsigned long long  getID() const {return *(unsigned  long long*)_ID;}
-  void setID(unsigned long long ID) { *(unsigned  long long*)_ID = ID; }
-  int getID_V1() const {return _ID[1];}
-//    Real eps;
-//    int ID; //replaces phi and eps
 } ;
 
 

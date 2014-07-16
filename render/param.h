@@ -166,7 +166,7 @@ template<class T> class Param : public ParamBase
             char *str = _strdup(m_name.c_str());
             // replace spaces with _
             char *ch;
-            while(ch = strchr(str, ' ')) {
+            while((ch = strchr(str, ' '))) {
               *ch = '_';
             }
             //stream << m_name << " " << *m_ptr << '\n';

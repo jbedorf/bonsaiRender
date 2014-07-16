@@ -29,7 +29,6 @@ int main(int argc, char * argv[])
   int nDomains     = -1;
   int reduceFactor =  1;
   std::string fullScreenMode    = "";
-  bool displayFPS = true;
   bool stereo     = false;
 
 
@@ -160,7 +159,7 @@ int main(int argc, char * argv[])
 #endif
   rData.computeMinMax();
 
-  initAppRenderer(argc, argv, rData);
+  initAppRenderer(argc, argv, rData,fullScreenMode.c_str(), stereo);
 
   fprintf(stderr, " -- Done -- \n");
   while(1) {}

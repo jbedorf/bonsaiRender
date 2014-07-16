@@ -29,6 +29,8 @@ typedef unsigned short ushort;
 // host implementations of CUDA functions
 ////////////////////////////////////////////////////////////////////////////////
 
+#include <cuda_runtime.h>
+#if 0
 struct float2 { float x, y; };
 struct float3 { float x, y, z; };
 struct float4 { float x,y,z,w; };
@@ -61,6 +63,7 @@ inline static uint4 make_uint4(uint x, uint y, uint z, uint w)
 
 #define __host__
 #define __device__
+#endif
 
 inline float fminf(float a, float b)
 {

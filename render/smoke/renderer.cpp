@@ -35,8 +35,8 @@
 
 //#define NOCOPY
 
-extern int renderDevID;
-extern int devID;
+//extern int renderDevID;
+//extern int devID;
 
 using namespace nv;
 
@@ -165,7 +165,7 @@ SmokeRenderer::SmokeRenderer(int numParticles, int maxParticles) :
 
 	//initCUDA();
 
-	cudaGLSetGLDevice(renderDevID);
+//	cudaGLSetGLDevice(renderDevID);
 
 	mParticlePos.alloc(mMaxParticles, true, false, false);
 	mParticleDepths.alloc(mMaxParticles, false, false, false);
@@ -175,21 +175,21 @@ SmokeRenderer::SmokeRenderer(int numParticles, int maxParticles) :
 	}
 	mParticleIndices.copy(GpuArray<uint>::HOST_TO_DEVICE);
 
-	cudaStreamCreate(&m_copyStreamPos);
-  cudaStreamCreate(&m_copyStreamColor);
+//	cudaStreamCreate(&m_copyStreamPos);
+//  cudaStreamCreate(&m_copyStreamColor);
 
-  cudaStreamCreate(&m_copyStreamSortPos);
-  cudaStreamCreate(&m_copyStreamSortDepth);
-  cudaStreamCreate(&m_copyStreamSortIndices);
+//  cudaStreamCreate(&m_copyStreamSortPos);
+//  cudaStreamCreate(&m_copyStreamSortDepth);
+//  cudaStreamCreate(&m_copyStreamSortIndices);
 
-  cudaDeviceEnablePeerAccess(devID, 0);
-	cudaSetDevice(devID);
+//  cudaDeviceEnablePeerAccess(devID, 0);
+//	cudaSetDevice(devID);
 
-	cudaDeviceEnablePeerAccess( renderDevID, 0 );
+//	cudaDeviceEnablePeerAccess( renderDevID, 0 );
 
 	//Allocate additional arrays
-  cudaMalloc( &mParticleDepths_devID, mMaxParticles*sizeof(float));
-  cudaMalloc( &mParticleIndices_devID, mMaxParticles*sizeof(uint));
+//  cudaMalloc( &mParticleDepths_devID, mMaxParticles*sizeof(float));
+//  cudaMalloc( &mParticleIndices_devID, mMaxParticles*sizeof(uint));
 
 	printf("Vendor: %s\n", glGetString(GL_VENDOR));
 	printf("Renderer: %s\n", glGetString(GL_RENDERER));
@@ -222,7 +222,7 @@ SmokeRenderer::~SmokeRenderer()
 	glDeleteTextures(1, &m_noiseTex);
 	glDeleteTextures(1, &m_cubemapTex);
 
-	cudaSetDevice(renderDevID);
+//	cudaSetDevice(renderDevID);
 
 	mParticlePos.free();
 	mParticleDepths.free();
@@ -349,19 +349,21 @@ void SmokeRenderer::setPositions(float *pos)
 }
 
 
+#if 0
 void SmokeRenderer::setPositionsDevice(float *posD)
 {
-	cudaSetDevice(renderDevID);
+//	cudaSetDevice(renderDevID);
 
 #ifndef NOCOPY
     mParticlePos.map();
 //  cudaMemcpy(mParticlePos.getDevicePtr(), posD, mNumParticles*4*sizeof(float), cudaMemcpyDeviceToDevice);
-    cudaMemcpyPeerAsync(mParticlePos.getDevicePtr(), renderDevID, posD, devID, mNumParticles*4*sizeof(float), m_copyStreamPos);
+//    cudaMemcpyPeerAsync(mParticlePos.getDevicePtr(), renderDevID, posD, devID, mNumParticles*4*sizeof(float), m_copyStreamPos);
     mParticlePos.unmap();
 #endif
 
-	cudaSetDevice(devID);
+//	cudaSetDevice(devID);
 }
+#endif
 
 void SmokeRenderer::setColors(float *color)
 {
@@ -381,9 +383,10 @@ void SmokeRenderer::setColors(float *color)
 	glBindBuffer( GL_ARRAY_BUFFER_ARB, 0);
 }
 
+#if 0
 void SmokeRenderer::setColorsDevice(float *colorD)
 {
-	cudaSetDevice(renderDevID);
+//	cudaSetDevice(renderDevID);
 
  	if (!mColorVbo)
 	{
@@ -401,12 +404,13 @@ void SmokeRenderer::setColorsDevice(float *colorD)
   void *ptr;
   cutilSafeCall(cudaGLMapBufferObject((void **) &ptr, mColorVbo));
   //cudaMemcpy( ptr, colorD, mNumParticles * 4 * sizeof(float), cudaMemcpyDeviceToDevice );
-  cudaMemcpyPeerAsync( ptr, renderDevID, colorD, devID, mNumParticles * 4 * sizeof(float), m_copyStreamColor );
-  cutilSafeCall(cudaGLUnmapBufferObject(mColorVbo));
+//  cudaMemcpyPeerAsync( ptr, renderDevID, colorD, devID, mNumParticles * 4 * sizeof(float), m_copyStreamColor );
+ // cutilSafeCall(cudaGLUnmapBufferObject(mColorVbo));
 #endif
 
-	cudaSetDevice(devID);
+//	cudaSetDevice(devID);
 }
+#endif
 
 void SmokeRenderer::depthSort(float4 *posD)
 {
@@ -416,6 +420,7 @@ void SmokeRenderer::depthSort(float4 *posD)
 }
 
 
+#if 0
 void SmokeRenderer::depthSortCopy()
 {
     cudaSetDevice(renderDevID);
@@ -423,8 +428,8 @@ void SmokeRenderer::depthSortCopy()
 #ifndef NOCOPY
   mParticleIndices.map();
 
-  cudaMemcpyPeerAsync(mParticleDepths.getDevicePtr(), renderDevID, mParticleDepths_devID, devID, mNumParticles*sizeof(float), m_copyStreamSortDepth);
-  cudaMemcpyPeerAsync(mParticleIndices.getDevicePtr(), renderDevID, mParticleIndices_devID, devID, mNumParticles*sizeof(uint), m_copyStreamSortIndices);
+//  cudaMemcpyPeerAsync(mParticleDepths.getDevicePtr(), renderDevID, mParticleDepths_devID, devID, mNumParticles*sizeof(float), m_copyStreamSortDepth);
+ // cudaMemcpyPeerAsync(mParticleIndices.getDevicePtr(), renderDevID, mParticleIndices_devID, devID, mNumParticles*sizeof(uint), m_copyStreamSortIndices);
 
   mParticleIndices.unmap();
 #endif
@@ -438,8 +443,9 @@ void SmokeRenderer::depthSortCopy()
 //    mParticlePos.unmap();
 //    mParticleIndices.unmap();
 
-	cudaSetDevice(devID);
+//	cudaSetDevice(devID);
 }
+#endif
 
 // draw points from vertex buffer objects
 void SmokeRenderer::drawPoints(int start, int count, bool sorted)
