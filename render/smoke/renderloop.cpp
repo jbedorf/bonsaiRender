@@ -313,8 +313,8 @@ public:
 //       m_renderer(tree->localTree.n + tree->localTree.n_dust),
       m_renderer(idata.n(), MAX_PARTICLES),
       //m_displayMode(ParticleRenderer::PARTICLE_SPRITES_COLOR),
-//	    m_displayMode(SmokeRenderer::VOLUMETRIC),
-	    m_displayMode(SmokeRenderer::POINTS),
+	    m_displayMode(SmokeRenderer::VOLUMETRIC),
+//	    m_displayMode(SmokeRenderer::POINTS),
       m_ox(0), m_oy(0), m_buttonState(0), m_inertia(0.2f),
       m_paused(false),
       m_renderingEnabled(true),
@@ -1283,7 +1283,7 @@ public:
     //dustColor = make_float4(0.0f, 0.0f, 0.0f, 0.0f);  // black
 
     darkMatterColor = make_float4(0.0f, 0.2f, 0.4f, 3.0f);      // blue
-    darkMatterColor = make_float4(0.0f, 0.2f, 0.4f, 0.0f);      // blue
+//    darkMatterColor = make_float4(0.0f, 0.2f, 0.4f, 0.0f);      // blue
 
     m_colorParams = new ParamListGL("colors");
 #if 0

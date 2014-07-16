@@ -118,6 +118,16 @@ class RendererData
       _rmax = std::max(_rmax, _xmax);
       _rmax = std::max(_rmax, _ymax);
       _rmax = std::max(_rmax, _zmax);
+
+      for (int i = 0; i < _n; i++)
+      {
+        assert(_posx[i] >= _xmin && _posx[i] <= _xmax);
+        assert(_posy[i] >= _ymin && _posy[i] <= _ymax);
+        assert(_posz[i] >= _zmin && _posz[i] <= _zmax);
+        assert(_posx[i] >= _rmin && _posx[i] <= _rmax);
+        assert(_posy[i] >= _rmin && _posy[i] <= _rmax);
+        assert(_posz[i] >= _rmin && _posz[i] <= _rmax);
+      }
     }
 
     float xmin() const { return _xmin;} 

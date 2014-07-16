@@ -1193,7 +1193,7 @@ void SmokeRenderer::render()
 		m_simpleProg->enable();
 		drawPoints(0, mNumParticles, false);
 		m_simpleProg->disable();
-        glPointSize(1.0f);
+    glPointSize(1.0f);
 		break;
 
 	case SPRITES:
