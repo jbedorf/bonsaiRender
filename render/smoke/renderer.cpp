@@ -192,6 +192,8 @@ SmokeRenderer::SmokeRenderer(int numParticles, int maxParticles) :
 //	cudaDeviceEnablePeerAccess( renderDevID, 0 );
 
 	//Allocate additional arrays
+  mParticlePos  = (float4*)malloc(mMaxParticles*sizeof(float4));
+  mParticleColors  = (float4*)malloc(mMaxParticles*sizeof(float4));
   mParticleDepths  = (float*)malloc(mMaxParticles*sizeof(float));
   mParticleIndices = (uint*)malloc(mMaxParticles*sizeof(uint));
 //  cudaMalloc( &mParticleDepths_devID, mMaxParticles*sizeof(float));
@@ -233,6 +235,10 @@ SmokeRenderer::~SmokeRenderer()
 //	mParticlePos.free();
 //	mParticleDepths.free();
 //	mParticleIndices.free();
+  free(mParticleIndices);
+  free(mParticleDepths);
+  free(mParticlePos);
+  free(mParticleColors);
 }
 
 GLuint SmokeRenderer::createRainbowTexture()
@@ -342,6 +348,8 @@ void SmokeRenderer::setNumberOfParticles(uint n_particles)
 
 void SmokeRenderer::setPositions(float *pos)
 {
+  for (uint i = 0; i < mNumParticles; i++)
+    mParticlePos[i] = ((float4*)pos)[i];
 #if 0
 	//memcpy(mParticlePos.getHostPtr(), pos, mNumParticles*4*sizeof(float));
 	//ParticlePos.copy(GpuArray<float4>::HOST_TO_DEVICE);
@@ -380,6 +388,8 @@ void SmokeRenderer::setPositionsDevice(float *posD)
 
 void SmokeRenderer::setColors(float *color)
 {
+  for (uint i = 0; i < mNumParticles; i++)
+    mParticleColors[i] = ((float4*)color)[i];
 	if (!mColorVbo)
 	{
 		// allocate
@@ -435,6 +445,7 @@ void SmokeRenderer::depthSort(float4 *pos)
 
 void SmokeRenderer::depthSortCopy()
 {
+//  depthSort(mParticlePos);
 #if 0
     cudaSetDevice(renderDevID);
 
@@ -482,13 +493,14 @@ void SmokeRenderer::drawPoints(int start, int count, bool sorted)
     }
 
     if (sorted) {
-      assert(0);
       if (!mIndexBuffer)
       {
         glGenBuffersARB(1, (GLuint*)&mIndexBuffer);
+        glBindBufferARB(GL_ARRAY_BUFFER_ARB, mIndexBuffer);
+        glBufferData(GL_ARRAY_BUFFER_ARB, mNumParticles * sizeof(uint), mParticleIndices, GL_DYNAMIC_DRAW);
       }
         glBindBufferARB(GL_ELEMENT_ARRAY_BUFFER_ARB, mIndexBuffer);
-        //glBindBufferARB(GL_ELEMENT_ARRAY_BUFFER_ARB, mParticleIndices.getVbo());
+        glBufferSubData(GL_ARRAY_BUFFER_ARB, 0, mNumParticles * sizeof(uint), mParticleIndices);
         glDrawElements(GL_POINTS, count, GL_UNSIGNED_INT, (void*) (start*sizeof(unsigned int)) );
         glBindBufferARB(GL_ELEMENT_ARRAY_BUFFER_ARB, 0);
     } else {
@@ -1157,7 +1169,7 @@ void SmokeRenderer::renderSprites(bool sort)
     if (sort) {
 	    calcVectors();
 	    depthSortCopy();
-        glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
+      glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
 	    drawPointSprites(m_particleProg, 0, mNumParticles, false, true);	
     } else {
         glBlendFunc(GL_ONE, GL_ONE);

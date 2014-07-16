@@ -31,7 +31,7 @@ public:
     enum DisplayMode
     {
         POINTS,
-		SPRITES,
+        SPRITES,
         SPRITES_SORTED,
         VOLUMETRIC,
         NUM_MODES
@@ -296,6 +296,7 @@ private:
     cudaStream_t      m_copyStreamSortIndices;
 
     float4 *mParticlePos;
+    float4 *mParticleColors;
     float  *mParticleDepths;
     uint   *mParticleIndices;
 };
