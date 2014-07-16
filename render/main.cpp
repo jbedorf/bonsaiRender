@@ -28,8 +28,10 @@ int main(int argc, char * argv[])
   std::string fileName;
   int nDomains     = -1;
   int reduceFactor =  1;
+#ifndef PARTICLESRENDERER
   std::string fullScreenMode    = "";
   bool stereo     = false;
+#endif
 
 
   if (rank == 0)  
@@ -45,8 +47,10 @@ int main(int argc, char * argv[])
 		ADDUSAGE(" -i  --infile #         Input snapshot filename ");
     ADDUSAGE(" -n  --ndomains #       Number of domains ");
 		ADDUSAGE(" -r  --reducefactor #   cut down bodies dataset by # factor [1])")
+#ifndef PARTICLESRENDERER
 		ADDUSAGE("     --fullscreen #     set fullscreen mode string");
 		ADDUSAGE("     --stereo           enable stereo rendering");
+#endif
 		ADDUSAGE(" ");
 
 
@@ -71,8 +75,10 @@ int main(int argc, char * argv[])
     if ((optarg = opt.getValue("infile")))       fileName           = std::string(optarg);
     if ((optarg = opt.getValue("ndomains")))     nDomains           = atoi(optarg);
     if ((optarg = opt.getValue("reducefactor"))) reduceFactor       = atoi(optarg);
+#ifndef PARTICLESRENDERER
     if ((optarg = opt.getValue("fullscreen")))	 fullScreenMode     = std::string(optarg);
     if (opt.getFlag("stereo"))  stereo = true;
+#endif
 
     if (fileName.empty() || nDomains == -1 || reduceFactor < 1)
     {
@@ -105,7 +111,7 @@ int main(int argc, char * argv[])
     fprintf(stderr, " nTotal= %lld \n", nFirst + nSecond);
   }
 
-#if 0
+#if 1
   const int nPtcl = nFirstLocal + nSecondLocal;
   RendererData rData(nPtcl);
   for (int i = 0; i < nFirstLocal; i++)
@@ -159,7 +165,11 @@ int main(int argc, char * argv[])
 #endif
   rData.computeMinMax();
 
-  initAppRenderer(argc, argv, rData,fullScreenMode.c_str(), stereo);
+  initAppRenderer(argc, argv, rData
+#ifndef PARTICLESRENDERER
+      ,fullScreenMode.c_str(), stereo
+#endif
+      );
 
   fprintf(stderr, " -- Done -- \n");
   while(1) {}

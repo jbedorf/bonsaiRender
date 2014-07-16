@@ -374,6 +374,8 @@ private:
 
     float4 darkMatterColor = make_float4(1.0f, 0.5f, 0.1f, 0.1f);
     darkMatterColor = make_float4(0.0f, 0.0f, 0.9f, 0.4f);
+//    darkMatterColor = make_float4(0.0f, 0.2f, 0.4f, 0.0f);      // blue
+
     float4 starColor =       make_float4(0.1f, 0.0f, 1.0f, 0.2f);
 
     float4 *colors = new float4[n];

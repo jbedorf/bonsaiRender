@@ -26,7 +26,7 @@ OBJ = main.o $(ENGINE)/renderloop.o anyoption.o $(ENGINE)/renderer.o paramgl.o
 ifeq ($(ENGINE),smoke)
 	OBJ += tr.o
 	OBJ += smoke/GLSLProgram.o
-	OBJ += smoke/SmokeShaders.cpp
+	OBJ += smoke/SmokeShaders.o
 	OBJ += smoke/framebufferObject.o
 #	OBJ += smoke/depthSort.cu_o
 	OBJ += smoke/depthSort.o

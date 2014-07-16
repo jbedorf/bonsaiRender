@@ -5,4 +5,5 @@
 
 void initAppRenderer(int argc, char** argv, 
                      RendererData &data);
+#define PARTICLESRENDERER
 #endif // _RENDERLOOP_H_
