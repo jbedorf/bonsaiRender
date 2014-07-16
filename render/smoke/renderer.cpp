@@ -16,6 +16,7 @@
 #include <math.h>
 #include <stdlib.h>
 #include <string.h>
+#include <cassert>
 #include "renderer.h"
 #include "SmokeShaders.h"
 //#include <nvImage.h>
@@ -353,7 +354,11 @@ void SmokeRenderer::setPositions(float *pos)
       glGenBuffers(1, (GLuint*)&m_pbo);
     }
     glBindBuffer(GL_ARRAY_BUFFER_ARB, m_pbo);
-    glBufferSubData(GL_ARRAY_BUFFER_ARB, 0, mNumParticles * 4 * sizeof(float), pos);
+#if 0 /* eg: fails */
+    glBufferData(GL_ARRAY_BUFFER_ARB, 0, mNumParticles * 4 * sizeof(float), pos);
+#else
+    glBufferData(GL_ARRAY_BUFFER_ARB, mNumParticles * 4 * sizeof(float), pos, GL_STATIC_DRAW_ARB);
+#endif
     glBindBuffer( GL_ARRAY_BUFFER_ARB, 0);
 #endif
 }
@@ -479,6 +484,7 @@ void SmokeRenderer::drawPoints(int start, int count, bool sorted)
     }
 
     if (sorted) {
+      assert(0);
       if (!mIndexBuffer)
       {
         glGenBuffersARB(1, (GLuint*)&mIndexBuffer);
@@ -1168,6 +1174,7 @@ void SmokeRenderer::renderSprites(bool sort)
 
 void SmokeRenderer::render()
 {
+#if 1
 	switch(mDisplayMode) {
 	case POINTS:
 		glPointSize(2.0f);
@@ -1198,7 +1205,9 @@ void SmokeRenderer::render()
 	case NUM_MODES:
 		break;
 	}
+#endif
 
+#if 0
     if (m_displayLightBuffer) {
         // display light buffer to screen
         glViewport(0, 0, m_lightBufferSize, m_lightBufferSize);
@@ -1206,8 +1215,9 @@ void SmokeRenderer::render()
         displayTexture(m_lightTexture[m_srcLightTexture], 1.0f);
         glViewport(0, 0, mWindowW, mWindowH);
     }
+#endif
 
-    //glutReportErrors();
+    glutReportErrors();
 }
 
 // render scene depth to texture

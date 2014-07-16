@@ -313,7 +313,8 @@ public:
 //       m_renderer(tree->localTree.n + tree->localTree.n_dust),
       m_renderer(idata.n(), MAX_PARTICLES),
       //m_displayMode(ParticleRenderer::PARTICLE_SPRITES_COLOR),
-	    m_displayMode(SmokeRenderer::VOLUMETRIC),
+//	    m_displayMode(SmokeRenderer::VOLUMETRIC),
+	    m_displayMode(SmokeRenderer::POINTS),
       m_ox(0), m_oy(0), m_buttonState(0), m_inertia(0.2f),
       m_paused(false),
       m_renderingEnabled(true),
@@ -535,10 +536,13 @@ public:
     //m_renderer.display(m_displayMode);
     m_renderer.render();
 
+#if 0
     if (m_displayBoxes) {
       glEnable(GL_DEPTH_TEST);
 //      displayOctree();
     }
+#endif
+#if 0
     if (m_displayCursor) {
 
       //JB Hack TODO, I disable cursor in non-stereo mode since doesnt seem to do anything
@@ -562,6 +566,7 @@ public:
         glDisable(GL_BLEND);
       }
     }
+#endif
 
     if (m_displaySliders) {
       m_params->Render(0, 0);
@@ -639,7 +644,6 @@ public:
 
 
       // view transform
-      //{
         glMatrixMode(GL_MODELVIEW);
         glLoadIdentity();
 
@@ -679,6 +683,7 @@ public:
 
         glGetFloatv(GL_MODELVIEW_MATRIX, m_modelView);
 
+#if 0
         if (m_supernova) {
           if (m_overBright > 1.0f) {
             m_overBright -= 1.0f;
@@ -688,9 +693,12 @@ public:
           }
           m_renderer.setOverbright(m_overBright);
         }
+#endif
 
         //Start drawing
-        if (m_stereoEnabled) { //STEREO
+        if (m_stereoEnabled)  //STEREO
+        {
+          assert(0);
           //draw left
           glDrawBuffer(GL_BACK_LEFT);                                   //draw into back left buffer
           glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -709,7 +717,8 @@ public:
           glLoadMatrixf(m_modelView);
           mainRender(RIGHT_EYE);
         } //end of draw back right
-        else { //MONO
+        else 
+        { //MONO
           //draw left
           glDrawBuffer(GL_BACK);                                   //draw into back left buffer
           glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -723,23 +732,8 @@ public:
       else //rendering disabled just draw stats
         drawStats(fps);
 
-
-
-//        //m_renderer.display(m_displayMode);
-//        m_renderer.render();
-//
-//        if (m_displayBoxes) {
-//          glEnable(GL_DEPTH_TEST);
-//          displayOctree();
-//        }
-//
-//        if (m_displaySliders) {
-//          m_params->Render(0, 0);
-//        }
-//      }
-//    }
-//
-//    drawStats(fps);
+    glutReportErrors();
+    fprintf(stderr, " --- frame --- \n");
   }
 
   void mouse(int button, int state, int x, int y)
@@ -827,13 +821,15 @@ public:
     float flySpeed = (m_buttonState & 4) ? 0.5f : 0.1f;
 
 	// Z
-    if (m_keyDown['w']) { //  || (m_buttonState & 1)) {
+    if (m_keyDown['w'])  //  || (m_buttonState & 1)) 
+    {
 	  // foward
 	  m_cameraTrans.x += m_modelView[2] * flySpeed;
 	  m_cameraTrans.y += m_modelView[6] * flySpeed;
 	  m_cameraTrans.z += m_modelView[10] * flySpeed;
     }
-    if (m_keyDown['s']) {
+    if (m_keyDown['s']) 
+    {
 	  // back
 	  m_cameraTrans.x -= m_modelView[2] * flySpeed;
 	  m_cameraTrans.y -= m_modelView[6] * flySpeed;
@@ -1171,34 +1167,34 @@ public:
     }
   }
 
-  void getBodyData() {
+  void getBodyData() 
+  {
+    int n = m_idata.n();
+    //Above is safe since it is 0 if we dont use dust
 
-   int n = m_idata.n();
-   //Above is safe since it is 0 if we dont use dust
 
+    const float slope = +1.35; // reversed MF, low mass depleted
+    StarSampler sSampler (slope-1);
+    float4 *colors = m_particleColors;
+    float4 *pos = m_particlePos;
+    for (int i = 0; i < n; i++)
+    {
+      int type =  m_idata.type(i);
+      if (type == 0)
+        colors[i] = darkMatterColor;
+      else
+      {
+        const float  Mstar = sSampler.sampleMass();
+        const float4 Cstar = sSampler.getColour(Mstar);
+        colors[i] = Cstar;
+        pos[i] = make_float4(m_idata.posx(i), m_idata.posy(i), m_idata.posz(i),0);
+      }
+    }
 
-   const float slope = +1.35; // reversed MF, low mass depleted
-   StarSampler sSampler (slope-1);
-   float4 *colors = m_particleColors;
-   float4 *pos = m_particlePos;
-   for (int i = 0; i < n; i++)
-   {
-     int type =  m_idata.type(i);
-     if (type == 0)
-       colors[i] = darkMatterColor;
-     else
-     {
-       const float  Mstar = sSampler.sampleMass();
-       const float4 Cstar = sSampler.getColour(Mstar);
-       colors[i] = Cstar;
-       pos[i] = make_float4(m_idata.posx(i), m_idata.posy(i), m_idata.posz(i),0);
-     }
-   }
-
-   m_renderer.setNumParticles(m_idata.n());
-   m_renderer.setPositions((float*)pos);
-   m_renderer.setColors((float*)colors);
-   m_renderer.depthSort(pos);
+    m_renderer.setNumParticles(m_idata.n());
+    m_renderer.setPositions((float*)pos);
+    m_renderer.setColors((float*)colors);
+    m_renderer.depthSort(pos);
   }
 
 
