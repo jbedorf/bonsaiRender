@@ -21,7 +21,7 @@
 
 #include <algorithm>
 #include "renderloop.h"
-#include "render_particles.h"
+#include "renderer.h"
 #include "vector_math.h"
 #include <cstdarg>
 

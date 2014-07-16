@@ -12,7 +12,7 @@ INCLUDE_FLAGS= -I./ -I$(ENGINE)/
 LDFLAGS = -lGL -lGLU -lglut -lGLEW
 #-L$(PWD)/lib/linux -lGLEW_x86_64
 
-OBJ = main.o $(ENGINE)/renderloop.o anyoption.o $(ENGINE)/render_particles.o paramgl.o
+OBJ = main.o $(ENGINE)/renderloop.o anyoption.o $(ENGINE)/renderer.o paramgl.o
 
 PROG= renderer
 
@@ -27,7 +27,11 @@ $(PROG): $(OBJ)
 clean:
 	/bin/rm -rf $(OBJ) $(PROG)
 
+clean_bak:
+	find . -name '*~' -exec /bin/rm -rf '{}' \;
 
-$(OBJ): anyoption.h  paramgl.h  param.h  read_tipsy.h  RendererData.h  $(ENGINE)/renderloop.h  $(ENGINE)/render_particles.h  tipsydefs.h  vector_math.h
+
+
+$(OBJ): anyoption.h  paramgl.h  param.h  read_tipsy.h  RendererData.h  $(ENGINE)/renderloop.h  $(ENGINE)/renderer.h  tipsydefs.h  vector_math.h
 
 
