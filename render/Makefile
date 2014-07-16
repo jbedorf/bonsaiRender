@@ -7,12 +7,18 @@ CUDA_TK  = /usr/local/cuda
 CXXFLAGS = -O3 -g -Wall -openmp -std=c++11
 CFLAGS = -O3 -g -Wall
 
-ENGINE=./particles
-INCLUDE_FLAGS= -I./ -I$(ENGINE)/
+ENGINE=particles
+#ENGINE=smoke
+
+
+INCLUDE_FLAGS= -I./ -I./$(ENGINE)/
 LDFLAGS = -lGL -lGLU -lglut -lGLEW
 #-L$(PWD)/lib/linux -lGLEW_x86_64
 
 OBJ = main.o $(ENGINE)/renderloop.o anyoption.o $(ENGINE)/renderer.o paramgl.o
+ifeq ($(ENGINE),smoke)
+	OBJ += crap.o
+endif
 
 PROG= renderer
 
