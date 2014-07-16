@@ -10,6 +10,9 @@ CXXFLAGS += -Wno-reorder
 CXXFLAGS += -Wno-write-strings
 CFLAGS = -O3 -g -Wall
 
+NVCC=$(CUDATK)/bin/nvcc
+NVCCFLAGS=-arch=sm_35
+
 ENGINE=particles
 ENGINE=smoke
 
@@ -22,6 +25,11 @@ LDFLAGS = -lGL -lGLU -lglut -lGLEW
 OBJ = main.o $(ENGINE)/renderloop.o anyoption.o $(ENGINE)/renderer.o paramgl.o
 ifeq ($(ENGINE),smoke)
 	OBJ += tr.o
+	OBJ += smoke/GLSLProgram.o
+	OBJ += smoke/SmokeShaders.cpp
+	OBJ += smoke/framebufferObject.o
+#	OBJ += smoke/depthSort.cu_o
+	OBJ += smoke/depthSort.o
 endif
 
 PROG= renderer
@@ -36,6 +44,9 @@ $(PROG): $(OBJ)
 
 %.o: %.c
 	$(CC) $(CFLAGS) $(INCLUDE_FLAGS) -c $< -o $@
+
+%.cu_o: %.cu
+	$(NVCC) $(NVCCFLAGS) $(INCLUDE_FLAGS) -c $< -o $@
 
 clean:
 	/bin/rm -rf $(OBJ) $(PROG)

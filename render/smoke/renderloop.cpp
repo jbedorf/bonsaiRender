@@ -192,7 +192,7 @@ bool displayFps = false;
 double fps = 0.0;
 int fpsCount = 0;
 int fpsLimit = 5;
-cudaEvent_t startEvent, stopEvent;
+//cudaEvent_t startEvent, stopEvent;
 
 void drawWireBox(float3 boxMin, float3 boxMax) {
 #if 0
@@ -362,7 +362,7 @@ public:
     //m_particleColors  = new float4[arraySize];
     m_particleColors  = new float4[MAX_PARTICLES];  
     m_particlePos  = new float4[MAX_PARTICLES];  
-    cudaMalloc( &m_particleColorsDev, MAX_PARTICLES * sizeof(float4)); 
+//    cudaMalloc( &m_particleColorsDev, MAX_PARTICLES * sizeof(float4)); 
     initBodyColors();
 
 	  m_renderer.setFOV(m_fov);
@@ -377,9 +377,9 @@ public:
     readParams(m_renderer.getParams(), "params.txt");
     readParams(m_colorParams, "colorparams.txt");
 
-    cudaEventCreate(&startEvent, 0);
-    cudaEventCreate(&stopEvent, 0);
-    cudaEventRecord(startEvent, 0);
+//    cudaEventCreate(&startEvent, 0);
+//    cudaEventCreate(&stopEvent, 0);
+//    cudaEventRecord(startEvent, 0);
 
     StartTimer();
   }
@@ -886,7 +886,7 @@ public:
       togglePause();
       break;
     case 27: // escape
-      displayTimers();
+//      displayTimers();
       exit(0);
       break;
     case 'p':
@@ -1320,7 +1320,7 @@ public:
 
   float4 *m_particleColors;
   float4 *m_particlePos;
-  float4 *m_particleColorsDev;
+//  float4 *m_particleColorsDev;
 
   // view params
   int m_ox; // = 0
@@ -1452,7 +1452,7 @@ void onexit() {
   if (glutGameModeGet(GLUT_GAME_MODE_ACTIVE) != 0) {
     glutLeaveGameMode();
   }
-  cudaDeviceReset();
+//  cudaDeviceReset();
 }
 
 void display()
@@ -1492,7 +1492,7 @@ void display()
       fpsLimit = 0;
     }
 
-    cudaEventRecord(startEvent, 0);
+//    cudaEventRecord(startEvent, 0);
   }
 }
 
@@ -1780,7 +1780,7 @@ void initGL(int argc, char** argv, const char *fullScreenMode, const bool stereo
   if (GLEW_OK != err)
   {
     fprintf(stderr, "GLEW Error: %s\n", glewGetErrorString(err));
-    cudaDeviceReset();
+//    cudaDeviceReset();
     exit(-1);
   }
   else if (!glewIsSupported("GL_VERSION_2_0 "

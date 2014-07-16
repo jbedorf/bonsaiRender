@@ -19,7 +19,8 @@
 #include "GLSLProgram.h"
 #include "nvMath.h"
 #include "paramgl.h"
-#include "GpuArray.h"
+#include <cuda_runtime.h>
+//#include "GpuArray.h"
 
 class SmokeRenderer
 {
@@ -172,10 +173,11 @@ private:
     GLuint              mIndexBuffer;
 	GLuint              mPosBufferTexture;
 
-	GpuArray<float4>    mParticlePos;
-	GpuArray<float>     mParticleDepths;
-	GpuArray<uint>      mParticleIndices;
+//	GpuArray<float4>    mParticlePos;
+//	GpuArray<float>     mParticleDepths;
+//	GpuArray<uint>      mParticleIndices;
 
+    unsigned int m_pbo;
     float               mParticleRadius;
     DisplayMode	        mDisplayMode;
 
@@ -284,7 +286,7 @@ private:
     GLuint              m_textureArrayID;
 	GLuint              m_spriteTex;
 	GLuint              m_noiseTex;
-    GLuint              m_cubemapTex;
+//    GLuint              m_cubemapTex;
 
     cudaStream_t        m_copyStreamPos;
     cudaStream_t        m_copyStreamColor;
@@ -293,9 +295,9 @@ private:
     cudaStream_t      m_copyStreamSortDepth;
     cudaStream_t      m_copyStreamSortIndices;
 
-    float4 *mParticlePos_devID;
-    float  *mParticleDepths_devID;
-    uint   *mParticleIndices_devID;
+    float4 *mParticlePos;
+    float  *mParticleDepths;
+    uint   *mParticleIndices;
 };
 
 #endif

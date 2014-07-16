@@ -44,6 +44,7 @@ SmokeRenderer::SmokeRenderer(int numParticles, int maxParticles) :
     mMaxParticles(maxParticles),
     mNumParticles(numParticles),
     mPosVbo(0),
+    m_pbo(0),
     mVelVbo(0),
     mColorVbo(0),
     mIndexBuffer(0),
@@ -101,7 +102,7 @@ SmokeRenderer::SmokeRenderer(int numParticles, int maxParticles) :
 	m_volumeWidth(0.1f),
 	m_gamma(1.0f / 2.2f),
 	m_fog(0.001f),
-    m_cubemapTex(0),
+//    m_cubemapTex(0),
     m_flareThreshold(0.5f),
     m_flareIntensity(0.0f),
     m_sourceIntensity(0.5f),
@@ -153,11 +154,13 @@ SmokeRenderer::SmokeRenderer(int numParticles, int maxParticles) :
 	glGenTextures(1, &mPosBufferTexture);
 	m_noiseTex = createNoiseTexture(64, 64, 64);
 
+#if 0
     m_cubemapTex = loadCubemapCross("../images/Carina_cross.ppm");
     if (!m_cubemapTex) {
       //m_cubemapTex = loadCubemap("../images/deepfield%d.ppm");
 	  m_cubemapTex = loadCubemap("../images/deepfield%d_1k.ppm");
     }
+#endif
 
 	m_spriteTex = createSpriteTexture(256);
 
@@ -167,13 +170,13 @@ SmokeRenderer::SmokeRenderer(int numParticles, int maxParticles) :
 
 //	cudaGLSetGLDevice(renderDevID);
 
-	mParticlePos.alloc(mMaxParticles, true, false, false);
-	mParticleDepths.alloc(mMaxParticles, false, false, false);
-	mParticleIndices.alloc(mMaxParticles, true, false, true);
-	for(uint i=0; i<mMaxParticles; i++) {
-		mParticleIndices.getHostPtr()[i] = i;
-	}
-	mParticleIndices.copy(GpuArray<uint>::HOST_TO_DEVICE);
+//	mParticlePos.alloc(mMaxParticles, true, false, false);
+//	mParticleDepths.alloc(mMaxParticles, false, false, false);
+//	mParticleIndices.alloc(mMaxParticles, true, false, true);
+//	for(uint i=0; i<mMaxParticles; i++) {
+//		mParticleIndices.getHostPtr()[i] = i;
+//	}
+//	mParticleIndices.copy(GpuArray<uint>::HOST_TO_DEVICE);
 
 //	cudaStreamCreate(&m_copyStreamPos);
 //  cudaStreamCreate(&m_copyStreamColor);
@@ -188,6 +191,8 @@ SmokeRenderer::SmokeRenderer(int numParticles, int maxParticles) :
 //	cudaDeviceEnablePeerAccess( renderDevID, 0 );
 
 	//Allocate additional arrays
+  mParticleDepths  = (float*)malloc(mMaxParticles*sizeof(float));
+  mParticleIndices = (uint*)malloc(mMaxParticles*sizeof(uint));
 //  cudaMalloc( &mParticleDepths_devID, mMaxParticles*sizeof(float));
 //  cudaMalloc( &mParticleIndices_devID, mMaxParticles*sizeof(uint));
 
@@ -220,13 +225,13 @@ SmokeRenderer::~SmokeRenderer()
     glDeleteTextures(3, m_downSampledTex);
 
 	glDeleteTextures(1, &m_noiseTex);
-	glDeleteTextures(1, &m_cubemapTex);
+//	glDeleteTextures(1, &m_cubemapTex);
 
 //	cudaSetDevice(renderDevID);
 
-	mParticlePos.free();
-	mParticleDepths.free();
-	mParticleIndices.free();
+//	mParticlePos.free();
+//	mParticleDepths.free();
+//	mParticleIndices.free();
 }
 
 GLuint SmokeRenderer::createRainbowTexture()
@@ -341,8 +346,13 @@ void SmokeRenderer::setPositions(float *pos)
 	//ParticlePos.copy(GpuArray<float4>::HOST_TO_DEVICE);
 #else
     // XXX - why is this so much faster?
-    int posVbo = mParticlePos.getVbo();
-    glBindBuffer(GL_ARRAY_BUFFER_ARB, posVbo);
+//    int posVbo = mParticlePos.getVbo();
+//    glBindBuffer(GL_ARRAY_BUFFER_ARB, posVbo);
+    if (!m_pbo)
+    {
+      glGenBuffers(1, (GLuint*)&m_pbo);
+    }
+    glBindBuffer(GL_ARRAY_BUFFER_ARB, m_pbo);
     glBufferSubData(GL_ARRAY_BUFFER_ARB, 0, mNumParticles * 4 * sizeof(float), pos);
     glBindBuffer( GL_ARRAY_BUFFER_ARB, 0);
 #endif
@@ -412,17 +422,17 @@ void SmokeRenderer::setColorsDevice(float *colorD)
 }
 #endif
 
-void SmokeRenderer::depthSort(float4 *posD)
+void SmokeRenderer::depthSort(float4 *pos)
 {
   calcVectors();
   float4 modelViewZ = make_float4(m_modelView._array[2], m_modelView._array[6], m_modelView._array[10], m_modelView._array[14]);
-  depthSortCUDA(posD, mParticleDepths_devID, (int *) mParticleIndices_devID, modelViewZ, mNumParticles);
+  depthSortCUDA(pos, mParticleDepths, (int *) mParticleIndices, modelViewZ, mNumParticles);
 }
 
 
-#if 0
 void SmokeRenderer::depthSortCopy()
 {
+#if 0
     cudaSetDevice(renderDevID);
 
 #ifndef NOCOPY
@@ -444,13 +454,14 @@ void SmokeRenderer::depthSortCopy()
 //    mParticleIndices.unmap();
 
 //	cudaSetDevice(devID);
-}
 #endif
+}
 
 // draw points from vertex buffer objects
 void SmokeRenderer::drawPoints(int start, int count, bool sorted)
 {
-    glBindBufferARB(GL_ARRAY_BUFFER_ARB, mParticlePos.getVbo());
+    glBindBufferARB(GL_ARRAY_BUFFER_ARB, m_pbo);
+//    glBindBufferARB(GL_ARRAY_BUFFER_ARB, mParticlePos.getVbo());
     glVertexPointer(4, GL_FLOAT, 0, 0);
     glEnableClientState(GL_VERTEX_ARRAY);                
 
@@ -468,8 +479,12 @@ void SmokeRenderer::drawPoints(int start, int count, bool sorted)
     }
 
     if (sorted) {
-        //glBindBufferARB(GL_ELEMENT_ARRAY_BUFFER_ARB, mIndexBuffer);
-		glBindBufferARB(GL_ELEMENT_ARRAY_BUFFER_ARB, mParticleIndices.getVbo());
+      if (!mIndexBuffer)
+      {
+        glGenBuffersARB(1, (GLuint*)&mIndexBuffer);
+      }
+        glBindBufferARB(GL_ELEMENT_ARRAY_BUFFER_ARB, mIndexBuffer);
+        //glBindBufferARB(GL_ELEMENT_ARRAY_BUFFER_ARB, mParticleIndices.getVbo());
         glDrawElements(GL_POINTS, count, GL_UNSIGNED_INT, (void*) (start*sizeof(unsigned int)) );
         glBindBufferARB(GL_ELEMENT_ARRAY_BUFFER_ARB, 0);
     } else {
@@ -823,7 +838,7 @@ void SmokeRenderer::drawSlices()
         drawSkybox(m_cubemapTex);
         glPopMatrix();
     #else
-        drawSkybox(m_cubemapTex);
+//        drawSkybox(m_cubemapTex);
     #endif
 
 	/*
@@ -1131,7 +1146,7 @@ void SmokeRenderer::renderSprites(bool sort)
 	glClear(GL_COLOR_BUFFER_BIT);
 
     glDisable(GL_BLEND);
-    drawSkybox(m_cubemapTex);
+//    drawSkybox(m_cubemapTex);
 #endif
 
 	glColor4f(1.0, 1.0, 1.0, m_spriteAlpha);
@@ -1463,8 +1478,12 @@ void SmokeRenderer::debugVectors()
 
 void SmokeRenderer::drawSkybox(GLuint tex)
 {
+#if 0
     if (!m_cubemapTex)
       return;
+#else
+  return;
+#endif
 
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_CUBE_MAP, tex);
