@@ -352,13 +352,11 @@ void SmokeRenderer::setPositions(float *pos)
     if (!m_pbo)
     {
       glGenBuffers(1, (GLuint*)&m_pbo);
+      glBindBuffer(GL_ARRAY_BUFFER_ARB, m_pbo);
+      glBufferData(GL_ARRAY_BUFFER_ARB, mNumParticles * 4 * sizeof(float), pos, GL_DYNAMIC_DRAW);
     }
     glBindBuffer(GL_ARRAY_BUFFER_ARB, m_pbo);
-#if 0 /* eg: fails */
-    glBufferData(GL_ARRAY_BUFFER_ARB, 0, mNumParticles * 4 * sizeof(float), pos);
-#else
-    glBufferData(GL_ARRAY_BUFFER_ARB, mNumParticles * 4 * sizeof(float), pos, GL_STATIC_DRAW_ARB);
-#endif
+    glBufferSubData(GL_ARRAY_BUFFER_ARB, 0, mNumParticles * 4 * sizeof(float), pos);
     glBindBuffer( GL_ARRAY_BUFFER_ARB, 0);
 #endif
 }
