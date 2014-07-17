@@ -499,10 +499,13 @@ void SmokeRenderer::drawPoints(int start, int count, bool sorted)
         glBindBufferARB(GL_ARRAY_BUFFER_ARB, mIndexBuffer);
         glBufferData(GL_ARRAY_BUFFER_ARB, mNumParticles * sizeof(uint), mParticleIndices, GL_DYNAMIC_DRAW);
       }
-        glBindBufferARB(GL_ELEMENT_ARRAY_BUFFER_ARB, mIndexBuffer);
-        glBufferSubData(GL_ARRAY_BUFFER_ARB, 0, mNumParticles * sizeof(uint), mParticleIndices);
-        glDrawElements(GL_POINTS, count, GL_UNSIGNED_INT, (void*) (start*sizeof(unsigned int)) );
-        glBindBufferARB(GL_ELEMENT_ARRAY_BUFFER_ARB, 0);
+      glBindBuffer(GL_ARRAY_BUFFER_ARB, mIndexBuffer);
+      glBufferSubData(GL_ARRAY_BUFFER_ARB, 0, mNumParticles * sizeof(uint), mParticleIndices);
+      glBindBuffer( GL_ARRAY_BUFFER_ARB, 0);
+
+      glBindBufferARB(GL_ELEMENT_ARRAY_BUFFER_ARB, mIndexBuffer);
+      glDrawElements(GL_POINTS, count, GL_UNSIGNED_INT, (void*) (start*sizeof(unsigned int)) );
+      glBindBufferARB(GL_ELEMENT_ARRAY_BUFFER_ARB, 0);
     } else {
         glDrawArrays(GL_POINTS, start, count);
     }
