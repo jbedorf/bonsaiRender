@@ -24,6 +24,20 @@
 #include <cassert>
 #include <fstream>
 
+#include <sys/time.h>
+static inline double rtc(void)
+{
+  struct timeval Tvalue;
+  double etime;
+  struct timezone dummy;
+
+  gettimeofday(&Tvalue,&dummy);
+  etime =  (double) Tvalue.tv_sec +
+    1.e-6*((double) Tvalue.tv_usec);
+  return etime;
+}
+
+
 
 //#include "render_particles.h"
 #include "renderer.h"
@@ -190,7 +204,6 @@ extern void displayTimers();    // For profiling counter display
 // fps
 bool displayFps = false;
 double fps = 0.0;
-int fpsCount = 0;
 int fpsLimit = 5;
 //cudaEvent_t startEvent, stopEvent;
 
@@ -1458,6 +1471,8 @@ void onexit() {
 //  cudaDeviceReset();
 }
 
+unsigned long long fpsCount;
+double timeBegin;
 void display()
 {
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -1471,7 +1486,7 @@ void display()
   fpsCount++;
 
   // this displays the frame rate updated every second (independent of frame rate)
-  if (fpsCount >= fpsLimit)
+ // if (fpsCount >= fpsLimit)
   {
 //    static double gflops = 0;
 //    static double interactionsPerSecond = 0;
@@ -1484,11 +1499,17 @@ void display()
     
     milliseconds /= (float)fpsCount;
     
-    fps = 1.f / (milliseconds / 1000.f);
+    // fps = 1.f / (milliseconds / 1000.f);
+    fps = fpsCount/(rtc() - timeBegin);
+    if (fpsCount > 10*fps)
+    {
+      fpsCount = 0;
+      timeBegin = rtc();
+    }
     theDemo->drawStats(fps);
     
-    fpsCount = 0;
-    fpsLimit = (fps > 1.f) ? (int)fps : 1;
+  //  fpsCount = 0;
+   // fpsLimit = (fps > 1.f) ? (int)fps : 1;
 
     if (theDemo->m_paused)
     {
