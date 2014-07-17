@@ -46,6 +46,7 @@ void main()                                                 \n
 	//pointRadius *= 1.0 + smoothstep(overBrightThreshold, 0.0, age)*ageScale;
 	//pointRadius *= mass;
 	vec4 col = gl_Color;
+//    type = 3.0;
 	if (type == 0.0) {
 		// dust
 		pointRadius *= ageScale;	// scale up

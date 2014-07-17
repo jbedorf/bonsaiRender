@@ -111,8 +111,8 @@ int main(int argc, char * argv[])
     fprintf(stderr, " nTotal= %lld \n", nFirst + nSecond);
   }
 
-#if 1
-  const int nPtcl = nFirstLocal; //+ nSecondLocal;
+#if 0
+  const int nPtcl = nFirstLocal+ nSecondLocal;
   RendererData rData(nPtcl);
   for (int i = 0; i < nFirstLocal; i++)
   {
@@ -129,7 +129,6 @@ int main(int argc, char * argv[])
           data.firstVel[i].y*data.firstVel[i].y +
           data.firstVel[i].z*data.firstVel[i].z);
   }
-#if 0
   for (int i = 0; i < nSecondLocal; i++)
   {
     const int ip = i + nFirstLocal;
@@ -145,7 +144,6 @@ int main(int argc, char * argv[])
           data.secondVel[i].y*data.secondVel[i].y +
           data.secondVel[i].z*data.secondVel[i].z);
   }
-#endif
 #else
   const int nPtcl = nSecondLocal;
   RendererData rData(nPtcl);

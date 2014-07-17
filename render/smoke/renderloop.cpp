@@ -1185,12 +1185,15 @@ public:
       pos[i] = make_float4(m_idata.posx(i), m_idata.posy(i), m_idata.posz(i),0);
       int type =  m_idata.type(i);
       if (type == 0)
+      {
+        assert(0);
         colors[i] = darkMatterColor;
+      }
       else
       {
         const float  Mstar = sSampler.sampleMass();
         const float4 Cstar = sSampler.getColour(Mstar);
-        colors[i] = Cstar;
+        colors[i] = make_float4(1.0,0,0,2);
   //      colors[i] = make_float4(0);
       }
     }
