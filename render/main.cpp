@@ -111,7 +111,7 @@ int main(int argc, char * argv[])
     fprintf(stderr, " nTotal= %lld \n", nFirst + nSecond);
   }
 
-#if 0
+#if 1
   const int nPtcl = nFirstLocal+ nSecondLocal;
   RendererData rData(nPtcl);
   for (int i = 0; i < nFirstLocal; i++)
