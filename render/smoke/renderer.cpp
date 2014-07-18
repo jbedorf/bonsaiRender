@@ -348,8 +348,10 @@ void SmokeRenderer::setNumberOfParticles(uint n_particles)
 
 void SmokeRenderer::setPositions(float *pos)
 {
+#if 0
   for (uint i = 0; i < mNumParticles; i++)
     mParticlePos[i] = ((float4*)pos)[i];
+#endif
 #if 0
 	//memcpy(mParticlePos.getHostPtr(), pos, mNumParticles*4*sizeof(float));
 	//ParticlePos.copy(GpuArray<float4>::HOST_TO_DEVICE);
@@ -388,8 +390,10 @@ void SmokeRenderer::setPositionsDevice(float *posD)
 
 void SmokeRenderer::setColors(float *color)
 {
+#if 0
   for (uint i = 0; i < mNumParticles; i++)
     mParticleColors[i] = ((float4*)color)[i];
+#endif
 	if (!mColorVbo)
 	{
 		// allocate

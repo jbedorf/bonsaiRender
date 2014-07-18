@@ -31,9 +31,11 @@ struct Cmp
 void sort_by_key(float* keys, int* values, int count)
 {
   std::vector<KeyVal_t> pairs(count);
+#pragma omp parallel for
   for (int i = 0; i < count; i++)
     pairs[i] = std::make_pair(keys[i], values[i]);
   __gnu_parallel::sort(pairs.begin(), pairs.end(), Cmp());
+#pragma omp parallel for
   for (int i = 0; i < count; i++)
   {
     keys  [i] = pairs[i].first;
