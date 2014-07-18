@@ -1191,23 +1191,28 @@ public:
 
     float slope = +1.35; // reversed MF, low mass depleted
     slope = 0.1;
-    StarSampler sSampler (slope-1);
     float4 *colors = m_particleColors;
     float4 *pos = m_particlePos;
     darkMatterColor = make_float4(0.0f, 0.2f, 0.4f, 0.0f);      // blue
-    for (int i = 0; i < n; i++)
+
+#pragma omp parallel
     {
-      pos[i] = make_float4(m_idata.posx(i), m_idata.posy(i), m_idata.posz(i),0);
-      int type =  m_idata.type(i);
-      if (type == 0)
+      StarSampler sSampler (slope-1);
+#pragma omp for schedule(guided,1000)
+      for (int i = 0; i < n; i++)
       {
-        colors[i] = darkMatterColor;
-      }
-      else
-      {
-        const float  Mstar = sSampler.sampleMass();
-        const float4 Cstar = sSampler.getColour(Mstar);
-        colors[i] = Cstar;
+        pos[i] = make_float4(m_idata.posx(i), m_idata.posy(i), m_idata.posz(i),0);
+        int type =  m_idata.type(i);
+        if (type == 0)
+        {
+          colors[i] = darkMatterColor;
+        }
+        else
+        {
+          const float  Mstar = sSampler.sampleMass();
+          const float4 Cstar = sSampler.getColour(Mstar);
+          colors[i] = Cstar;
+        }
       }
     }
 

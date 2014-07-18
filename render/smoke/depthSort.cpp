@@ -1,5 +1,6 @@
 #include <cassert>
 #include <algorithm>
+#include <parallel/algorithm>
 #include <vector>
 #include "vector_math.h"
 
@@ -32,7 +33,7 @@ void sort_by_key(float* keys, int* values, int count)
   std::vector<KeyVal_t> pairs(count);
   for (int i = 0; i < count; i++)
     pairs[i] = std::make_pair(keys[i], values[i]);
-  std::sort(pairs.begin(), pairs.end(), Cmp());
+  __gnu_parallel::sort(pairs.begin(), pairs.end(), Cmp());
   for (int i = 0; i < count; i++)
   {
     keys  [i] = pairs[i].first;

@@ -440,6 +440,16 @@ void SmokeRenderer::depthSort(float4 *pos)
   calcVectors();
   float4 modelViewZ = make_float4(m_modelView._array[2], m_modelView._array[6], m_modelView._array[10], m_modelView._array[14]);
   depthSortCUDA(pos, mParticleDepths, (int *) mParticleIndices, modelViewZ, mNumParticles);
+
+  if (!mIndexBuffer)
+  {
+    glGenBuffersARB(1, (GLuint*)&mIndexBuffer);
+    glBindBufferARB(GL_ARRAY_BUFFER_ARB, mIndexBuffer);
+    glBufferData(GL_ARRAY_BUFFER_ARB, mNumParticles * sizeof(uint), mParticleIndices, GL_DYNAMIC_DRAW);
+  }
+  glBindBuffer(GL_ARRAY_BUFFER_ARB, mIndexBuffer);
+  glBufferSubData(GL_ARRAY_BUFFER_ARB, 0, mNumParticles * sizeof(uint), mParticleIndices);
+  glBindBuffer( GL_ARRAY_BUFFER_ARB, 0);
 }
 
 
@@ -493,21 +503,11 @@ void SmokeRenderer::drawPoints(int start, int count, bool sorted)
     }
 
     if (sorted) {
-      if (!mIndexBuffer)
-      {
-        glGenBuffersARB(1, (GLuint*)&mIndexBuffer);
-        glBindBufferARB(GL_ARRAY_BUFFER_ARB, mIndexBuffer);
-        glBufferData(GL_ARRAY_BUFFER_ARB, mNumParticles * sizeof(uint), mParticleIndices, GL_DYNAMIC_DRAW);
-      }
-      glBindBuffer(GL_ARRAY_BUFFER_ARB, mIndexBuffer);
-      glBufferSubData(GL_ARRAY_BUFFER_ARB, 0, mNumParticles * sizeof(uint), mParticleIndices);
-      glBindBuffer( GL_ARRAY_BUFFER_ARB, 0);
-
       glBindBufferARB(GL_ELEMENT_ARRAY_BUFFER_ARB, mIndexBuffer);
       glDrawElements(GL_POINTS, count, GL_UNSIGNED_INT, (void*) (start*sizeof(unsigned int)) );
       glBindBufferARB(GL_ELEMENT_ARRAY_BUFFER_ARB, 0);
     } else {
-        glDrawArrays(GL_POINTS, start, count);
+      glDrawArrays(GL_POINTS, start, count);
     }
 
     glDisableClientState(GL_VERTEX_ARRAY);
@@ -1532,8 +1532,8 @@ void SmokeRenderer::initParams()
 {
     m_params = new ParamListGL("render_params");
 
-	  m_params->AddParam(new Param<int>("slices", m_numSlices, 0, 256, 1, &m_numSlices));
-	  m_params->AddParam(new Param<int>("displayed slices", m_numDisplayedSlices, 0, 256, 1, &m_numDisplayedSlices));
+	  m_params->AddParam(new Param<int>("slices", m_numSlices, 1, 256, 1, &m_numSlices));
+	  m_params->AddParam(new Param<int>("displayed slices", m_numDisplayedSlices, 1, 256, 1, &m_numDisplayedSlices));
 
     m_params->AddParam(new Param<float>("sprite size", mParticleRadius, 0.0f, 2.0f, 0.01f, &mParticleRadius));
     m_params->AddParam(new Param<float>("dust scale", m_ageScale, 0.0f, 50.0f, 0.1f, &m_ageScale));
