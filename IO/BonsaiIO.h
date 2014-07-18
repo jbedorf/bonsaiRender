@@ -17,7 +17,7 @@ namespace BonsaiIO
     const char versionString[256];
     fp64_t time;
     fp64_t dummySpace[256];
-    std::vector<int> npPerType;
+    std::vector<std::pair<uint64_t,uint64_t>> typeInfo
   };
   
   /*********** Bonsai Data Types *************/
