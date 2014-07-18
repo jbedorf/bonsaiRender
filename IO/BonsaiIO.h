@@ -9,7 +9,7 @@ namespace BonsaiIO
 
   class Core
   {
-    std::vector<std::pair<uint64_t,DataStructBase*>> list;
+    std::vector<std::pair<uint64_t,DataStructBase*>> data;
   }
 
   class BonsaiHeader
