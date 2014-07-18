@@ -1193,7 +1193,7 @@ public:
     slope = 0.1;
     float4 *colors = m_particleColors;
     float4 *pos = m_particlePos;
-    darkMatterColor = make_float4(0.0f, 0.2f, 0.4f, 0.0f);      // blue
+//    darkMatterColor = make_float4(0.0f, 0.2f, 0.4f, 0.0f);      // blue
 
 #pragma omp parallel
     {
