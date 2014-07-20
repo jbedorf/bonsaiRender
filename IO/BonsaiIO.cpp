@@ -68,7 +68,7 @@ void writeSnapshot(
   /* write velocities */
   {
     typedef float vec3[3];
-    BonsaiIO::Vector<vec3> vel("VEL",n);
+    BonsaiIO::DataType<vec3> vel("VEL",n);
 #pragma omp parallel for
     for (int i = 0; i < n; i++)
     {
