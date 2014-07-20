@@ -5,20 +5,46 @@ namespace BonsaiIO
   typedef long long int long_t;
 
   /*********** Header ******************/
+
   class Header
   {
     private:
       const std::string versionString;
       double time;
+      std::vector< std::pair<std::string, size_t> > data;
 
     public:
-    Header() : versionString("V1")
+      Header() : versionString("V1")
     {
     }
 
+    MPI_Offset getOffset(const std::string &name)
+    {
+      if (data.find(name) == data.end())
+        return 0;
+
+    }
+
+    bool read(MPI_File &fh)
+    {
+    }
+
+    bool write(MPI_File &fh)
+    {
+    }
+
+    bool add(const std::string &name, const size_t n)
+    {
+      if (data.find(name) == data.end())
+      {
+        data[name] = size_t;
+        return true;
+      }
+      return false;
+    }
   };
 
-  
+
   /*********** Data types *************/
 
   class DataTypeBase
@@ -71,20 +97,20 @@ namespace BonsaiIO
       MPI_Status mpi;
 
       Header header;
-      
+
 
     public:
-        Core(const int _myRank,
-            const int _nRank,
-            const MPI_Comm &_comm,
-            const IOTYPE _iotype,
-            const std::string _fileName) :
-          write(false)
-          myRank(_myRank),
-          nRank(_nRank),
-          comm(_comm),
-          iotype(_iotype),
-          fileName(_fileName)
+      Core(const int _myRank,
+          const int _nRank,
+          const MPI_Comm &_comm,
+          const IOTYPE _iotype,
+          const std::string _fileName) :
+        write(false)
+        myRank(_myRank),
+        nRank(_nRank),
+        comm(_comm),
+        iotype(_iotype),
+        fileName(_fileName)
     {
       int file_open_error;
       switch (iotype)
@@ -123,93 +149,99 @@ namespace BonsaiIO
     }
 
 
-        bool readMPIIO(DataTypeBase &data)
+      bool readMPIIO(DataTypeBase &data)
+      {
+        assert(isRead());
+
+        const MPI_Offset dataOffset = header.getOffset(data.getName());
+        if (dataOffset == 0)
+          return false;
+
+        const size_t nBytesGbl = header.getNBytes();
+
+        const uint64_t nBytesPerRank = (nBytesGlb - 1 + nRank) / nRank;
+        const uint64_t beg = myRank * nBytesPerRank;
+        const uint64_t end = std::min(beg + nBytesPerRank, nBytesGlb);
+
+        data.allocate(nBytesPerRank);
+
+        uint64_t nBytes = end - beg;
+        const uint64_t nMaxPerRead = (1U << 31) - 1;
+        while (nBytes > 0)
         {
-          assert(isRead());
-          if (!header.seek(data.getName()))
-            return false;
-
-          const size_t nBytesGbl = header.getNBytes();
-
-
-          MPI_Offset dataOffset = header.getOffset();
-
-          const uint64_t nBytesPerRank = (nBytesGlb - 1 + nRank) / nRank;
-          const uint64_t beg = myRank * nBytesPerRank;
-          const uint64_t end = std::min(beg + nBytesPerRank, nBytesGlb);
-          
-          data.allocate(nBytesPerRank);
-          
-          uint64_t nBytes = end - beg;
-          const uint64_t nMaxPerRead = (1U << 31) - 1;
-          while (nBytes > 0)
-          {
-            const int count = static_cast<int>(std::min(nBytes, nMaxPerWrite));
-            assert(count > 0);
-            MPI_File_read(
-                fh,
-                data.getDataPtr(),
-                count, 
-                MPI_BYTE, 
-                &status);
-            int read;
-            MPI_Get_count(&status, MPI_INT, &read);
-            assert(count == read);
-            nBytes -= nMaxPerRead;
-          }
-          return true;
+          const int count = static_cast<int>(std::min(nBytes, nMaxPerWrite));
+          assert(count > 0);
+          MPI_File_read(
+              fh,
+              data.getDataPtr(),
+              count, 
+              MPI_BYTE, 
+              &status);
+          int read;
+          MPI_Get_count(&status, MPI_INT, &read);
+          assert(count == read);
+          nBytes -= nMaxPerRead;
         }
+        return true;
+      }
 
-        bool writeMPIIO(const DataTypeBase &data)
-        {
-          assert(isWrite());
-          const double tWrite = MPI_Wtime();
+      bool writeMPIIO(const DataTypeBase &data)
+      {
+        assert(isWrite());
+        const double tWrite = MPI_Wtime();
 
 
-          uint64_t nBytesLoc = data.getN() * data.unitSize();
-          uint64_t nBytesGlb;
-          
+        uint64_t nBytesLoc = data.getN() * data.unitSize();
+        uint64_t nBytesGlb;
 
-          MPI_Allreduce(&nBytesLoc, &nBytesGlb, 1, MPI_LONG_LONG, MPI_SUM, comm);
+
+        MPI_Allreduce(&nBytesLoc, &nBytesGlb, 1, MPI_LONG_LONG, MPI_SUM, comm);
+        if (isMaster())
           header.add(data.getName(), nBytesGlb);
 
-          const uint64_t nBytesPerRank = (nBytesGlb  - 1 + nRank) / nRank;
-          const uint64_t beg = myRank * nBytesPerRank;
-          const uint64_t end = std::min(beg + nBytesPerRank, nBytesGlb);
+        const uint64_t nBytesPerRank = (nBytesGlb  - 1 + nRank) / nRank;
+        const uint64_t beg = myRank * nBytesPerRank;
+        const uint64_t end = std::min(beg + nBytesPerRank, nBytesGlb);
 
-          MPI_Offset myOffset = headerOffset + dataOffset + beg;
-          MPI_File_seek(fh, myOffset, MPI_SEEK_SET);
+        MPI_Offset myOffset = headerOffset + dataOffset + beg;
+        MPI_File_seek(fh, myOffset, MPI_SEEK_SET);
 
-          uint64_t nBytes = end - beg;
-          const uint64_t nMaxPerWrite = (1U << 31) - 1;
-          while (nBytes > 0)
-          {
-            const int count = static_cast<int>(std::min(nBytes, nMaxPerWrite));
-            assert(count > 0);
-            MPI_File_write(
-                fh,
-                data.getDataPtr(),
-                count, 
-                MPI_BYTE, 
-                &status);
-            int written;
-            MPI_Get_count(&status, MPI_INT, &written);
-            assert(count == written);
-            nBytes -= nMaxPerWrite;
-          }
-
-          dataOffset += nBytesGlb;
-
-          dtWrite += MPI_Wtime() - tWrite;
-          return true;
-        }
-
-
-        void close()
+        uint64_t nBytes = end - beg;
+        const uint64_t nMaxPerWrite = (1U << 31) - 1;
+        while (nBytes > 0)
         {
-          /* write header */
-          MPI_File_close(&fh);
+          const int count = static_cast<int>(std::min(nBytes, nMaxPerWrite));
+          assert(count > 0);
+          MPI_File_write(
+              fh,
+              data.getDataPtr(),
+              count, 
+              MPI_BYTE, 
+              &status);
+          int written;
+          MPI_Get_count(&status, MPI_INT, &written);
+          assert(count == written);
+          nBytes -= nMaxPerWrite;
         }
+
+        dataOffset += nBytesGlb;
+
+        dtWrite += MPI_Wtime() - tWrite;
+        return true;
+      }
+
+
+      void close()
+      {
+        if (isMaster())
+        {
+          MPI_FIle_seek(fh, 0, MPI_SEEK_SET);
+          header.write(&fh);
+        }
+        MPI_Barrier(comm);
+        /* write header */
+        MPI_File_close(&fh);
+      }
 
   };
 
