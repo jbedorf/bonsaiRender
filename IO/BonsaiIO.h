@@ -2,63 +2,30 @@
 
 namespace BonsaiIO
 {
-  typedef long long int long_t;
-
-  /*********** Header ******************/
-
-  class Header
+  struct Exception : public std::exception
   {
-    private:
-      const std::string versionString;
-      double time;
-      std::vector< std::pair<std::string, size_t> > data;
-
-    public:
-      Header() : versionString("V1")
-    {
-    }
-
-    MPI_Offset getOffset(const std::string &name)
-    {
-      if (data.find(name) == data.end())
-        return 0;
-
-    }
-
-    bool read(MPI_File &fh)
-    {
-    }
-
-    bool write(MPI_File &fh)
-    {
-    }
-
-    bool add(const std::string &name, const size_t n)
-    {
-      if (data.find(name) == data.end())
-      {
-        data[name] = size_t;
-        return true;
-      }
-      return false;
-    }
+    std::string s;
+    Exception(std::string ss) : s(ss) {}
+    ~Exception() throw () {} // Updated
+    const char* what() const throw() { return s.c_str(); }
   };
 
-
+  typedef long long int long_t;
+  
   /*********** Data types *************/
 
   class DataTypeBase
   {
     private:
       std::string name;
-      long_t n;
-      int   elementSize;
     public:
-      virtual void DataTypeBase(const std::string _name, const int n) : name(_name), n(_n) {};
-      virtual void ~DataTypeBase() {};
-      const std::string& typeName() const {return name;}
-  };
+      void DataTypeBase(const std::string _name) : name(_name) {};
+      const std::string& getName() const {return name;}
 
+      virtual size_t getUnitSize   () const = 0;
+      virtual size_t getNumElements() const = 0;
+      virtual size_t getNumBytes   () const = 0;
+  };
 
   template<typename T>
     class DataType : public DataTypeBase
@@ -66,15 +33,86 @@ namespace BonsaiIO
     private:
       std::vector<T> data;
     public:
-      virtual void DataType(std::string _name, const int n = 0) : DataTypeBase(_name, _n)
-    {
-      if (n > 0)
+      DataType(std::string name, const int _n = 0) : DataTypeBase(name)
+      {
+        if (n > 0)
+          data.resize(n);
+      }
+      void allocate(const size_t n)
+      {
         data.resize(n);
-      dataSize = sizeof(T);
-    }
+      }
       const T& operator[](const size_t i) const { return data[i]; }
-      T operator[](const size_t i) const { return data[i]; }
+            T& operator[](const size_t i)       { return data[i]; }
+
+      size_t getUnitSize   () const {return sizeof(T);}
+      size_t getNumElements() const {return data.size();}
+      size_t getNumBytes   () const {return data.size()*sizeof(T);}
   };
+
+  /*********** Header ******************/
+
+  class Header
+  {
+    private:
+      struct dataType
+      {
+        std::string name;
+        size_t unitSize;
+        size_t numElements;
+      };
+
+      const std::string versionString;
+      double time;
+      std::vector<dataType> data;
+
+    public:
+      Header() : versionString("V1") {}
+
+      int find(const std::string &name) const
+      {
+        const int n = data.size();
+        for (int i = 0; i < n; i++)
+          if (data[i].name == name)
+            return i;
+        return -1;
+      }
+
+      MPI_Offset getOffset(const int idx) const
+      {
+        assert(idx >= 0);
+        MPI_Offset myOffset = headerSize();
+        for (int i = 0; i < idx-1; i++)
+          myOffset += data[i].unitSize * data[i].numElements;
+        return myOffset;
+      }
+
+      bool add(const DataTypeBase &dataVec)
+      {
+        if (find(name) == -1)
+        {
+          dataType d;
+          d.name        = dataVec.getName       ();
+          d.unitSize    = dataVec.getUnitSize   ();
+          d.numElements = dataVec.getNumElements();
+          data.push_back(d);
+          return true;
+        }
+
+        return false;
+      }
+
+      bool read(MPI_File &fh)
+      {
+      }
+
+      bool write(MPI_File &fh)
+      {
+      }
+
+  };
+
+
 
   /*********** Core reader/writer *************/
 
@@ -151,22 +189,31 @@ namespace BonsaiIO
 
       bool readMPIIO(DataTypeBase &data)
       {
-        assert(isRead());
+        /* make sure we are in the reading phase */
+        if (!isRead())
+          throw Exception("Trying to read a file, while using WRITE mode.");
 
-        const MPI_Offset dataOffset = header.getOffset(data.getName());
-        if (dataOffset == 0)
+        /* find data set */
+        const int idx = header.find(data.getName());
+        if (idx == -1)
           return false;
 
-        const size_t nBytesGbl = header.getNBytes();
+        /* confirm that unit size has the same length */
+        if (header.getUnitSize(idx) != data.getUnitSize())
+          return false
 
-        const uint64_t nBytesPerRank = (nBytesGlb - 1 + nRank) / nRank;
-        const uint64_t beg = myRank * nBytesPerRank;
-        const uint64_t end = std::min(beg + nBytesPerRank, nBytesGlb);
+        const size_t nElementsGlb = header.getNumBytes(idx);
 
-        data.allocate(nBytesPerRank);
+        const uint64_t nElementsPerRank = (nElementsGlb - 1 + nRank) / nRank;
+        const uint64_t beg = myRank * nElementsPerRank;
+        const uint64_t end = std::min(beg + nElementsPerRank, nElementsGlb);
 
-        uint64_t nBytes = end - beg;
+        data.allocate(nElementsPerRank);
+
+        uint64_t nBytes = (end - beg) * data.getUnitSize();
         const uint64_t nMaxPerRead = (1U << 31) - 1;
+
+        const MPI_Offset dataOffset = header.getDataOffset(dx);
         while (nBytes > 0)
         {
           const int count = static_cast<int>(std::min(nBytes, nMaxPerWrite));
@@ -179,7 +226,9 @@ namespace BonsaiIO
               &status);
           int read;
           MPI_Get_count(&status, MPI_INT, &read);
-          assert(count == read);
+          if (count != read)
+          
+            throw Exception("Count != read while reading the file.");
           nBytes -= nMaxPerRead;
         }
         return true;
@@ -187,17 +236,16 @@ namespace BonsaiIO
 
       bool writeMPIIO(const DataTypeBase &data)
       {
-        assert(isWrite());
+        /* make sure we are in the writing phase */
+        if (!isWrite())
+          throw Exception("Trying to write a file, while using READ mode.");
         const double tWrite = MPI_Wtime();
 
-
         uint64_t nBytesLoc = data.getN() * data.unitSize();
-        uint64_t nBytesGlb;
-
 
         MPI_Allreduce(&nBytesLoc, &nBytesGlb, 1, MPI_LONG_LONG, MPI_SUM, comm);
         if (isMaster())
-          header.add(data.getName(), nBytesGlb);
+          header.add(data);
 
         const uint64_t nBytesPerRank = (nBytesGlb  - 1 + nRank) / nRank;
         const uint64_t beg = myRank * nBytesPerRank;
@@ -245,133 +293,4 @@ namespace BonsaiIO
 
   };
 
-  class Header
-  {
-    const char versionString[256];
-    fp64_t time;
-    fp64_t dummySpace[256];
-    std::vector<std::pair<uint64_t,uint64_t>> typeInfo
-  };
-
-  /*********** Bonsai Data Types *************/
-
-  enum TypeName 
-  {
-    IDTYPE, POS, VEL,
-    RHOH, GASDATA,
-    TREENODE, TREESTRUCTURE,
-    NTYPES
-  };
-
-  /*********** Bonsai Data Type Base class *************/
-
-  class DataStructBase
-  {
-    public:
-      virtual TypeName getTypeName() const = 0;
-  };
-
-  /*********** Bonsai Data Type Derived Classes  *************/
-
-  class IDType : public DataStructBase
-  {
-    private:
-      uint64_t _IDTypePacked;
-    public:
-      virtual TypeName getTypeName() const { return IDTYPE; }
-
-      uint64_t getID() const
-      {
-        return _IDTypePacked & 0xFFFF000000000000ULL;
-      }
-      uint32_t getType() const
-      {
-        return static_cast<uint32_t>(_IDTypePacked >> 48);
-      }
-      void setID(const int64_t ID)
-      {
-        const uint32_t type = getType();
-        _IDTypePacked = (ID & 0xFFFF000000000000ULL) | (static_cast<uint64_t>(type) << 48);
-      }
-      void setType(const int type)
-      {
-        const uint64_t ID = getID();
-        _IDTypePacked  = ID | (static_cast<uint64_t>(type) << 48);
-      }
-  };
-
-  class Position : public DataStructBase
-  {
-    private:
-      fp32_t _pos[3];
-    public:
-      virtual TypeName getTypeName() const { return POS; }
-      fp32_t  pos(const int i) const { return _pos[i]; }
-      fp32_t& pos(const int i)       { return _pos[i]; }
-  };
-  class Velocity : public DataStructBase
-  {
-    private:
-      fp32_t _vel[3];
-    public:
-      virtual TypeName getTypeName() const { return VEL; }
-      fp32_t  vel(const int i) const { return _vel[i]; }
-      fp32_t& vel(const int i)       { return _vel[i]; }
-  };
-  class DensityH : public DataStructBase
-  {
-    private:
-      fp32_t _density;
-      fp32_t _h;
-    public:
-      virtual TypeName getTypeName() const { return VEL; }
-      fp32_t  _density() const { return _density; }
-      fp32_t& _density()       { return _density; }
-      fp32_t  _h() const { return _h; }
-      fp32_t& _h()       { return _h; }
-  };
-
-  class GasData : public DensityH
-  {
-    private:
-      fp32_t _temperature, pressure;
-    public:
-      virtual TypeName getTypeName() const { return VEL; }
-      fp32_t  _pressure() const { return _density; }
-      fp32_t& _pressure()       { return _density; }
-      fp32_t  _pressure() const { return _pressure; }
-      fp32_t& _pressure()       { return _pressure; }
-  };
-
-
-  class TreeNode : public DataStructBase
-  {
-    private:
-      fp32_t rmin[3];
-      fp32_t rmax[3];
-      fp32_t _mass, _com[3];
-    public:
-      virtual TypeName getTypeName() const { return TREENODE; }
-      fp32_t  min(const int i) const { return rmin[i]; }
-      fp32_t& min(const int i)       { return rmin[i]; }
-      fp32_t  max(const int i) const { return rmax[i]; }
-      fp32_t& max(const int i)       { return rmax[i]; }
-      fp32_t  com(const int i) const { return _com[i]; }
-      fp32_t& com(const int i)       { return _com[i]; }
-      fp32_t  mass() const { return _mass; }
-      fp32_t& mass()       { return _mass; }
-  };
-
-  class TreeStructure : public DataStructBase
-  {
-    private:
-      uint64_t _parent;
-      uint64_t _children[8];
-    public:
-      virtual TypeName getTypeName() const { return TREESTRUCTURE; }
-      uint64_t  parent() const { return _parent; }
-      uint64_t& parent()       { return _parent; }
-      uint64_t  children(const int i) const { return _children[i]; }
-      uint64_t& children(const int i)       { return _children[i]; }
-  };
-};
+}
