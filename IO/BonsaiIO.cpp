@@ -67,7 +67,7 @@ void writeSnapshot(
 
   /* write velocities */
   {
-    typedef float[3] vec3;
+    typedef float vec3[3];
     BonsaiIO::Vector<vec3> vel("VEL",n);
 #pragma omp parallel for
     for (int i = 0; i < n; i++)
@@ -81,7 +81,7 @@ void writeSnapshot(
   
   /* write rhoh */
   {
-    typedef float[2] vec2;
+    typedef float vec2[2];
     BonsaiIO::DataType<vec2> rhoh("RHOH",n);
 #pragma omp parallel for
     for (int i = 0; i < n; i++)
@@ -163,7 +163,7 @@ void readSnapshot(
   }
 
   {
-    typedef float[3] vec3;
+    typedef float vec3[3];
     Bonsai::DataType<vec3> vel("VEL");
     if (!out.read(vel))
     {
@@ -184,14 +184,12 @@ void readSnapshot(
   }
 
   {
-    typedef float[2] vec2;
+    typedef float vec2[2];
     Bonsai::DataType<vec2> rhoh("RHOH");
     if (out.read.(rhoh))
     {
       if (myRank == 0)
-      {
-        fprintf(stderr , " -- No RHOH data is found \n");
-      }
+        fprintf(stderr , " -- RHOH data is found \n");
       const int n = rhoh.size();
       rhohList.resize(n);
       assert(rhohList.size() == bodiesID.size());
@@ -203,9 +201,7 @@ void readSnapshot(
       }
     }
     else if (myRank == 0)
-    {
       fprintf(stderr , " -- No RHOH data is found \n");
-    }
   }
 
 }

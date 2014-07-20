@@ -22,7 +22,7 @@ namespace BonsaiIO
       void DataTypeBase(const std::string _name) : name(_name) {};
       const std::string& getName() const {return name;}
 
-      virtual size_t getUnitSize   () const = 0;
+      virtual size_t getElementSize() const = 0;
       virtual size_t getNumElements() const = 0;
       virtual size_t getNumBytes   () const = 0;
   };
@@ -45,7 +45,7 @@ namespace BonsaiIO
       const T& operator[](const size_t i) const { return data[i]; }
             T& operator[](const size_t i)       { return data[i]; }
 
-      size_t getUnitSize   () const {return sizeof(T);}
+      size_t getElementSize() const {return sizeof(T);}
       size_t getNumElements() const {return data.size();}
       size_t getNumBytes   () const {return data.size()*sizeof(T);}
   };
@@ -93,7 +93,7 @@ namespace BonsaiIO
         {
           dataType d;
           d.name        = dataVec.getName       ();
-          d.unitSize    = dataVec.getUnitSize   ();
+          d.unitSize    = dataVec.getElementSize();
           d.numElements = dataVec.getNumElements();
           data.push_back(d);
           return true;
@@ -187,8 +187,9 @@ namespace BonsaiIO
     }
 
 
-      bool readMPIIO(DataTypeBase &data)
+      bool readMPIIO(DataTypeBase &data, const bool restart = false)
       {
+        const double tRead = MPI_Wtime();
         /* make sure we are in the reading phase */
         if (!isRead())
           throw Exception("Trying to read a file, while using WRITE mode.");
@@ -199,62 +200,125 @@ namespace BonsaiIO
           return false;
 
         /* confirm that unit size has the same length */
-        if (header.getUnitSize(idx) != data.getUnitSize())
+        if (header.getElementSize(idx) != data.getElementSize())
           return false
 
-        const size_t nElementsGlb = header.getNumBytes(idx);
+        const int nRankFile    = header.getNRank(idx);
+        std::vector<uint64_t> numElementsPerRank(nRankFile);
+        MPI_Offset myOffset = header.getDataOffset(dx);
+        MPI_File_read(
+            fh,
+            &numElementsPerRank[0],
+            nRankFile, 
+            MPI_LONG_LONG,
+            &status);
+        int nRead;
+        MPI_Get_count(&status, MPI_INT, &nRead);
+        if (nRankFile != nRead)
+          throw Exception("Error while reading nRankFile.");
 
-        const uint64_t nElementsPerRank = (nElementsGlb - 1 + nRank) / nRank;
-        const uint64_t beg = myRank * nElementsPerRank;
-        const uint64_t end = std::min(beg + nElementsPerRank, nElementsGlb);
+        myOffset += nRankFile*sizeof(uint64_t);
+        std::vector<uint64_t> beg(nRankFile+1, 0), end(nRankFile+1, 0);
+        for (int i = 0; i < nRank; i++)
+        {
+          end[i  ] = beg[i] + numElementsPerRank[i];
+          beg[i+1] = end[i];
+        }
+        const uint64_t numElementsGlb = end[nRankFile-1];
 
-        data.allocate(nElementsPerRank);
+        if (!(restart && nRankPerFile == nRank))
+        {
+          const uint64_t nElementsPerRank = (numElementsGlb - 1 + nRank) / nRank;
+          const uint64_t _beg = myRank * nElementsPerRank;
+          const uint64_t _end = std::min(beg + nElementsPerRank, nElementsGlb);
+          beg[myRank] = _beg;
+          end[myRank] = _end;
+        }
 
-        uint64_t nBytes = (end - beg) * data.getUnitSize();
+        data.allocate(numElementsPerRank);
+
+        uint64_t offset = 0;
+        uint64_t nBytes = (end - beg) * data.getElementSize();
         const uint64_t nMaxPerRead = (1U << 31) - 1;
 
-        const MPI_Offset dataOffset = header.getDataOffset(dx);
         while (nBytes > 0)
         {
           const int count = static_cast<int>(std::min(nBytes, nMaxPerWrite));
           assert(count > 0);
           MPI_File_read(
               fh,
-              data.getDataPtr(),
+              reinterpret_cast<char*>(data.getDataPtr()) + offset,
               count, 
               MPI_BYTE, 
               &status);
           int read;
           MPI_Get_count(&status, MPI_INT, &read);
           if (count != read)
-          
-            throw Exception("Count != read while reading the file.");
+            throw Exception("Something went wrong while reading the data.");
           nBytes -= nMaxPerRead;
+          offset += count;
         }
+        
+        dtRead += MPI_Wtime() - tRead;
+        nBytesRead += numElementsGlb*data.getElementSize();
         return true;
       }
 
       bool writeMPIIO(const DataTypeBase &data)
       {
-        /* make sure we are in the writing phase */
-        if (!isWrite())
-          throw Exception("Trying to write a file, while using READ mode.");
         const double tWrite = MPI_Wtime();
 
-        uint64_t nBytesLoc = data.getN() * data.unitSize();
+        /* make sure we are in the writing phase */
+        if (!isWrite())
+          throw Exception("Trying to write a file, while being in the READ mode.");
 
-        MPI_Allreduce(&nBytesLoc, &nBytesGlb, 1, MPI_LONG_LONG, MPI_SUM, comm);
+        uint64_t numElementsLoc = data.getNumElements();
+
+        /* gather numELementsLoc to all ranks */
+        std::vector<uint64_t> numElementsPerRank(nRank);
+        MPI_Allgather(
+            &numElementsLoc,            1, MPI_LONG_LONG,
+            &numElementsPerRank[0], nRank, MPI_LONG_LONG,
+            comm);
+        
+        std::vector<uint64_t> beg(nRank+1, 0), end(nRank+1, 0);
+        for (int i = 0; i < nRank; i++)
+        {
+          end[i  ] = beg[i] + numElementsPerRank[i];
+          beg[i+1] = end[i];
+        }
+
+        const size_t numElementsGlb = end[nRank-1];
+       
+        MPI_Offset myOffset = dataOffsetGlb;
+
         if (isMaster())
-          header.add(data);
+        {
+          /* add data description to the header */ 
+          header.add(data, numElementsGlb, nRank);
 
-        const uint64_t nBytesPerRank = (nBytesGlb  - 1 + nRank) / nRank;
-        const uint64_t beg = myRank * nBytesPerRank;
-        const uint64_t end = std::min(beg + nBytesPerRank, nBytesGlb);
+          /* write descirption about #elements at each rank */
+          /* this is handy for restart functionality to avoid domain decomposition */
+          MPI_File_seek(fh, myOffset, MPI_SEEK_SET);
+          MPI_File_write(
+              fh,
+              &numElementsPerRank[0],
+              nRank,
+              MPI_LONG_LONG,
+              &status);
+          int written;
+          MPI_Get_count(&status, MPI_INT, &written);
+          if (nRank != written)
+            throw Exception("Error while writing data description");
+        }
+       
+        /* write the data */ 
 
-        MPI_Offset myOffset = headerOffset + dataOffset + beg;
+        myOffset += nRank*sizeof(uint64_t) + beg;
         MPI_File_seek(fh, myOffset, MPI_SEEK_SET);
 
-        uint64_t nBytes = end - beg;
+        uint64_t nBytes = (end[myRank] - beg[myRank])*data.getElementSize();
+        uint64_t offset = 0;
         const uint64_t nMaxPerWrite = (1U << 31) - 1;
         while (nBytes > 0)
         {
@@ -262,18 +326,22 @@ namespace BonsaiIO
           assert(count > 0);
           MPI_File_write(
               fh,
-              data.getDataPtr(),
+              reinterpret_cast<char*>(data.getDataPtr()) + offset,
               count, 
               MPI_BYTE, 
               &status);
           int written;
           MPI_Get_count(&status, MPI_INT, &written);
-          assert(count == written);
+          if (count != written)
+            throw Exception("Something went wrong while writing the data.");
           nBytes -= nMaxPerWrite;
+          offset += count;
         }
 
-        dataOffset += nBytesGlb;
+        /* write request is completed, now adjust dataOffset */
+        dataOffsetGlb += nRank*sizeof(uint64_t) + numElementsGlb*data.getElementSize();
 
+        nByteWrite = dataOffsetGlb;
         dtWrite += MPI_Wtime() - tWrite;
         return true;
       }
@@ -281,13 +349,24 @@ namespace BonsaiIO
 
       void close()
       {
-        if (isMaster())
+        if (isMaster() && isWrite())
         {
-          MPI_FIle_seek(fh, 0, MPI_SEEK_SET);
+          MPI_File_seek(fh, 0, MPI_SEEK_SET);
+          MPI_File_write(
+              fh,
+              &dataOffsetGlb,
+              1,
+              MPI_LONG_LONG,
+              &status);
+          int written;
+          MPI_Get_count(&status, MPI_INT, &written);
+          if (written != 1)
+            throw Exception("Error while writing header offset.");
+          MPI_FIle_seek(fh, dataoffsetGlb, MPI_SEEK_SET);
           header.write(&fh);
         }
-        MPI_Barrier(comm);
-        /* write header */
+
+        /* close file */
         MPI_File_close(&fh);
       }
 
