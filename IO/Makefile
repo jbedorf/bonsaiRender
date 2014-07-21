@@ -19,7 +19,7 @@ SRCPATH = ./
 SRC = BonsaiIO.cpp main.cpp
 OBJ = $(SRC:%.cpp=%.o)
 
-PROG = read_tipsy
+PROG = parallelIO
 
 RM = /bin/rm
 
@@ -35,6 +35,6 @@ $(PROG): $(OBJ)
 
 
 clean:
-	/bin/rm -rf *.o $(PROG)  $(PROG1)
+	/bin/rm -rf *.o $(PROG)  $(OBJ)
 
 $(OBJ): BonsaiIO.h 
