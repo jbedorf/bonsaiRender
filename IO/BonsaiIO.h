@@ -46,6 +46,7 @@ namespace BonsaiIO
       IOTYPE iotype;
     public:
       FileIO() : _opened(false) {}
+      virtual ~FileIO() {}
       virtual bool isOpened() const { return _opened; }
       virtual bool isRead  () const { return isOpened() && iotype == READ;  }
       virtual bool isWrite () const { return isOpened() && iotype == WRITE; }
@@ -69,6 +70,7 @@ namespace BonsaiIO
 
     public:
       MPIFileIO(const MPI_Comm &_comm) : FileIO(), comm(_comm) {}
+      virtual ~MPIFileIO() {}
 
       void open(const std::string &fileName, const IOTYPE _iotype)
       {
@@ -362,7 +364,6 @@ namespace BonsaiIO
         fhPtr(new MPIFileIO(comm)),
         fh(*fhPtr),
         numBytes(0), dtIO(0)
-
       {
         switch (iotype)
         {
@@ -380,6 +381,7 @@ namespace BonsaiIO
             assert(0);
         }
       }
+      ~Core() { delete fhPtr; }
 
       bool read(DataTypeBase &data, const bool restart = false, const int reduceFactor = 1)
       {
