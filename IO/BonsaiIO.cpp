@@ -1,10 +1,10 @@
 #include "BonsaiIO.h"
-  
-class IDType;
+
+class IDType
 {
-  public:
-    uint64_t ID;
   private:
+    uint64_t _IDTypePacked;
+  public:
     uint64_t getID() const
     {
       return _IDTypePacked & 0xFFFF000000000000ULL;
@@ -25,20 +25,27 @@ class IDType;
     }
 };
 
+struct real2 { float x,y;};
+struct real4 { float x,y,z,w;};
+typedef unsigned long long uulong;
+
+#define DISKID  1000000000
+#define BULGEID 2000000000
+#define DARKMATTERID 3000000000
+
+
 void writeSnapshot(
     real4 *bodyPositions,
     real4 *bodyVelocities,
-    uulong* bodiesIDs,
+    uulong* bodyIds,
     const int n,
     const int nDomains,
     const std::string &fileName,
     const float time,
-    const MPIComm &comm,
+    const MPI_Comm &comm,
     const int nRank, const int myRank)
 {
-  BonsaiIO::Core out(myRank, nRank, comm, BonsaiIO::WRITEMPI, fileName);
-
-  out.setNDomains(nDomains);
+  BonsaiIO::Core out(myRank, nRank, comm, BonsaiIO::WRITE, fileName);
 
   /* write IDs */
   {
@@ -46,7 +53,7 @@ void writeSnapshot(
 #pragma omp parallel for
     for (int i = 0; i < n; i++)
     {
-      ID[i].setID(bodiesIDs[i]);
+      ID[i].setID(bodyIds[i]);
       int type = 0;
       if(bodyIds[i] >= DISKID  && bodyIds[i] < BULGEID)       type = 2;
       if(bodyIds[i] >= BULGEID && bodyIds[i] < DARKMATTERID)  type = 1;
@@ -98,22 +105,22 @@ void writeSnapshot(
 void readSnapshot(
     std::vector<real4>  &bodyPositions,
     std::vector<real4>  &bodyVelocities,
-    std::vector<uulong> &bodiesID,
+    std::vector<uulong> &bodyID,
     std::vector<real2>  &rhohList,
     const std::string   &fileName,
-    const MPIComm       &comm,
+    const MPI_Comm       &comm,
     const int nRank, 
     const int myRank,
     int &NTotal2,
     int &NFirst, int &NSecond, int &NThird,
     std::vector<real4> &dustPositions, std::vector<real4> &dustVelocities,
-    std::vector<ullong> &dustIDs, 
+    std::vector<uulong> &dustIDs, 
     const int reduce_bodies_factor,
     const int reduce_dust_factor,
     const bool restart)
 {
   NFirst = NSecond = NThird = 0;
-  BonsaiIO::Core out(fileName, BonsaiIO::READMPI);
+  BonsaiIO::Core out(myRank, nRank, comm, BonsaiIO::READ, fileName);
 
   {
     BonsaiIO::DataType<IDType> IDList("IDType");
@@ -123,12 +130,12 @@ void readSnapshot(
         fprintf(stderr, " FATAL: No particle ID data is found. Please make sure you passed the right file \n");
       exit(-1);
     }
-    const int n = IDList.size();
-    bodiesID.resize(n);
+    const int n = IDList.getNumElements();
+    bodyID.resize(n);
 #pragma omp parallel for
     for (int i = 0; i < n; i++)
     {
-      bodiesID[i] = IDList[i].getID();
+      bodyID[i] = IDList[i].getID();
       switch (IDList[i].getType())
       {
         case 0:
@@ -154,9 +161,9 @@ void readSnapshot(
         fprintf(stderr, " FATAL: No particle positions data is found. Please make sure you passed the right file \n");
       exit(-1);
     }
-    const int n = pos.size();
+    const int n = pos.getNumElements();
     bodyPositions.resize(n);
-    assert(bodyPositions.size() == bodiesID.size());
+    assert(bodyPositions.size() == bodyID.size());
 #pragma omp parallel for
     for (int i = 0; i < n; i++)
       bodyPositions[i] = pos[i];
@@ -164,16 +171,16 @@ void readSnapshot(
 
   {
     typedef float vec3[3];
-    Bonsai::DataType<vec3> vel("VEL");
+    BonsaiIO::DataType<vec3> vel("VEL");
     if (!out.read(vel))
     {
       if (myRank == 0)
         fprintf(stderr, " FATAL: No particle velocity data is found. Please make sure you passed the right file \n");
       exit(-1);
     }
-    const int n = vel.size();
+    const int n = vel.getNumElements();
     bodyVelocities.resize(n);
-    assert(bodyVelocities.size() == bodiesID.size());
+    assert(bodyVelocities.size() == bodyID.size());
 #pragma omp parallel for
     for (int i = 0; i < n; i++)
     {
@@ -185,14 +192,14 @@ void readSnapshot(
 
   {
     typedef float vec2[2];
-    Bonsai::DataType<vec2> rhoh("RHOH");
-    if (out.read.(rhoh))
+    BonsaiIO::DataType<vec2> rhoh("RHOH");
+    if (out.read(rhoh))
     {
       if (myRank == 0)
         fprintf(stderr , " -- RHOH data is found \n");
-      const int n = rhoh.size();
+      const int n = rhoh.getNumElements();
       rhohList.resize(n);
-      assert(rhohList.size() == bodiesID.size());
+      assert(rhohList.size() == bodyID.size());
 #pragma omp parallel for
       for (int i = 0; i < n; i++)
       {
