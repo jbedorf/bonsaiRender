@@ -21,6 +21,8 @@ int main(int argc, char * argv[])
   MPI_Comm_size(comm, &nRank);
   MPI_Comm_rank(comm, &myRank);
 
+  bool restartFlag = true;
+
 
   if (argc < 2)
   {
@@ -40,7 +42,8 @@ int main(int argc, char * argv[])
   if (argc > 2)
   {
     reduceFactor = atoi(argv[2]);
-    fprintf(stderr," reduceFactor= %d\n", reduceFactor);
+    if (myRank == 0)
+      fprintf(stderr," reduceFactor= %d\n", reduceFactor);
   }
   
   BonsaiIO::Core out(myRank, nRank, comm, BonsaiIO::READ, fileName);
@@ -53,7 +56,7 @@ int main(int argc, char * argv[])
   
   {
     BonsaiIO::DataType<IDType> IDList("IDType");
-    if (!out.read(IDList))
+    if (!out.read(IDList, restartFlag, reduceFactor))
     {
       if (myRank == 0)
         fprintf(stderr, " FATAL: No particle ID data is found. Please make sure you passed the right file \n");
@@ -98,7 +101,7 @@ int main(int argc, char * argv[])
   std::vector<real4> bodyPositions;
   {
     BonsaiIO::DataType<real4> pos("POS:real4");
-    if (!out.read(pos))
+    if (!out.read(pos, restartFlag, reduceFactor))
     {
       if (myRank == 0)
         fprintf(stderr, " FATAL: No particle positions data is found. Please make sure you passed the right file \n");
@@ -116,7 +119,7 @@ int main(int argc, char * argv[])
   {
     typedef float vec3[3];
     BonsaiIO::DataType<vec3> vel("VEL:float[3]");
-    if (!out.read(vel))
+    if (!out.read(vel, restartFlag, reduceFactor))
     {
       if (myRank == 0)
         fprintf(stderr, " FATAL: No particle velocity data is found. Please make sure you passed the right file \n");
@@ -140,7 +143,7 @@ int main(int argc, char * argv[])
   {
     typedef float vec2[2];
     BonsaiIO::DataType<vec2> rhoh("RHOH");
-    if (out.read(rhoh))
+    if (out.read(rhoh, restartFlag, reduceFactor))
     {
       if (myRank == 0)
         fprintf(stderr , " -- RHOH data is found \n");

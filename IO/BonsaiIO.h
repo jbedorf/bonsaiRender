@@ -463,7 +463,6 @@ namespace BonsaiIO
         }
         else
         {
-          assert(reduceFactor == 1);
           long_t numElements = 0;
           for (long_t i = 0; i < numElementsLoc; i += reduceFactor)
             numElements++;
