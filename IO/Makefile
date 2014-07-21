@@ -8,7 +8,7 @@ OMPFLAGS  = -fopenmp
 OFLAGS = -O3 -g -Wall 
 # OMPFLAGS=
 
-CXXFLAGS =  -fPIC $(OFLAGS) -Wstrict-aliasing=2 $(OMPFLAGS)
+CXXFLAGS =  -fPIC $(OFLAGS) $(OMPFLAGS)
 
 
 
