@@ -92,8 +92,8 @@ int main(int argc, char * argv[])
     long long NTotal2L = NFirstL+NSecondL+NThirdL;
     NTotal2  = NFirst +NSecond +NThird ;
     if (myRank == 0)
-      fprintf(stderr, "rank= %d  n= %d  nTotal2L= %lld  nTotal2= %lld\n",
-          myRank, n, NTotal2L, NTotal2);
+      fprintf(stderr, "rank= %d  NFirst= %lld  NSecond= %lld  NThird= %lld  nTotal2= %lld\n",
+          myRank, NFirst, NSecond, NThird, NTotal2);
     assert(NTotal2L == n);
   }
  

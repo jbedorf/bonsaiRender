@@ -482,7 +482,10 @@ namespace BonsaiIO
             fh.read(&tmp[0], count, "Error while reading reduced data.");
             for (long_t i = 0; i < count; i += size)
               if ((previous + i)%(reduceFactor*size) == 0)
+              {
                 memcpy(reinterpret_cast<char*>(data.getDataPtr()) + el*size, &tmp[i], size);
+                el++;
+              }
             previous += count;
             nRead    -= count;
             assert(el <= numElements);
