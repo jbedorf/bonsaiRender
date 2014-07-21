@@ -132,7 +132,7 @@ namespace BonsaiIO
               count, 
               MPI_BYTE, 
               &status);
-          MPI_Get_count(&status, MPI_INT, &checkCount);
+          MPI_Get_count(&status, MPI_BYTE, &checkCount);
           if (count != checkCount)
             throw Exception(errString);
           nRead  -= count;
@@ -156,7 +156,7 @@ namespace BonsaiIO
               count, 
               MPI_BYTE, 
               &status);
-          MPI_Get_count(&status, MPI_INT, &checkCount);
+          MPI_Get_count(&status, MPI_BYTE, &checkCount);
           if (count != checkCount)
             throw Exception(errString);
           nWrite -= count;
@@ -235,20 +235,36 @@ namespace BonsaiIO
     private:
       struct DataInfo
       {
-        enum {NAMEMAX = 256};
+        enum {NAMEMAX = 255};
         char name[NAMEMAX+1];
         size_t elementSize;
         long_t offset;
         int nRank;
       };
 
-      long_t offset;
       std::vector<DataInfo> data;
       double time;
 
 
     public:
-      Header() : offset(sizeof(long_t)) {}
+      void   setTime(const double _time) { time = _time;}
+      double getTime() { return time; }
+
+      void printFields() const
+      {
+        const int n = data.size();
+        for (int i = 0; i < n; i++)
+        {
+          fprintf(stderr, "---------Field %d ----------------------\n", i);
+          fprintf(stderr, "Name=        %s\n", data[i].name);
+          fprintf(stderr, "elementSize= %d\n", (int)data[i].elementSize);
+          fprintf(stderr, "nRank=       %d\n", (int)data[i].nRank);
+          fprintf(stderr, "offset=      %lld\n", data[i].offset);
+        }
+        fprintf(stderr, "------------------------------------\n");
+      }
+
+      Header() {}
 
       int find(const std::string &name) const
       {
@@ -280,18 +296,17 @@ namespace BonsaiIO
         return data[idx].offset;
       }
 
-      bool add(const DataTypeBase &dataVec, const size_t offset, const int nRank)
+      bool add(const DataTypeBase &dataVec, const long_t offset, const int nRank)
       {
         assert(dataVec.getName().size() <= DataInfo::NAMEMAX);
         if (find(dataVec.getName()) == -1)
         {
           DataInfo d;
           sprintf(d.name, dataVec.getName().c_str());
+          d.offset      = offset;
           d.elementSize = dataVec.getElementSize();
-          d.offset      = this->offset;
           d.nRank       = nRank;
           data.push_back(d);
-          this->offset += offset;
           return true;
         }
         return false;
@@ -304,7 +319,7 @@ namespace BonsaiIO
         fh.write(versionString, 16*sizeof(char), "Error writing versionString.");
         fh.write(&time, sizeof(float), "Error writing time.");
         int nData = data.size();
-        fh.write(&nData, sizeof(float), "Error writing nData.");
+        fh.write(&nData, sizeof(int), "Error writing nData.");
         fh.write(&data[0], sizeof(DataInfo)*nData, "Error writing dataInfo.");
       }
 
@@ -317,10 +332,10 @@ namespace BonsaiIO
 
         fh.read(&time, sizeof(float), "Error reading time.");
         int nData;
-        fh.read(&nData, sizeof(float), "Error reading nData.");
+        fh.read(&nData, sizeof(int), "Error reading nData.");
 
         data.resize(nData);
-        fh.write(&data[0], sizeof(DataInfo)*nData, "Error reading dataInfo.");
+        fh.read(&data[0], sizeof(DataInfo)*nData, "Error reading dataInfo.");
       }
   };
 
@@ -346,10 +361,12 @@ namespace BonsaiIO
       size_t numBytes;
       double dtIO;
 
-      bool isMaster() const { return nRank == 0; }
+      Header header;
+      bool isMaster() const { return myRank == 0; }
+
 
     public:
-      Header header;
+      Header const & getHeader() { return header; }
 
     public:
       Core(const int _myRank,
@@ -411,7 +428,7 @@ namespace BonsaiIO
         numBytes += nRankFile*sizeof(long_t);
 
         std::vector<long_t> beg(nRankFile+1, 0), end(nRankFile+1, 0);
-        for (int i = 0; i < nRank; i++)
+        for (int i = 0; i < nRankFile; i++)
         {
           end[i  ] = beg[i] + numElementsPerRank[i];
           beg[i+1] = end[i];
@@ -434,7 +451,7 @@ namespace BonsaiIO
           assert(sumGlb == numElementsGlb);
         }
 
-        offset += beg[myRank];
+        offset += beg[myRank]*data.getElementSize();;
         fh.seek(offset);
 
         if (reduceFactor <= 1)
@@ -447,6 +464,18 @@ namespace BonsaiIO
         else
         {
           assert(reduceFactor == 1);
+          long_t numElements = 0;
+          for (long_t i = 0; i < numElementsLoc; i += reduceFactor)
+            numElements++;
+          data.resize(numElements);
+          long_t el = 0;
+          const size_t size = data.getElementSize();
+          for (long_t i = 0; i < numElementsLoc; i += reduceFactor, el += size)
+          {
+            fh.read(
+                reinterpret_cast<char*>(data.getDataPtr()) + el,
+                size, "Error while reading reduced data.");
+          }
         }
 
         dtIO += MPI_Wtime() - tRead;
@@ -465,8 +494,8 @@ namespace BonsaiIO
         /* gather numELementsLoc to all ranks */
         std::vector<long_t> numElementsPerRank(nRank);
         MPI_Allgather(
-            &numElementsLoc,            1, MPI_LONGT,
-            &numElementsPerRank[0], nRank, MPI_LONGT,
+            &numElementsLoc,        1, MPI_LONGT,
+            &numElementsPerRank[0], 1, MPI_LONGT,
             comm);
 
         std::vector<long_t> beg(nRank+1, 0), end(nRank+1, 0);
@@ -481,7 +510,8 @@ namespace BonsaiIO
         if (isMaster())
         {
           /* add data description to the header */ 
-          header.add(data, dataOffsetGlb, nRank);
+          if (!header.add(data, dataOffsetGlb, nRank))
+            throw Exception("Data type is already added.");
 
           /* write descirption about #elements at each rank */
           /* this is handy for restart functionality to avoid domain decomposition */
@@ -492,8 +522,9 @@ namespace BonsaiIO
 
         dataOffsetGlb += sizeof(long_t)*nRank;
 
-        fh.seek(dataOffsetGlb + beg[myRank]);
+        fh.seek(dataOffsetGlb + beg[myRank]*data.getElementSize());
         const long_t nBytes = (end[myRank] - beg[myRank]) * data.getElementSize();
+        assert(nBytes > 0);
         fh.write(data.getDataPtr(), nBytes, "Error while writing data.");
 
         dataOffsetGlb += numElementsGlb*data.getElementSize();
@@ -516,6 +547,8 @@ namespace BonsaiIO
 
         fh.close();
       }
+
+      double computeBandwidth() const { return numBytes/dtIO; }
   };
 
 }
