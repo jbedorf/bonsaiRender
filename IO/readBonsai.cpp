@@ -142,7 +142,7 @@ int main(int argc, char * argv[])
   std::vector<real2> rhohList;
   {
     typedef float vec2[2];
-    BonsaiIO::DataType<vec2> rhoh("RHOH");
+    BonsaiIO::DataType<vec2> rhoh("RHOH:float[2]");
     if (out.read(rhoh, restartFlag, reduceFactor))
     {
       if (myRank == 0)
