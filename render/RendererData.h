@@ -33,6 +33,8 @@ class RendererData
     enum Attribute_t {
       MASS,
       VEL,
+      RHO,
+      H,
       NPROP};
   private:
     const int _n;
