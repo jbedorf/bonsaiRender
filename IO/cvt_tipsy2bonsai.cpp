@@ -56,8 +56,17 @@ int main(int argc, char * argv[])
     fprintf(stderr, " nTotal= %lld \n", nFirst + nSecond);
   }
 
+  const double tAll = MPI_Wtime();
   {
+    const double tOpen = MPI_Wtime();
     BonsaiIO::Core out(rank, nranks, comm, BonsaiIO::WRITE, outputName);
+    double dtOpenLoc = MPI_Wtime() - tOpen;
+    double dtOpenGlb;
+    MPI_Allreduce(&dtOpenLoc, &dtOpenGlb, 1, MPI_DOUBLE, MPI_MAX,comm);
+    if (rank == 0)
+      fprintf(stderr, "open file in %g sec \n", dtOpenGlb);
+
+    double dtWrite = 0;
 
     /* write IDs */
     {
@@ -74,7 +83,9 @@ int main(int argc, char * argv[])
         ID[i+nFirstLocal].setID(data.secondID[i]);
         ID[i+nFirstLocal].setType(1);
       }
+      double t0 = MPI_Wtime();
       out.write(ID);
+      dtWrite += MPI_Wtime() - t0;
     }
   
     /* write pos */
@@ -86,7 +97,9 @@ int main(int argc, char * argv[])
 #pragma omp parallel for
       for (int i = 0; i< nSecondLocal; i++)
         pos[i+nFirstLocal] = data.secondPos[i];
+      double t0 = MPI_Wtime();
       out.write(pos);
+      dtWrite += MPI_Wtime() - t0;
     }
     
     /* write vel */
@@ -107,10 +120,24 @@ int main(int argc, char * argv[])
         vel[i+nFirstLocal][1] = data.secondVel[i].y;
         vel[i+nFirstLocal][2] = data.secondVel[i].z;
       }
+      double t0 = MPI_Wtime();
       out.write(vel);
+      dtWrite += MPI_Wtime() - t0;
     }
 
+
+    double dtWriteGlb;
+    MPI_Allreduce(&dtWrite, &dtWriteGlb, 1, MPI_DOUBLE, MPI_MAX,comm);
+    if (rank == 0)
+      fprintf(stderr, "write file in %g sec \n", dtWriteGlb);
+
+    const double tClose = MPI_Wtime();
     out.close();
+    double dtCloseLoc = MPI_Wtime() - tClose;
+    double dtCloseGlb;
+    MPI_Allreduce(&dtCloseLoc, &dtCloseGlb, 1, MPI_DOUBLE, MPI_MAX,comm);
+    if (rank == 0)
+      fprintf(stderr, "close time in %g sec \n", dtCloseGlb);
 
     if (rank == 0)
     {
@@ -118,6 +145,11 @@ int main(int argc, char * argv[])
       fprintf(stderr, " Bandwidth= %g MB/s\n", out.computeBandwidth()/1e6);
     }
   }
+  double dtAllLoc = MPI_Wtime() - tAll;
+  double dtAllGlb;
+  MPI_Allreduce(&dtAllLoc, &dtAllGlb, 1, MPI_DOUBLE, MPI_MAX,comm);
+  if (rank == 0)
+    fprintf(stderr, "All operations done in   %g sec \n", dtAllGlb);
 
 
 
