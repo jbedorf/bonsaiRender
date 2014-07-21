@@ -54,8 +54,8 @@ namespace BonsaiIO
       virtual void open(const std::string&, IOTYPE) = 0;
       virtual void close() = 0;
       virtual void seek (const size_t offset) = 0;
-      virtual void read (void *data, const size_t count, const std::string &errString) = 0;
-      virtual void write(const void *data, const size_t count, const std::string &errString) = 0;
+      virtual void read (      void *data, const size_t count, const std::string &errString, const size_t batchMax = (1U << 31) - 1) = 0;
+      virtual void write(const void *data, const size_t count, const std::string &errString, const size_t batchMax = (1U << 31) - 1) = 0;
   };
 
   /* MPI-IO implementation */
@@ -116,10 +116,9 @@ namespace BonsaiIO
         MPI_File_seek(fh, offset, MPI_SEEK_SET);
       }
 
-      void read(void *data, const size_t count, const std::string &errString) 
+      void read(void *data, const size_t count, const std::string &errString, const size_t batchMax)
       {
         assert(isRead());
-        const size_t batchMax = (1U << 31) - 1;
         size_t offset = 0;
         size_t nRead = count;
         while (nRead > 0)
@@ -140,10 +139,9 @@ namespace BonsaiIO
         }
       }
 
-      void write(const void *data, const size_t count, const std::string &errString)
+      void write(const void *data, const size_t count, const std::string &errString, const size_t batchMax)
       {
         assert(isWrite());
-        const size_t batchMax = (1U << 31) - 1;
         size_t offset = 0;
         size_t nWrite = count;
         while (nWrite > 0)
