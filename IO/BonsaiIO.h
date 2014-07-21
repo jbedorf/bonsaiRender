@@ -6,6 +6,7 @@
 #include <exception>
 #include <cassert>
 #include <cstdlib>
+#include <cstring>
 
 
 namespace BonsaiIO
@@ -462,17 +463,31 @@ namespace BonsaiIO
         else
         {
           long_t numElements = 0;
-          for (long_t i = 0; i < numElementsLoc; i += reduceFactor)
-            numElements++;
+          for (long_t i = 0; i < numElementsLoc; i++)
+            if (i%reduceFactor==0)
+              numElements++;
           data.resize(numElements);
+
+          const long_t size = data.getElementSize();
+
+          const long_t nBatch = numElements*size;
+          std::vector<char> tmp(nBatch);
+
+          long_t nRead = numElementsLoc*size;
           long_t el = 0;
-          const size_t size = data.getElementSize();
-          for (long_t i = 0; i < numElementsLoc; i += reduceFactor, el += size)
+          long_t previous = 0;
+          while (nRead > 0)
           {
-            fh.read(
-                reinterpret_cast<char*>(data.getDataPtr()) + el,
-                size, "Error while reading reduced data.");
+            const long_t count = std::min(nRead, nBatch);
+            fh.read(&tmp[0], count, "Error while reading reduced data.");
+            for (long_t i = 0; i < count; i += size)
+              if ((previous + i)%(reduceFactor*size) == 0)
+                memcpy(reinterpret_cast<char*>(data.getDataPtr()) + el*size, &tmp[i], size);
+            previous += count;
+            nRead    -= count;
+            assert(el <= numElements);
           }
+          numBytes+= numElementsGlb*data.getElementSize();
         }
 
         dtIO += MPI_Wtime() - tRead;
