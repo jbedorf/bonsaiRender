@@ -95,7 +95,7 @@ namespace BonsaiIO
             MPI_File_open(
                 comm,
                 (char*)fileName.c_str(),
-                MPI_MODE_CREATE | MPI_MODE_RDWR,
+                MPI_MODE_CREATE | MPI_MODE_WRONLY,
                 MPI_INFO_NULL,
                 &fh);
 
