@@ -16,24 +16,29 @@ LDFLAGS =
 
 SRCPATH = ./
 
-SRC1 = BonsaiIO.cpp cvt_tipsy2bonsai.cpp
-SRC2 = BonsaiIO.cpp readBonsai.cpp
+SRC1 = cvt_tipsy2bonsai.cpp
+SRC2 = readBonsai.cpp
+SRC3 = benchmark.cpp
 OBJ1 = $(SRC1:%.cpp=%.o)
 OBJ2 = $(SRC2:%.cpp=%.o)
+OBJ3 = $(SRC3:%.cpp=%.o)
 
 PROG1 = cvt_tipsy2bonsai
 PROG2 = readBonsai
+PROG3 = benchmark
 
 RM = /bin/rm
 
-all:	  $(PROG1) $(PROG2)
+all:	  $(PROG1) $(PROG2) $(PROG3)
 
 
 $(PROG1): $(OBJ1) 
 	$(LD) $(LDFLAGS) $^ -o $@ $(OMPFLAGS)
-
 $(PROG2): $(OBJ2) 
 	$(LD) $(LDFLAGS) $^ -o $@ $(OMPFLAGS)
+$(PROG3): $(OBJ3) 
+	$(LD) $(LDFLAGS) $^ -o $@ $(OMPFLAGS)
+
 
 
 
@@ -46,3 +51,4 @@ clean:
 
 $(OBJ1): BonsaiIO.h  read_tipsy.h
 $(OBJ2): BonsaiIO.h
+$(OBJ3): BonsaiIO.h
