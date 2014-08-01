@@ -35,7 +35,8 @@ int main(int argc, char * argv[])
 #ifdef OLDIO
   int nDomains     = -1;
 #endif
-  int reduceFactor =  1;
+  int reduceDM    =  10;
+  int reduceS=  1;
 #ifndef PARTICLESRENDERER
   std::string fullScreenMode    = "";
   bool stereo     = false;
@@ -56,7 +57,8 @@ int main(int argc, char * argv[])
 #ifdef OLDIO
     ADDUSAGE(" -n  --ndomains #       Number of domains ");
 #endif
-		ADDUSAGE(" -r  --reducefactor #   cut down bodies dataset by # factor [1])")
+		ADDUSAGE("     --reduceDM    #   cut down DM dataset by # factor [10]. 0-disable DM");
+		ADDUSAGE("     --reduceS     #   cut down stars dataset by # factor [1]. 0-disable S");
 #ifndef PARTICLESRENDERER
 		ADDUSAGE("     --fullscreen #     set fullscreen mode string");
 		ADDUSAGE("     --stereo           enable stereo rendering");
@@ -69,7 +71,8 @@ int main(int argc, char * argv[])
 #ifdef OLDIO
 		opt.setOption( "ndomains",     'n');
 #endif
-		opt.setOption( "reducefactor", 'r');
+		opt.setOption( "reduceDM");
+		opt.setOption( "reduceS");
     opt.setOption( "fullscreen");
     opt.setFlag("stereo");
 
@@ -88,7 +91,8 @@ int main(int argc, char * argv[])
 #ifdef OLDIO
     if ((optarg = opt.getValue("ndomains")))     nDomains           = atoi(optarg);
 #endif
-    if ((optarg = opt.getValue("reducefactor"))) reduceFactor       = atoi(optarg);
+    if ((optarg = opt.getValue("reduceDM"))) reduceDM       = atoi(optarg);
+    if ((optarg = opt.getValue("reduceS"))) reduceS       = atoi(optarg);
 #ifndef PARTICLESRENDERER
     if ((optarg = opt.getValue("fullscreen")))	 fullScreenMode     = std::string(optarg);
     if (opt.getFlag("stereo"))  stereo = true;
@@ -98,7 +102,7 @@ int main(int argc, char * argv[])
 #ifdef OLDIO
         nDomains == -1 || 
 #endif
-        reduceFactor < 1)
+        reduceDM < 0 || reduceS < 1)
     {
       opt.printUsage();
       ::exit(0);
@@ -109,12 +113,14 @@ int main(int argc, char * argv[])
 
 
 #ifdef OLDIO
+  assert(reduceDM > 0);
+  assert(reduceS > 0);
   ReadTipsy data(
       fileName, 
       rank, nranks,
       nDomains, 
-      reduceFactor,
-      reduceFactor);
+      reduceDM,
+      reduceS);
 
   long long nFirstLocal = data.firstID.size();
   long long nSecondLocal = data.secondID.size();
@@ -162,55 +168,120 @@ int main(int argc, char * argv[])
           data.secondVel[i].y*data.secondVel[i].y +
           data.secondVel[i].z*data.secondVel[i].z);
   }
-#else
+#else  /* end OLDIO */
+
   BonsaiIO::Core out(rank, nranks, comm, BonsaiIO::READ, fileName);
   if (rank == 0)
     out.getHeader().printFields();
   typedef float float4[4];
   typedef float float3[3];
   typedef float float2[2];
-  BonsaiIO::DataType<IDType> IDList("IDType");
-  BonsaiIO::DataType<float4> pos("POS:real4");
-  BonsaiIO::DataType<float3> vel("VEL:float[3]");
-  BonsaiIO::DataType<float2> rhoh("RHOH:float[2]");
 
-  assert(out.read(IDList, true, reduceFactor));
-  assert(out.read(pos,    true, reduceFactor));
-  assert(out.read(vel,    true, reduceFactor));
-  bool renderDensity = true;
-  if (!out.read(rhoh,  true, reduceFactor))
+  BonsaiIO::DataType<IDType> IDListS("Stars:IDType");
+  BonsaiIO::DataType<float4> posS("Stars:POS:real4");
+  BonsaiIO::DataType<float3> velS("Stars:VEL:float[3]");
+  BonsaiIO::DataType<float2> rhohS("Stars:RHOH:float[2]");
+
+  if (reduceS > 0)
   {
-    if (rank == 0)
+    assert(out.read(IDListS, true, reduceS));
+    assert(out.read(posS,    true, reduceS));
+    assert(out.read(velS,    true, reduceS));
+    bool renderDensity = true;
+    if (!out.read(rhohS,  true, reduceS))
     {
-      fprintf(stderr , " -- RHOH data is found \n");
-      fprintf(stderr , " -- rendering w/o density info \n");
+      if (rank == 0)
+      {
+        fprintf(stderr , " -- Stars RHOH data is found \n");
+        fprintf(stderr , " -- rendering stars w/o density info \n");
+      }
+      renderDensity = false;
     }
-    renderDensity = false;
+    assert(IDListS.getNumElements() == posS.getNumElements());
+    assert(IDListS.getNumElements() == velS.getNumElements());
+    if (renderDensity)
+      assert(IDListS.getNumElements() == posS.getNumElements());
   }
-  const int nPtcl = IDList.getNumElements();
-  assert(IDList.getNumElements() == pos.getNumElements());
-  assert(IDList.getNumElements() == vel.getNumElements());
-  if (renderDensity)
-    assert(IDList.getNumElements() == pos.getNumElements());
-  RendererData rData(nPtcl);
-  for (int i = 0; i < nPtcl; i++)
+ 
+  BonsaiIO::DataType<IDType> IDListDM("DM:IDType");
+  BonsaiIO::DataType<float4> posDM("DM:POS:real4");
+  BonsaiIO::DataType<float3> velDM("DM:VEL:float[3]");
+  BonsaiIO::DataType<float2> rhohDM("DM:RHOH:float[2]");
+  if (reduceDM > 0)
+  {
+    assert(out.read(IDListDM, true, reduceDM));
+    assert(out.read(posDM,    true, reduceDM));
+    assert(out.read(velDM,    true, reduceDM));
+    bool renderDensity = true;
+    if (!out.read(rhohDM,  true, reduceDM))
+    {
+      if (rank == 0)
+      {
+        fprintf(stderr , " -- DM RHOH data is found \n");
+        fprintf(stderr , " -- rendering stars w/o density info \n");
+      }
+      renderDensity = false;
+    }
+    assert(IDListS.getNumElements() == posS.getNumElements());
+    assert(IDListS.getNumElements() == velS.getNumElements());
+    if (renderDensity)
+      assert(IDListS.getNumElements() == posS.getNumElements());
+  }
+
+
+  const int nS  = IDListS.getNumElements();
+  const int nDM = IDListDM.getNumElements();
+  RendererData rData(nS+nDM);
+  for (int i = 0; i < nS; i++)
   {
     const int ip = i;
-    rData.posx(ip) = pos[i][0];
-    rData.posy(ip) = pos[i][1];
-    rData.posz(ip) = pos[i][2];
-    rData.ID  (ip) = IDList[i].getID();
-    rData.type(ip) = IDList[i].getType();
-    rData.attribute(RendererData::MASS, ip) = pos[i][3];
+    rData.posx(ip) = posS[i][0];
+    rData.posy(ip) = posS[i][1];
+    rData.posz(ip) = posS[i][2];
+    rData.ID  (ip) = IDListS[i].getID();
+    rData.type(ip) = IDListS[i].getType();
+    assert(rData.type(ip) == 1); /* sanity check */
+    rData.attribute(RendererData::MASS, ip) = posS[i][3];
     rData.attribute(RendererData::VEL,  ip) =
       std::sqrt(
-          vel[i][0]*vel[i][0] +
-          vel[i][1]*vel[i][1] +
-          vel[i][2]*vel[i][2]);
-    if (renderDensity)
+          velS[i][0]*velS[i][0] +
+          velS[i][1]*velS[i][1] +
+          velS[i][2]*velS[i][2]);
+    if (rhohS.size() > 0)
     {
-    rData.attribute(RendererData::RHO, ip) = rhoh[i][0];
-    rData.attribute(RendererData::H,  ip)  = rhoh[i][1];
+      rData.attribute(RendererData::RHO, ip) = rhohS[i][0];
+      rData.attribute(RendererData::H,  ip)  = rhohS[i][1];
+    }
+    else
+    {
+      rData.attribute(RendererData::RHO, ip) = 0.0;
+      rData.attribute(RendererData::H,   ip) = 0.0;
+    }
+  }
+  for (int i = 0; i < nDM; i++)
+  {
+    const int ip = i + nS;
+    rData.posx(ip) = posDM[i][0];
+    rData.posy(ip) = posDM[i][1];
+    rData.posz(ip) = posDM[i][2];
+    rData.ID  (ip) = IDListDM[i].getID();
+    rData.type(ip) = IDListDM[i].getType();
+    assert(rData.type(ip) == 0); /* sanity check */
+    rData.attribute(RendererData::MASS, ip) = posDM[i][3];
+    rData.attribute(RendererData::VEL,  ip) =
+      std::sqrt(
+          velDM[i][0]*velDM[i][0] +
+          velDM[i][1]*velDM[i][1] +
+          velDM[i][2]*velDM[i][2]);
+    if (rhohDM.size() > 0)
+    {
+      rData.attribute(RendererData::RHO, ip) = rhohDM[i][0];
+      rData.attribute(RendererData::H,   ip) = rhohDM[i][1];
+    }
+    else
+    {
+      rData.attribute(RendererData::RHO, ip) = 0.0;
+      rData.attribute(RendererData::H,   ip) = 0.0;
     }
   }
 #endif

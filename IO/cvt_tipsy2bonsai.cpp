@@ -61,7 +61,7 @@ static double writeStars(ReadTipsy &data, IO &out)
     for (int i = 0; i< pCount; i++)
     {
       ID[i].setID(data.secondID[i]);
-      ID[i].setType(0);
+      ID[i].setType(1);
     }
     double t0 = MPI_Wtime();
     out.write(ID);
