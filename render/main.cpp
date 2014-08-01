@@ -236,7 +236,7 @@ int main(int argc, char * argv[])
   const int nS  = IDListS.getNumElements();
   const int nDM = IDListDM.getNumElements();
   long long int nSloc = nS, nSglb;
-  long long int nDMloc = nDMloc, nDMglb;
+  long long int nDMloc = nDM, nDMglb;
 
   MPI_Allreduce(&nSloc, &nSglb, 1, MPI_LONG, MPI_SUM, comm);
   MPI_Allreduce(&nDMloc, &nDMglb, 1, MPI_LONG, MPI_SUM, comm);
