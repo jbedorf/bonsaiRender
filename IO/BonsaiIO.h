@@ -461,7 +461,8 @@ namespace BonsaiIO
         {
           data.resize(numElementsLoc);
           const long_t nBytes = (end[myRank] - beg[myRank]) * data.getElementSize();
-          fh.read(data.getDataPtr(), nBytes, "Error while reading data.");
+          if (nBytes > 0)
+            fh.read(data.getDataPtr(), nBytes, "Error while reading data.");
           numBytes+= numElementsGlb*data.getElementSize();
         }
         else
@@ -543,8 +544,8 @@ namespace BonsaiIO
 
         fh.seek(dataOffsetGlb + beg[myRank]*data.getElementSize());
         const long_t nBytes = (end[myRank] - beg[myRank]) * data.getElementSize();
-        assert(nBytes > 0);
-        fh.write(data.getDataPtr(), nBytes, "Error while writing data.");
+        if (nBytes > 0)
+          fh.write(data.getDataPtr(), nBytes, "Error while writing data.");
 
         dataOffsetGlb += numElementsGlb*data.getElementSize();
 
