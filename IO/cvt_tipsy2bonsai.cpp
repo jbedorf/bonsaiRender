@@ -6,7 +6,6 @@ template<typename IO>
 static double writeDM(ReadTipsy &data, IO &out)
 {
   double dtWrite = 0;
-
   const int pCount  = data.firstID.size();
   /* write IDs */
   {
@@ -20,7 +19,7 @@ static double writeDM(ReadTipsy &data, IO &out)
     out.write(ID);
     dtWrite += MPI_Wtime() - t0;
   }
-    
+  
   /* write pos */
   {
     BonsaiIO::DataType<ReadTipsy::real4> pos("DM:POS:real4",pCount);
@@ -55,6 +54,7 @@ static double writeStars(ReadTipsy &data, IO &out)
   double dtWrite = 0;
 
   const int pCount  = data.secondID.size();
+
   /* write IDs */
   {
     BonsaiIO::DataType<IDType> ID("Stars:IDType", pCount);
@@ -161,7 +161,15 @@ int main(int argc, char * argv[])
 
     double dtWrite = 0;
 
+    
+    if (rank == 0)
+      fprintf(stderr, " write DM  \n");
+    MPI_Barrier(comm);
     dtWrite += writeDM(data,out);
+
+    if (rank == 0)
+      fprintf(stderr, " write Stars\n");
+    MPI_Barrier(comm);
     dtWrite += writeStars(data,out);
 
 

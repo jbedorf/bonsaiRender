@@ -95,7 +95,7 @@ namespace BonsaiIO
             MPI_File_open(
                 comm,
                 (char*)fileName.c_str(),
-                MPI_MODE_CREATE | MPI_MODE_WRONLY,
+                MPI_MODE_CREATE | MPI_MODE_RDWR,
                 MPI_INFO_NULL,
                 &fh);
 
@@ -174,9 +174,12 @@ namespace BonsaiIO
   {
     private:
       std::string name;
+    protected:
+      size_t numElements;
     public:
-      DataTypeBase(const std::string _name) : name(_name) {};
+      DataTypeBase(const std::string _name) : name(_name), numElements(0) {};
       const std::string& getName() const {return name;}
+      size_t size() { return numElements; }
 
       virtual void   resize(const size_t)   = 0;
       virtual size_t getElementSize() const = 0;
@@ -191,7 +194,6 @@ namespace BonsaiIO
     class DataType : public DataTypeBase
   {
     private:
-      size_t numElements;
       T *data;
       void free()
       {
@@ -459,7 +461,8 @@ namespace BonsaiIO
         {
           data.resize(numElementsLoc);
           const long_t nBytes = (end[myRank] - beg[myRank]) * data.getElementSize();
-          fh.read(data.getDataPtr(), nBytes, "Error while reading data.");
+          if (nBytes > 0)
+            fh.read(data.getDataPtr(), nBytes, "Error while reading data.");
           numBytes+= numElementsGlb*data.getElementSize();
         }
         else
@@ -541,8 +544,8 @@ namespace BonsaiIO
 
         fh.seek(dataOffsetGlb + beg[myRank]*data.getElementSize());
         const long_t nBytes = (end[myRank] - beg[myRank]) * data.getElementSize();
-        assert(nBytes > 0);
-        fh.write(data.getDataPtr(), nBytes, "Error while writing data.");
+        if (nBytes > 0)
+          fh.write(data.getDataPtr(), nBytes, "Error while writing data.");
 
         dataOffsetGlb += numElementsGlb*data.getElementSize();
 
