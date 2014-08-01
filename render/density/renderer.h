@@ -17,7 +17,7 @@ void checkGLErrors(const char *s);
 
 class ParticleRenderer
 {
-public:
+  public:
     ParticleRenderer();
     ~ParticleRenderer();
 
@@ -29,10 +29,10 @@ public:
 
     enum DisplayMode
     {
-        PARTICLE_POINTS,
-        PARTICLE_SPRITES,
-        PARTICLE_SPRITES_COLOR,
-        PARTICLE_NUM_MODES
+      PARTICLE_POINTS,
+      PARTICLE_SPRITES,
+      PARTICLE_SPRITES_COLOR,
+      PARTICLE_NUM_MODES
     };
 
     void display(DisplayMode mode = PARTICLE_POINTS);
@@ -43,14 +43,14 @@ public:
     void resetPBO();
     ParamListGL *getParams() { return m_params; }
 
-protected: // methods
+  protected: // methods
     void _initGL();
     void _createTexture(int resolution);
     void _drawPoints(bool color = false);
     void initParams();
-    
 
-protected: // data
+
+  protected: // data
     float *m_pos;
     double *m_pos_fp64;
     int m_numParticles;
