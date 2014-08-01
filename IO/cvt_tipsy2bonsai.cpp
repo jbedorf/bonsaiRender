@@ -2,6 +2,100 @@
 #include "IDType.h"
 #include "read_tipsy.h"
 
+template<typename IO>
+static double writeDM(ReadTipsy &data, IO &out)
+{
+  double dtWrite = 0;
+
+  const int pCount  = data.firstID.size();
+  /* write IDs */
+  {
+    BonsaiIO::DataType<IDType> ID("DM:IDType", pCount);
+    for (int i = 0; i< pCount; i++)
+    {
+      ID[i].setID(data.firstID[i]);
+      ID[i].setType(0);
+    }
+    double t0 = MPI_Wtime();
+    out.write(ID);
+    dtWrite += MPI_Wtime() - t0;
+  }
+    
+  /* write pos */
+  {
+    BonsaiIO::DataType<ReadTipsy::real4> pos("DM:POS:real4",pCount);
+    for (int i = 0; i< pCount; i++)
+      pos[i] = data.firstPos[i];
+    double t0 = MPI_Wtime();
+    out.write(pos);
+    dtWrite += MPI_Wtime() - t0;
+  }
+    
+  /* write vel */
+  {
+    typedef float vec3[3];
+    BonsaiIO::DataType<vec3> vel("DM:VEL:float[3]",pCount);
+    for (int i = 0; i< pCount; i++)
+    {
+      vel[i][0] = data.firstVel[i].x;
+      vel[i][1] = data.firstVel[i].y;
+      vel[i][2] = data.firstVel[i].z;
+    }
+    double t0 = MPI_Wtime();
+    out.write(vel);
+    dtWrite += MPI_Wtime() - t0;
+  }
+
+  return dtWrite;
+}
+
+template<typename IO>
+static double writeStars(ReadTipsy &data, IO &out)
+{
+  double dtWrite = 0;
+
+  const int pCount  = data.secondID.size();
+  /* write IDs */
+  {
+    BonsaiIO::DataType<IDType> ID("Stars:IDType", pCount);
+    for (int i = 0; i< pCount; i++)
+    {
+      ID[i].setID(data.secondID[i]);
+      ID[i].setType(0);
+    }
+    double t0 = MPI_Wtime();
+    out.write(ID);
+    dtWrite += MPI_Wtime() - t0;
+  }
+    
+  /* write pos */
+  {
+    BonsaiIO::DataType<ReadTipsy::real4> pos("Stars:POS:real4",pCount);
+    for (int i = 0; i< pCount; i++)
+      pos[i] = data.secondPos[i];
+    double t0 = MPI_Wtime();
+    out.write(pos);
+    dtWrite += MPI_Wtime() - t0;
+  }
+    
+  /* write vel */
+  {
+    typedef float vec3[3];
+    BonsaiIO::DataType<vec3> vel("Stars:VEL:float[3]",pCount);
+    for (int i = 0; i< pCount; i++)
+    {
+      vel[i][0] = data.secondVel[i].x;
+      vel[i][1] = data.secondVel[i].y;
+      vel[i][2] = data.secondVel[i].z;
+    }
+    double t0 = MPI_Wtime();
+    out.write(vel);
+    dtWrite += MPI_Wtime() - t0;
+  }
+
+  return dtWrite;
+}
+
 
 int main(int argc, char * argv[])
 {
@@ -43,7 +137,6 @@ int main(int argc, char * argv[])
 
   long long nFirstLocal = data.firstID.size();
   long long nSecondLocal = data.secondID.size();
-  long long nTotalLoc = nFirstLocal + nSecondLocal;
 
   long long nFirst, nSecond;
   MPI_Allreduce(&nFirstLocal, &nFirst, 1, MPI_LONG, MPI_SUM, comm);
@@ -68,62 +161,8 @@ int main(int argc, char * argv[])
 
     double dtWrite = 0;
 
-    /* write IDs */
-    {
-      BonsaiIO::DataType<IDType> ID("IDType", nTotalLoc);
-#pragma omp parallel for
-      for (int i = 0; i< nFirstLocal; i++)
-      {
-        ID[i].setID(data.firstID[i]);
-        ID[i].setType(0);
-      }
-#pragma omp parallel for
-      for (int i = 0; i< nSecondLocal; i++)
-      {
-        ID[i+nFirstLocal].setID(data.secondID[i]);
-        ID[i+nFirstLocal].setType(1);
-      }
-      double t0 = MPI_Wtime();
-      out.write(ID);
-      dtWrite += MPI_Wtime() - t0;
-    }
-  
-    /* write pos */
-    {
-      BonsaiIO::DataType<ReadTipsy::real4> pos("POS:real4",nTotalLoc);
-#pragma omp parallel for
-      for (int i = 0; i< nFirstLocal; i++)
-        pos[i] = data.firstPos[i];
-#pragma omp parallel for
-      for (int i = 0; i< nSecondLocal; i++)
-        pos[i+nFirstLocal] = data.secondPos[i];
-      double t0 = MPI_Wtime();
-      out.write(pos);
-      dtWrite += MPI_Wtime() - t0;
-    }
-    
-    /* write vel */
-    {
-      typedef float vec3[3];
-      BonsaiIO::DataType<vec3> vel("VEL:float[3]",nTotalLoc);
-#pragma omp parallel for
-      for (int i = 0; i< nFirstLocal; i++)
-      {
-        vel[i][0] = data.firstVel[i].x;
-        vel[i][1] = data.firstVel[i].y;
-        vel[i][2] = data.firstVel[i].z;
-      }
-#pragma omp parallel for
-      for (int i = 0; i< nSecondLocal; i++)
-      {
-        vel[i+nFirstLocal][0] = data.secondVel[i].x;
-        vel[i+nFirstLocal][1] = data.secondVel[i].y;
-        vel[i+nFirstLocal][2] = data.secondVel[i].z;
-      }
-      double t0 = MPI_Wtime();
-      out.write(vel);
-      dtWrite += MPI_Wtime() - t0;
-    }
+    dtWrite += writeDM(data,out);
+    dtWrite += writeStars(data,out);
 
 
     double dtWriteGlb;
