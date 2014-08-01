@@ -29,8 +29,7 @@ namespace BonsaiIO
   
   enum IOTYPE 
   {
-    FREAD, FWRITE,
-    MPIREAD, MPIWRITE
+    READ, WRITE
   };
 
   typedef long long int long_t;
@@ -96,7 +95,7 @@ namespace BonsaiIO
             MPI_File_open(
                 comm,
                 (char*)fileName.c_str(),
-                MPI_MODE_CREATE | MPI_MODE_WRONLY,
+                MPI_MODE_CREATE | MPI_MODE_RDWR,
                 MPI_INFO_NULL,
                 &fh);
 
@@ -175,9 +174,12 @@ namespace BonsaiIO
   {
     private:
       std::string name;
+    protected:
+      size_t numElements;
     public:
-      DataTypeBase(const std::string _name) : name(_name) {};
+      DataTypeBase(const std::string _name) : name(_name), numElements(0) {};
       const std::string& getName() const {return name;}
+      size_t size() { return numElements; }
 
       virtual void   resize(const size_t)   = 0;
       virtual size_t getElementSize() const = 0;
@@ -192,7 +194,6 @@ namespace BonsaiIO
     class DataType : public DataTypeBase
   {
     private:
-      size_t numElements;
       T *data;
       void free()
       {
@@ -402,9 +403,10 @@ namespace BonsaiIO
       }
       ~Core() { delete fhPtr; }
 
-      bool readField(DataTypeBase &data, const bool restart = false, const int reduceFactor = 1)
+      bool read(DataTypeBase &data, const bool restart = false, const int reduceFactor = 1)
       {
         const double tRead = MPI_Wtime();
+        /* make sure we are in the reading phase */
         assert(fh.isRead());
 
         /* find data set */
@@ -423,8 +425,8 @@ namespace BonsaiIO
         std::vector<long_t> numElementsPerRank(nRankFile);
 
         long_t offset = header.getDataOffset(idx);
-        fh.seek(offset, offset + sizeof(long_t)*nRankFile);
-        fh.read(&numElementsPerRank[0], "Error while reading numElementsPerRank.");
+        fh.seek(offset);
+        fh.read(&numElementsPerRank[0], sizeof(long_t)*nRankFile, "Error while reading numElementsPerRank.");
         offset   += nRankFile*sizeof(long_t);
         numBytes += nRankFile*sizeof(long_t);
 
@@ -452,17 +454,15 @@ namespace BonsaiIO
           assert(sumGlb == numElementsGlb);
         }
 
-        const long_t nBytes = numElementsLoc * data.getElementSize();
-        const long_t offset_beg = offset + beg[myRank]*data.getElementSize();
-        const long_t offset_end = offset_beg + nBytes;
-        fh.seek(offset_beg, offset_end);
-        numBytes += numElementsGlb*data.getElementSize();
-
+        offset += beg[myRank]*data.getElementSize();;
+        fh.seek(offset);
 
         if (reduceFactor <= 1)
         {
           data.resize(numElementsLoc);
-          fh.read(data.getDataPtr(), "Error while reading data.");
+          const long_t nBytes = (end[myRank] - beg[myRank]) * data.getElementSize();
+          fh.read(data.getDataPtr(), nBytes, "Error while reading data.");
+          numBytes+= numElementsGlb*data.getElementSize();
         }
         else
         {
@@ -501,51 +501,13 @@ namespace BonsaiIO
         return true;
       }
 
-      void addField(const DataTypeBase &data)
-      {
-        assert(!fh.isOpen());
-        long_t numElementsLoc = data.getNumElements();
-        if (!header.add(data, dataOffsetGlb, nRank))
-          throw Exception("Data type is already added.");
-        long_t numElementsGlb;
-        MPI_Allreduce(&numElementsLoc, &numElementsGlb, 1, MPI_LONGT, MPI_SUM, comm);
-        assert(numElementsGbl > 0);
-
-        dataOffsetGlb += sizeof(long_t)*nRank;
-        dataOffsetGlb += numElementsGlb*data.getElementSize();
-          
-        header.add(data, dataOffsetGlb, nRank);
-      }
-
-      void writeHeader()
-      {
-        const size_t size = header.size();
-
-        assert(!fh.isOpen());
-        fh.open(size+dataOffsetGlb);
-        assert(fh.isWrite());
-
-        fh.seek(0,8);
-        if (isMaster())
-          fn.write(&dataoffsetGlb);
-
-        fh.seek(dataoffsetGlb, dataoffsetGlb+size);
-        if (isMaster())
-          header.write(fn);
-      }
-
-      bool writeField(const DataTypeBase &data)
+      bool write(const DataTypeBase &data)
       {
         const double tWrite = MPI_Wtime();
+
+        /* make sure we are in the writing phase */
         assert(fh.isWrite());
-        
-        const int idx = header.find(data.getName());
-        if (idx == -1)
-          return false;
-        
-        if (header.getElementSize(idx) != data.getElementSize())
-          return false;
-        long_t offset         = header.getDataOffset(idx);
+
         long_t numElementsLoc = data.getNumElements();
 
         /* gather numELementsLoc to all ranks */
@@ -564,16 +526,29 @@ namespace BonsaiIO
 
         const size_t numElementsGlb = end[nRank-1];
 
-        fh.seek(offset, offset+sizeof(long_t)*nRank);
         if (isMaster())
-          fh.write(&numElementsPerRank[0], "Error while writing numElementsPerRank.");
+        {
+          /* add data description to the header */ 
+          if (!header.add(data, dataOffsetGlb, nRank))
+            throw Exception("Data type is already added.");
 
-        offset += sizeof(long_t)*nRank + beg[myRank]*data.getElementSize();
+          /* write descirption about #elements at each rank */
+          /* this is handy for restart functionality to avoid domain decomposition */
+          fh.seek(dataOffsetGlb);
+          fh.write(&numElementsPerRank[0], sizeof(long_t)*nRank, "Error while writing numElementsPerRank.");
+        }
+        numBytes += nRank*sizeof(long_t);
+
+        dataOffsetGlb += sizeof(long_t)*nRank;
+
+        fh.seek(dataOffsetGlb + beg[myRank]*data.getElementSize());
         const long_t nBytes = (end[myRank] - beg[myRank]) * data.getElementSize();
-        fh.seek(offset, offset + nBytes);
-        fh.write(data.getDataPtr(), "Error while writing data.");
+        assert(nBytes > 0);
+        fh.write(data.getDataPtr(), nBytes, "Error while writing data.");
 
-        numBytes += offset - header.getDataOffset(idx);
+        dataOffsetGlb += numElementsGlb*data.getElementSize();
+
+        numBytes += numElementsGlb*data.getElementSize();
         dtIO += MPI_Wtime() - tWrite;
         return true;
       }
@@ -581,6 +556,14 @@ namespace BonsaiIO
 
       void close()
       {
+        if (isMaster() && fh.isWrite())
+        {
+          fh.seek(0);
+          fh.write(&dataOffsetGlb, sizeof(long_t), "Error while writing headerOffset.");
+          fh.seek(dataOffsetGlb);
+          header.write(fh);
+        }
+
         fh.close();
       }
 
