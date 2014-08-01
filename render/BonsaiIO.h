@@ -174,9 +174,12 @@ namespace BonsaiIO
   {
     private:
       std::string name;
+    protected:
+      size_t numElements;
     public:
-      DataTypeBase(const std::string _name) : name(_name) {};
+      DataTypeBase(const std::string _name) : name(_name), numElements(0) {};
       const std::string& getName() const {return name;}
+      size_t size() { return numElements; }
 
       virtual void   resize(const size_t)   = 0;
       virtual size_t getElementSize() const = 0;
@@ -191,7 +194,6 @@ namespace BonsaiIO
     class DataType : public DataTypeBase
   {
     private:
-      size_t numElements;
       T *data;
       void free()
       {
