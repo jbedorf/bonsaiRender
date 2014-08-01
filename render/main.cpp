@@ -184,6 +184,8 @@ int main(int argc, char * argv[])
 
   if (reduceS > 0)
   {
+    if (rank  == 0)
+      fprintf(stderr, " Reading star data \n");
     assert(out.read(IDListS, true, reduceS));
     assert(out.read(posS,    true, reduceS));
     assert(out.read(velS,    true, reduceS));
@@ -209,6 +211,8 @@ int main(int argc, char * argv[])
   BonsaiIO::DataType<float2> rhohDM("DM:RHOH:float[2]");
   if (reduceDM > 0)
   {
+    if (rank  == 0)
+      fprintf(stderr, " Reading DM data \n");
     assert(out.read(IDListDM, true, reduceDM));
     assert(out.read(posDM,    true, reduceDM));
     assert(out.read(velDM,    true, reduceDM));
@@ -231,6 +235,18 @@ int main(int argc, char * argv[])
 
   const int nS  = IDListS.getNumElements();
   const int nDM = IDListDM.getNumElements();
+  long long int nSloc = nS, nSglb;
+  long long int nDMloc = nDMloc, nDMglb;
+
+  MPI_Allreduce(&nSloc, &nSglb, 1, MPI_LONG, MPI_SUM, comm);
+  MPI_Allreduce(&nDMloc, &nDMglb, 1, MPI_LONG, MPI_SUM, comm);
+  if (rank == 0)
+  {
+    fprintf(stderr, "nStars = %lld\n", nSglb);
+    fprintf(stderr, "nDM    = %lld\n", nDMglb);
+  }
+
+
   RendererData rData(nS+nDM);
   for (int i = 0; i < nS; i++)
   {
