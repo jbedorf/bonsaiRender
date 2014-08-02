@@ -102,7 +102,7 @@ int main(int argc, char * argv[])
 #ifdef OLDIO
         nDomains == -1 || 
 #endif
-        reduceDM < 0 || reduceS < 1)
+        reduceDM < 0 || reduceS < 0)
     {
       opt.printUsage();
       ::exit(0);
