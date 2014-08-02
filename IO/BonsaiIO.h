@@ -200,11 +200,13 @@ namespace BonsaiIO
         if (data != NULL)
           ::free(data);
         data = NULL;
+        numElements = 0;
       }
       void malloc(const size_t _numElements)
       {
         numElements = _numElements;
-        data = (T*)::malloc(sizeof(T)*numElements);
+        if (numElements > 0)
+          data = (T*)::malloc(sizeof(T)*numElements);
       }
     public:
       DataType(std::string name, const size_t n = 0) : DataTypeBase(name), data(NULL)
@@ -213,7 +215,7 @@ namespace BonsaiIO
           malloc(n);
       }
       ~DataType() { free(); }
-      void   resize(const size_t n) { assert(n > 0); free(); malloc(n); }
+      void   resize(const size_t n) {free(); malloc(n); }
       size_t getElementSize() const {return sizeof(T);}
       size_t getNumElements() const {return numElements;}
       size_t getNumBytes   () const {return numElements*sizeof(T);}
@@ -430,7 +432,9 @@ namespace BonsaiIO
         offset   += nRankFile*sizeof(long_t);
         numBytes += nRankFile*sizeof(long_t);
 
-        std::vector<long_t> beg(nRankFile+1, 0), end(nRankFile+1, 0);
+
+        const int nRankMax = std::max(nRank, nRankFile);
+        std::vector<long_t> beg(nRankMax+1, 0), end(nRankMax+1, 0);
         for (int i = 0; i < nRankFile; i++)
         {
           end[i  ] = beg[i] + numElementsPerRank[i];
