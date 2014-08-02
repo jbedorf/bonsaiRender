@@ -403,7 +403,7 @@ namespace BonsaiIO
       }
       ~Core() { delete fhPtr; }
 
-      bool read(DataTypeBase &data, const bool restart = false, const int reduceFactor = 1)
+      bool read(DataTypeBase &data, const bool restart = true, const int reduceFactor = 1)
       {
         const double tRead = MPI_Wtime();
         /* make sure we are in the reading phase */
