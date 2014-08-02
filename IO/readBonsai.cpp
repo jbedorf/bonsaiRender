@@ -21,10 +21,13 @@ static double read(
       long long int nGlb;
       MPI_Allreduce(&nLoc, &nGlb, 1, MPI_DOUBLE, MPI_SUM, comm);
       if (rank == 0)
+      {
         fprintf(stderr, " Read %lld of type %s\n",
             nGlb, type->getName().c_str());
-      fprintf(stderr, " ---- \n");
-    } else if (rank == 0)
+        fprintf(stderr, " ---- \n");
+      }
+    } 
+    else if (rank == 0)
     {
       fprintf(stderr, " %s  is not found, skipping\n", type->getName().c_str());
       fprintf(stderr, " ---- \n");
