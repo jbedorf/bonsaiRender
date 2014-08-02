@@ -1179,6 +1179,21 @@ public:
       m_particleColors[i] = make_float4(1.0f, 1.0f, 1.0f, 1.0f);
     }
   }
+  
+  static void lCompressRange(
+      const float compressMin,
+      const float compressMax,
+      float &minRange,
+      float &maxRange)
+  {
+    assert(compressMin >= 0.0f && compressMin < 0.5f);
+    assert(compressMax >= 0.0f && compressMax < 0.5f);
+    const float min = minRange;
+    const float max = maxRange;
+    maxRange = max - (max-min)*compressMax;
+    minRange = min + (max-min)*compressMin;
+    assert(minRange < maxRange);
+  }
 
   void getBodyData() 
   {
@@ -1195,6 +1210,20 @@ public:
     float4 *pos = m_particlePos;
 //    darkMatterColor = make_float4(0.0f, 0.2f, 0.4f, 0.0f);      // blue
 
+    float velMax = m_idata.attributeMax(RendererData::VEL);
+    float velMin = m_idata.attributeMin(RendererData::VEL);
+    bool logScale = false;
+//    logScale = true;
+    if (logScale)
+    {
+      velMax = std::log(velMax);
+      velMin = std::log(velMin);
+    }
+    const float compressMax = 0.25;
+    const float compressMin = 0.25;
+    lCompressRange(compressMin,compressMax, velMin,velMax);
+    lCompressRange(compressMin,compressMax, velMin,velMax);
+    const float scale = 1.0/(velMax - velMin);
 #pragma omp parallel
     {
       StarSampler sSampler (slope-1);
@@ -1210,7 +1239,17 @@ public:
         else
         {
           const float  Mstar = sSampler.sampleMass();
-          const float4 Cstar = sSampler.getColour(Mstar);
+          float4 Cstar = sSampler.getColour(Mstar);
+#if 1
+          Cstar.z = 255.0;
+#endif
+          float vel = m_idata.attribute(RendererData::VEL,i);
+          if (logScale)
+            vel = std::log(vel);
+          const float vmax = 255.0f;
+          Cstar.y = vmax*(vel - velMin) * scale;
+          Cstar.y = std::max(0.0f,std::min(vmax,Cstar.y));
+          Cstar.x = 0.5*(Cstar.y+Cstar.z);
           colors[i] = Cstar;
         }
       }
