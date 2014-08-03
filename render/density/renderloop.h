@@ -4,6 +4,7 @@
 #include "RendererData.h"
 
 void initAppRenderer(int argc, char** argv, 
-                     RendererData &data);
-#define PARTICLESRENDERER
+                     RendererData &data,
+                     const char *fulleScreenMode = "",
+                     const bool stereo = false);
 #endif // _RENDERLOOP_H_

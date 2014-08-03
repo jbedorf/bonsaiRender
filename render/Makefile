@@ -15,7 +15,7 @@ NVCCFLAGS=-arch=sm_35
 
 ENGINE=particles
 ENGINE=smoke
-#ENGINE=density
+ENGINE=density
 
 
 INCLUDE_FLAGS= -I./ -I./$(ENGINE)/
@@ -31,6 +31,14 @@ ifeq ($(ENGINE),smoke)
 	OBJ += smoke/framebufferObject.o
 #	OBJ += smoke/depthSort.cu_o
 	OBJ += smoke/depthSort.o
+endif
+ifeq ($(ENGINE),density)
+	OBJ += tr.o
+	OBJ += density/GLSLProgram.o
+	OBJ += density/SmokeShaders.o
+	OBJ += density/framebufferObject.o
+#	OBJ += density/depthSort.cu_o
+	OBJ += density/depthSort.o
 endif
 
 PROG= renderer
