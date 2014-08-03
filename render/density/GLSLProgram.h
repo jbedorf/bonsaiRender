@@ -29,6 +29,7 @@ public:
 	void enable();
 	void disable();
 
+  GLuint getAttribLoc(const char *name);
 	void setUniform1f(const GLchar *name, GLfloat x);
 	void setUniform2f(const GLchar *name, GLfloat x, GLfloat y);
     void setUniform3f(const char *name, float x, float y, float z);

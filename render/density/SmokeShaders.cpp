@@ -23,6 +23,7 @@ const char *simpleVS = STRINGIFY(
 
 // particle vertex shader
 const char *particleVS = STRINGIFY(
+    in      float pointRadiusAttr;
     uniform float pointRadius;  // point size in world space    \n
     uniform float pointScale;   // scale to calculate size in pixels \n
     uniform float overBright;
