@@ -8,8 +8,8 @@
  * is strictly prohibited.
  *
  */
- 
- // Smoke particle renderer with volumetric shadows
+
+// Smoke particle renderer with volumetric shadows
 
 #ifndef SMOKE_RENDERER_H
 #define SMOKE_RENDERER_H
@@ -24,23 +24,23 @@
 
 class SmokeRenderer
 {
-public:
+  public:
     SmokeRenderer(int numParticles, int maxParticles);
     ~SmokeRenderer();
 
     enum DisplayMode
     {
-        POINTS,
-        SPRITES,
-        SPRITES_SORTED,
-        VOLUMETRIC,
-        NUM_MODES
+      POINTS,
+      SPRITES,
+      SPRITES_SORTED,
+      VOLUMETRIC,
+      NUM_MODES
     };
 
     enum Target
     {
-        LIGHT_BUFFER,
-        SCENE_BUFFER
+      LIGHT_BUFFER,
+      SCENE_BUFFER
     };
 
     void setDisplayMode(DisplayMode mode) { mDisplayMode = mode; }
@@ -50,11 +50,13 @@ public:
     void setPositionBuffer(GLuint vbo) { mPosVbo = vbo; }
     void setVelocityBuffer(GLuint vbo) { mVelVbo = vbo; }
     void setColorBuffer(GLuint vbo) { mColorVbo = vbo; }
+    void setSizeBuffer(GLuint vbo) { mSizeVbo = vbo; }
     void setIndexBuffer(GLuint ib) { mIndexBuffer = ib; }
 
-	void setPositions(float *pos);
+    void setPositions(float *pos);
     void setPositionsDevice(float *posD);
-	void setColors(float *color);
+    void setColors(float *color);
+    void setSizes(float *sizes);
     void setColorsDevice(float *colorD);
 
     void setWindowSize(int w, int h);
@@ -70,7 +72,7 @@ public:
 
     void setAlpha(float x) { m_spriteAlpha = x; }
     void setShadowAlpha(float x) { m_shadowAlpha = x; }
-	void setColorOpacity(nv::vec3f c) { m_colorOpacity = c; }
+    void setColorOpacity(nv::vec3f c) { m_colorOpacity = c; }
     void setLightColor(nv::vec3f c);
     nv::vec3f getLightColor() { return m_lightColor; }
 
@@ -80,14 +82,14 @@ public:
     void setBlurRadius(float x) { m_blurRadius = x; }
     void setDisplayLightBuffer(bool b) { m_displayLightBuffer = b; }
 
-	void setDepthMinMax(float min, float max) { m_minDepth = min; m_maxDepth = max; }
-	void setEnableAA(bool b) { m_enableAA = b; }
+    void setDepthMinMax(float min, float max) { m_minDepth = min; m_maxDepth = max; }
+    void setEnableAA(bool b) { m_enableAA = b; }
 
-	void setEnableVolume(bool b) { m_enableVolume = b; }
-	bool getEnableVolume() { return m_enableVolume; }
+    void setEnableVolume(bool b) { m_enableVolume = b; }
+    bool getEnableVolume() { return m_enableVolume; }
 
-	void setEnableFilters(bool b) { m_enableFilters = b; }
-	bool getEnableFilters() { return m_enableFilters; }
+    void setEnableFilters(bool b) { m_enableFilters = b; }
+    bool getEnableFilters() { return m_enableFilters; }
 
     void beginSceneRender(Target target);
     void endSceneRender(Target target);
@@ -104,7 +106,7 @@ public:
 
     void calcVectors();
     nv::vec3f getSortVector() { return m_halfVector; }
-//    nv::vec3f getSortVector() { return m_viewVector; }
+    //    nv::vec3f getSortVector() { return m_viewVector; }
 
     bool getCullDarkMatter() { return m_cullDarkMatter; }
     void setCullDarkMatter(bool b) { m_cullDarkMatter = b; }
@@ -113,17 +115,17 @@ public:
 
     void render();
     void debugVectors();
-    
+
     void depthSort(float4 *posD);
 
     //By JB to modify particle count while running
     void setNumberOfParticles(uint n_particles); 
     int  getNumberOfParticles() {return this->mNumParticles; }
 
-private:
+  private:
     //GLuint loadTexture(char *filename);
     //void loadSmokeTextures(int nImages, int offset, char* sTexturePrefix);
-	GLuint createRainbowTexture();
+    GLuint createRainbowTexture();
 
     void depthSortCopy();
 
@@ -132,12 +134,12 @@ private:
 
     void drawSlice(int i);
     void drawSliceLightView(int i);
-	void drawSliceLightViewAA(int i);
+    void drawSliceLightViewAA(int i);
 
-	void drawVolumeSlice(int i, bool shadowed);
+    void drawVolumeSlice(int i, bool shadowed);
 
     void drawSlices();
-	void renderSprites(bool sort);
+    void renderSprites(bool sort);
 
     void displayTexture(GLuint tex, float scale);
     void doStarFilter();
@@ -146,19 +148,19 @@ private:
     void doGlowFilter();
     void compositeResult();
     void blurLightBuffer();
-	void processImage(GLSLProgram *prog, GLuint src, GLuint dest);
+    void processImage(GLSLProgram *prog, GLuint src, GLuint dest);
 
     GLuint createTexture(GLenum target, int w, int h, GLint internalformat, GLenum format, void *data = 0);
-	GLuint createNoiseTexture(int w, int h, int d);
-	float *createSplatImage(int n);
-	GLuint createSpriteTexture(int size);
+    GLuint createNoiseTexture(int w, int h, int d);
+    float *createSplatImage(int n);
+    GLuint createSpriteTexture(int size);
 
     void createBuffers(int w, int h);
     void createLightBuffer();
 
     void drawQuad(float s=1.0f, float z=0.0f);
     void drawVector(nv::vec3f v);
-	void drawBounds();
+    void drawBounds();
     void drawSkybox(GLuint tex);
 
     void initParams();
@@ -170,12 +172,14 @@ private:
     GLuint              mPosVbo;
     GLuint              mVelVbo;
     GLuint              mColorVbo;
+    GLuint              mSizeVbo;
+    GLuint              mSizeVao;
     GLuint              mIndexBuffer;
-	GLuint              mPosBufferTexture;
+    GLuint              mPosBufferTexture;
 
-//	GpuArray<float4>    mParticlePos;
-//	GpuArray<float>     mParticleDepths;
-//	GpuArray<uint>      mParticleIndices;
+    //	GpuArray<float4>    mParticlePos;
+    //	GpuArray<float>     mParticleDepths;
+    //	GpuArray<uint>      mParticleIndices;
 
     unsigned int m_pbo;
     float               mParticleRadius;
@@ -199,7 +203,7 @@ private:
     // parameters
     float               m_shadowAlpha;
     float               m_spriteAlpha;
-	float               m_dustAlpha;
+    float               m_dustAlpha;
     float               m_transmission;
     bool                m_doBlur;
     float               m_blurRadius;
@@ -217,10 +221,10 @@ private:
     nv::vec4f               m_halfVectorEye;
     nv::vec4f               m_lightPosEye;
 
-	float				m_minDepth, m_maxDepth;
-	bool                m_enableAA;
-	bool				m_enableVolume;
-	bool				m_enableFilters;
+    float				m_minDepth, m_maxDepth;
+    bool                m_enableAA;
+    bool				m_enableVolume;
+    bool				m_enableFilters;
 
     float m_overBright;
     float m_overBrightThreshold;
@@ -228,14 +232,14 @@ private:
     int m_blurPasses;
     float m_indirectAmount;
 
-	float m_starBlurRadius;
+    float m_starBlurRadius;
     float m_starPower;
-	float m_starIntensity;
-	float m_starThreshold;
+    float m_starIntensity;
+    float m_starThreshold;
 
     float m_glowRadius;
     float m_glowIntensity;
-	float m_gamma;
+    float m_gamma;
 
     float m_sourceIntensity;
     float m_flareIntensity;
@@ -243,7 +247,7 @@ private:
     float m_flareRadius;
 
     float m_ageScale;
-	float m_fog;
+    float m_fog;
     float m_skyboxBrightness;
 
     float m_volumeAlpha;
@@ -262,13 +266,13 @@ private:
     GLSLProgram         *m_simpleProg;
     GLSLProgram         *m_particleProg, *m_particleAAProg, *m_particleShadowProg;
     GLSLProgram         *m_displayTexProg, *m_blurProg;
-	GLSLProgram         *m_starFilterProg;
-	GLSLProgram         *m_compositeProg;
-	GLSLProgram         *m_volumeProg;
+    GLSLProgram         *m_starFilterProg;
+    GLSLProgram         *m_compositeProg;
+    GLSLProgram         *m_volumeProg;
     GLSLProgram         *m_downSampleProg;
     GLSLProgram         *m_gaussianBlurProg;
     GLSLProgram         *m_skyboxProg;
-	GLSLProgram         *m_thresholdProg;
+    GLSLProgram         *m_thresholdProg;
 
     // image buffers
     FramebufferObject   *m_fbo;
@@ -284,9 +288,9 @@ private:
     GLuint              m_rampTex;
     GLuint              m_rainbowTex;
     GLuint              m_textureArrayID;
-	GLuint              m_spriteTex;
-	GLuint              m_noiseTex;
-//    GLuint              m_cubemapTex;
+    GLuint              m_spriteTex;
+    GLuint              m_noiseTex;
+    //    GLuint              m_cubemapTex;
 
     cudaStream_t        m_copyStreamPos;
     cudaStream_t        m_copyStreamColor;

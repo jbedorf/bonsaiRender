@@ -157,16 +157,26 @@ class RendererData
       assert(oldRange != 0.0);
 
       const float slope = (newMax - newMin)/oldRange;
+      float min = +HUGE, max = -HUGE;
       for (int i = 0; i < _n; i++)
+      {
         attribute(p,i) = slope * (attribute(p,i) - oldMin) + newMin;  
-      _attributeMin[p] = newMin;
-      _attributeMax[p] = newMax;
+        min = std::min(min, attribute(p,i));
+        max = std::max(max, attribute(p,i));
+      }
+      _attributeMin[p] = min;
+      _attributeMax[p] = max;
     }
     void scaleLog(const Attribute_t p)
     {
+      float min = +HUGE, max = -HUGE;
       for (int i = 0; i < _n; i++)
+      {
         attribute(p,i) = std::log(attribute(p,i) + 1.0f);
-      _attributeMin[p] = std::log(_attributeMin[p] + 1.0f);
-      _attributeMax[p] = std::log(_attributeMax[p] + 1.0f);
+        min = std::min(min, attribute(p,i));
+        max = std::max(max, attribute(p,i));
+      }
+      _attributeMin[p] = min;
+      _attributeMax[p] = max;
     }
 };

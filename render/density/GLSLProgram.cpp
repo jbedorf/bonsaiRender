@@ -53,6 +53,20 @@ GLSLProgram::disable()
 	glUseProgram(0);
 }
 
+GLint
+GLSLProgram::getAttribLoc(const char *name)
+{
+  GLint loc = glGetAttribLocation(mProg, name);
+  if (loc >= 0) {
+    return loc;
+  } else {
+#if 0 // _DEBUG
+    fprintf(stderr, "Error setting parameter '%s'\n", name);
+#endif
+  }
+  return -1;
+}
+
 void
 GLSLProgram::setUniform1f(const char *name, float value)
 {
