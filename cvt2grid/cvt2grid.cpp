@@ -1,5 +1,14 @@
 #include "BonsaiIO.h"
 #include "IDType.h"
+#include "Tree.h"
+
+typedef float float5[5];
+typedef float float4[4];
+typedef float float3[3];
+typedef float float2[2];
+std::vector<Particle> Node::ptcl;
+std::vector<Node>     Node::Node_heap;
+std::vector<std::pair<Node*, Node*> > Node::pair_list;
   
 
 static double read(
@@ -85,6 +94,8 @@ int main(int argc, char * argv[])
   MPI_Comm_size(comm, &nRank);
   MPI_Comm_rank(comm, &myRank);
 
+  assert(nRank == 1 && myRank == 0);
+
   if (argc < 5)
   {
     if (myRank == 0)
@@ -110,7 +121,7 @@ int main(int argc, char * argv[])
     fprintf(stderr, " Output file: %s\n", fileOut.c_str());
   }
 
-  std::vector<BonsaiIO::DataTypeBase*> data;
+  std::vector<BonsaiIO::DataTypeBase*> dataInput;
   
   /************* read ***********/
 
@@ -126,10 +137,8 @@ int main(int argc, char * argv[])
     double dtRead;
     if (reduceDM > 0)
     {
+      assert(0);
       std::vector<BonsaiIO::DataTypeBase*> dataDM;
-      typedef float float4[4];
-      typedef float float3[3];
-      typedef float float2[2];
       dataDM.push_back(new BonsaiIO::DataType<IDType>("DM:IDType"));
       dataDM.push_back(new BonsaiIO::DataType<float4>("DM:POS:real4"));
       dataDM.push_back(new BonsaiIO::DataType<float3>("DM:VEL:float[3]"));
@@ -137,14 +146,11 @@ int main(int argc, char * argv[])
 
       dtRead += read(myRank, comm, dataDM, in, reduceDM);
 
-      data.insert(data.end(), dataDM.begin(), dataDM.end());
+      dataInput.insert(dataInput.end(), dataDM.begin(), dataDM.end());
     }
     if (reduceS > 0)
     {
       std::vector<BonsaiIO::DataTypeBase*> dataStars;
-      typedef float float4[4];
-      typedef float float3[3];
-      typedef float float2[2];
       dataStars.push_back(new BonsaiIO::DataType<IDType>("Stars:IDType"));
       dataStars.push_back(new BonsaiIO::DataType<float4>("Stars:POS:real4"));
       dataStars.push_back(new BonsaiIO::DataType<float3>("Stars:VEL:float[3]"));
@@ -152,7 +158,7 @@ int main(int argc, char * argv[])
 
       dtRead += read(myRank, comm, dataStars, in, reduceS);
 
-      data.insert(data.end(), dataStars.begin(), dataStars.end());
+      dataInput.insert(dataInput.end(), dataStars.begin(), dataStars.end());
     }
 
     double readBW = in.computeBandwidth();
@@ -176,9 +182,94 @@ int main(int argc, char * argv[])
     }
   }
 
+  /************* estimate density **********/
+
+  std::vector<BonsaiIO::DataTypeBase*> data;
+  data.push_back(new BonsaiIO::DataType<float3>("XYZ:float[3]"));
+  data.push_back(new BonsaiIO::DataType<float5>("VxVyVz,DENS,H:float[5]"));
+
+  {
+    const auto &posArray = *dynamic_cast<BonsaiIO::DataType<float4>*>(dataInput[1]);
+    const auto &velArray = *dynamic_cast<BonsaiIO::DataType<float3>*>(dataInput[2]);
+    const size_t np = posArray.getNumElements();
+    Particle::Vector ptcl(np);
+
+    fprintf(stderr, " -- create tree particles -- \n");
+
+    for (size_t i = 0; i < np; i++)
+    {
+      const auto &pos = posArray[i];
+      const auto &vel = velArray[i];
+      ptcl[i].pos  = vec3(pos[0], pos[1], pos[2]);
+      ptcl[i].mass = pos[3];
+      ptcl[i].vel  = vec3(vel[0], vel[1], vel[2]);
+    }
+    Node::allocate(np,np);
+    fprintf(stderr, " -- build tree -- \n");
+    Tree tree(ptcl);
+
+    const auto &leafArray = tree.leafArray;
+    const int nLeaf = leafArray.size();
+
+    fprintf(stderr, " np= %d  nleaf= %d  NLEAF= %d\n",
+        (int)np, nLeaf, Node::NLEAF);
+
+    auto &posOut  = *dynamic_cast<BonsaiIO::DataType<float3>*>(data[0]);
+    auto &attrOut = *dynamic_cast<BonsaiIO::DataType<float5>*>(data[1]);
+
+    posOut.resize(nLeaf);
+    attrOut.resize(nLeaf);
+    
+    fprintf(stderr, " -- generate output data  -- \n");
+
+    for (int i = 0; i < nLeaf; i++)
+    {
+      const auto &leaf = *leafArray[i];
+      vec3 pos(0.0);
+      vec3 vel(0.0);
+      float mass = 0.0;
+      for (int i = 0; i < leaf.np; i++)
+      {
+        const auto &p = Node::ptcl[leaf.pfirst+i];
+        mass += p.mass;
+        pos += p.pos*p.mass;
+        vel += p.vel*p.mass;
+      }
+      pos *= 1.0/mass;
+      vel *= 1.0/mass;
+      posOut[i][0] = pos.x;
+      posOut[i][1] = pos.y;
+      posOut[i][2] = pos.z;
+      attrOut[i][0] = vel.x;
+      attrOut[i][1] = vel.y;
+      attrOut[i][2] = vel.z;
+      const float volume = leaf.size*leaf.size*leaf.size;
+      attrOut[i][3] = mass/volume;
+      attrOut[i][4] = leaf.size;
+      if (i%1000 == 0)
+      {
+        fprintf(stderr, "i= %d: pos= %g %g %g  vel= %g %g %g  d= %g  h= %g\n",
+            i,
+            posOut[i][0],
+            posOut[i][1],
+            posOut[i][2],
+            attrOut[i][0],
+            attrOut[i][1],
+            attrOut[i][2],
+            attrOut[i][3],
+            attrOut[i][4]);
+      }
+    }
+
+  }
+
+
+
+
   /************* write ***********/
 
   {
+    fprintf(stderr, " -- write  output   -- \n");
     const double tOpen = MPI_Wtime(); 
     BonsaiIO::Core out(myRank, nRank, comm, BonsaiIO::WRITE,  fileOut);
     double dtOpen = MPI_Wtime() - tOpen;
