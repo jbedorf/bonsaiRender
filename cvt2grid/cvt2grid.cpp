@@ -185,8 +185,8 @@ int main(int argc, char * argv[])
   /************* estimate density **********/
 
   std::vector<BonsaiIO::DataTypeBase*> data;
-  data.push_back(new BonsaiIO::DataType<float3>("XYZ:float[3]"));
-  data.push_back(new BonsaiIO::DataType<float5>("VxVyVz,DENS,H:float[5]"));
+  data.push_back(new BonsaiIO::DataType<float3>("Stars:XYZ:float[3]"));
+  data.push_back(new BonsaiIO::DataType<float5>("Stars:VxVyVz,DENS,H:float[5]"));
 
   {
     const auto &posArray = *dynamic_cast<BonsaiIO::DataType<float4>*>(dataInput[1]);
