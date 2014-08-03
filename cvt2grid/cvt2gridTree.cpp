@@ -121,7 +121,7 @@ int main(int argc, char * argv[])
     fprintf(stderr, " Output file: %s\n", fileOut.c_str());
   }
 
-  std::vector<BonsaiIO::DataTypeBase*> dataStars, dataDM,data;
+  std::vector<BonsaiIO::DataTypeBase*> dataInput;
   
   /************* read ***********/
 
@@ -138,6 +138,7 @@ int main(int argc, char * argv[])
     if (reduceDM > 0)
     {
       assert(0);
+      std::vector<BonsaiIO::DataTypeBase*> dataDM;
       dataDM.push_back(new BonsaiIO::DataType<IDType>("DM:IDType"));
       dataDM.push_back(new BonsaiIO::DataType<float4>("DM:POS:real4"));
       dataDM.push_back(new BonsaiIO::DataType<float3>("DM:VEL:float[3]"));
@@ -145,11 +146,11 @@ int main(int argc, char * argv[])
 
       dtRead += read(myRank, comm, dataDM, in, reduceDM);
 
-      data.insert(data.end(), dataDM.begin(), dataDM.end());
-
+      dataInput.insert(dataInput.end(), dataDM.begin(), dataDM.end());
     }
     if (reduceS > 0)
     {
+      std::vector<BonsaiIO::DataTypeBase*> dataStars;
       dataStars.push_back(new BonsaiIO::DataType<IDType>("Stars:IDType"));
       dataStars.push_back(new BonsaiIO::DataType<float4>("Stars:POS:real4"));
       dataStars.push_back(new BonsaiIO::DataType<float3>("Stars:VEL:float[3]"));
@@ -157,7 +158,7 @@ int main(int argc, char * argv[])
 
       dtRead += read(myRank, comm, dataStars, in, reduceS);
 
-      data.insert(data.end(), dataStars.begin(), dataStars.end());
+      dataInput.insert(dataInput.end(), dataStars.begin(), dataStars.end());
     }
 
     double readBW = in.computeBandwidth();
@@ -183,11 +184,13 @@ int main(int argc, char * argv[])
 
   /************* estimate density **********/
 
+  std::vector<BonsaiIO::DataTypeBase*> data;
+  data.push_back(new BonsaiIO::DataType<float3>("Stars:XYZ:float[3]"));
+  data.push_back(new BonsaiIO::DataType<float5>("Stars:VxVyVz,DENS,H:float[5]"));
 
   {
-    const auto &posArray = *dynamic_cast<BonsaiIO::DataType<float4>*>(dataStars[1]);
-    const auto &velArray = *dynamic_cast<BonsaiIO::DataType<float3>*>(dataStars[2]);
-    auto &rhohArray = *dynamic_cast<BonsaiIO::DataType<float2>*>(dataStars[3]);
+    const auto &posArray = *dynamic_cast<BonsaiIO::DataType<float4>*>(dataInput[1]);
+    const auto &velArray = *dynamic_cast<BonsaiIO::DataType<float3>*>(dataInput[2]);
     const size_t np = posArray.getNumElements();
     Particle::Vector ptcl(np);
 
@@ -197,7 +200,6 @@ int main(int argc, char * argv[])
     {
       const auto &pos = posArray[i];
       const auto &vel = velArray[i];
-      ptcl[i].ID   = i;
       ptcl[i].pos  = vec3(pos[0], pos[1], pos[2]);
       ptcl[i].mass = pos[3];
       ptcl[i].vel  = vec3(vel[0], vel[1], vel[2]);
@@ -212,7 +214,11 @@ int main(int argc, char * argv[])
     fprintf(stderr, " np= %d  nleaf= %d  NLEAF= %d\n",
         (int)np, nLeaf, Node::NLEAF);
 
-    rhohArray.resize(np);
+    auto &posOut  = *dynamic_cast<BonsaiIO::DataType<float3>*>(data[0]);
+    auto &attrOut = *dynamic_cast<BonsaiIO::DataType<float5>*>(data[1]);
+
+    posOut.resize(nLeaf);
+    attrOut.resize(nLeaf);
     
     fprintf(stderr, " -- generate output data  -- \n");
 
@@ -224,24 +230,39 @@ int main(int argc, char * argv[])
       vec3 vel(0.0);
       float mass = 0.0;
       npMean += leaf.np;
-      for (int j = 0; j < leaf.np; j++)
+      for (int i = 0; i < leaf.np; i++)
       {
-        const auto &p = Node::ptcl[leaf.pfirst+j];
+        const auto &p = Node::ptcl[leaf.pfirst+i];
         mass += p.mass;
         pos += p.pos*p.mass;
         vel += p.vel*p.mass;
       }
       pos *= 1.0/mass;
       vel *= 1.0/mass;
+      posOut[i][0] = pos.x;
+      posOut[i][1] = pos.y;
+      posOut[i][2] = pos.z;
+      attrOut[i][0] = vel.x;
+      attrOut[i][1] = vel.y;
+      attrOut[i][2] = vel.z;
       const float volume = leaf.size*leaf.size*leaf.size;
-      const float rho = mass/volume;
-      const float h   = leaf.size;
-      for (int j = 0; j < leaf.np; j++)
+      attrOut[i][3] = mass/volume;
+      attrOut[i][4] = leaf.size;
+#if 0
+      if (i%1000 == 0)
       {
-        const auto &p = Node::ptcl[leaf.pfirst+j];
-        rhohArray[p.ID][0] = rho;
-        rhohArray[p.ID][1] = h;
+        fprintf(stderr, "i= %d: pos= %g %g %g  vel= %g %g %g  d= %g  h= %g\n",
+            i,
+            posOut[i][0],
+            posOut[i][1],
+            posOut[i][2],
+            attrOut[i][0],
+            attrOut[i][1],
+            attrOut[i][2],
+            attrOut[i][3],
+            attrOut[i][4]);
       }
+#endif
     }
     fprintf(stderr, "npMean= %g\n", 1.0*npMean/nLeaf);
 
