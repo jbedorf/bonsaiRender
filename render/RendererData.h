@@ -91,6 +91,9 @@ class RendererData
     long_t  ID(const long_t i) const { return _ID[i]; }
     long_t& ID(const long_t i)       { return _ID[i]; }
 
+    void computeMinMax(const Attribute_t p)
+    {
+    }
     void computeMinMax()
     {
       _xmin=_ymin=_zmin=_rmin = +HUGE;
@@ -144,4 +147,26 @@ class RendererData
 
     float attributeMin(const Attribute_t p) const { return _attributeMin[p]; }
     float attributeMax(const Attribute_t p) const { return _attributeMax[p]; }
+
+    void rescaleLinear(const Attribute_t p, const float newMin, const float newMax)
+    {
+      const float oldMin = attributeMin(p);
+      const float oldMax = attributeMax(p);
+     
+      const float oldRange = oldMax - oldMin ;
+      assert(oldRange != 0.0);
+
+      const float slope = (newMax - newMin)/oldRange;
+      for (int i = 0; i < _n; i++)
+        attribute(p,i) = slope * (attribute(p,i) - oldMin) + newMin;  
+      _attributeMin[p] = newMin;
+      _attributeMax[p] = newMax;
+    }
+    void scaleLog(const Attribute_t p)
+    {
+      for (int i = 0; i < _n; i++)
+        attribute(p,i) = std::log(attribute(p,i) + 1.0f);
+      _attributeMin[p] = std::log(_attributeMin[p] + 1.0f);
+      _attributeMax[p] = std::log(_attributeMax[p] + 1.0f);
+    }
 };

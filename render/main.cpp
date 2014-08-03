@@ -398,6 +398,15 @@ int main(int argc, char * argv[])
 #endif
   rDataPtr->computeMinMax();
 
+  if (rDataPtr->attributeMin(RendererData::RHO) > 0.0)
+  {
+    rDataPtr->rescaleLinear(RendererData::RHO, 0, 60000.0);
+    rDataPtr->scaleLog(RendererData::RHO);
+  }
+  rDataPtr->rescaleLinear(RendererData::VEL, 0, 3000.0);
+  rDataPtr->scaleLog(RendererData::VEL);
+  
+
   initAppRenderer(argc, argv, *rDataPtr
 #ifndef PARTICLESRENDERER
       ,fullScreenMode.c_str(), stereo

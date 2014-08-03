@@ -1181,7 +1181,8 @@ public:
     }
   }
 
-  
+ 
+#if 0 
   static void lCompressRange(
       const float compressMin,
       const float compressMax,
@@ -1196,6 +1197,7 @@ public:
     minRange = min + (max-min)*compressMin;
     assert(minRange < maxRange);
   }
+#endif
 
   void getBodyData() 
   {
@@ -1215,30 +1217,9 @@ public:
     float rhoMax = m_idata.attributeMax(RendererData::RHO);
     float rhoMin = m_idata.attributeMin(RendererData::RHO);
     const bool hasRHO = rhoMax > 0.0;
-    bool logScaleVEL = false;
-    bool logScaleRHO = false;
-//    logScale = true;
-    logScaleRHO &= hasRHO;
-    if (logScaleVEL)
-    {
-      velMax = std::log(velMax);
-      velMin = std::log(velMin);
-    }
-    if (logScaleRHO)
-    {
-      rhoMax = std::log(rhoMax);
-      rhoMin = std::log(rhoMin);
-    }
-
-#if 0
-    const float compressMax = 0.25;
-    const float compressMin = 0.25;
-    lCompressRange(compressMin,compressMax, velMin,velMax);
-    lCompressRange(compressMin,compressMax, velMin,velMax);
-#endif
-
     const float scaleVEL =          1.0/(velMax - velMin);
     const float scaleRHO = hasRHO ? 1.0/(rhoMax - rhoMin) : 0.0;
+
 #pragma omp parallel
     {
       StarSampler sSampler (slope-1);
@@ -1255,10 +1236,6 @@ public:
         {
           float vel = m_idata.attribute(RendererData::VEL,i);
           float rho = m_idata.attribute(RendererData::RHO,i);
-          if (logScaleVEL)
-            vel = std::log(vel);
-          if (logScaleRHO)
-            rho = std::log(rho);
           vel = 255.0f*(vel - velMin) * scaleVEL;
           rho = 255.0f*(rho - rhoMin) * scaleRHO;
           const int ix = (int)vel;
@@ -1279,10 +1256,8 @@ public:
 #if 1
           Cstar.z = 255.0;
 #endif
-          float vel = m_idata.attribute(RendererData::VEL,i);
+          const float vel = m_idata.attribute(RendererData::VEL,i);
           
-          if (logScaleVEL)
-            vel = std::log(vel);
           const float vmax = 255.0f;
           Cstar.y = vmax*(vel - velMin) * scaleVEL;
           Cstar.y = std::max(0.0f,std::min(vmax,Cstar.y));
