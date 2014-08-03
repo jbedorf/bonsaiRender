@@ -222,12 +222,14 @@ int main(int argc, char * argv[])
     
     fprintf(stderr, " -- generate output data  -- \n");
 
+    size_t npMean = 0;
     for (int i = 0; i < nLeaf; i++)
     {
       const auto &leaf = *leafArray[i];
       vec3 pos(0.0);
       vec3 vel(0.0);
       float mass = 0.0;
+      npMean += leaf.np;
       for (int i = 0; i < leaf.np; i++)
       {
         const auto &p = Node::ptcl[leaf.pfirst+i];
@@ -246,6 +248,7 @@ int main(int argc, char * argv[])
       const float volume = leaf.size*leaf.size*leaf.size;
       attrOut[i][3] = mass/volume;
       attrOut[i][4] = leaf.size;
+#if 0
       if (i%1000 == 0)
       {
         fprintf(stderr, "i= %d: pos= %g %g %g  vel= %g %g %g  d= %g  h= %g\n",
@@ -259,7 +262,9 @@ int main(int argc, char * argv[])
             attrOut[i][3],
             attrOut[i][4]);
       }
+#endif
     }
+    fprintf(stderr, "npMean= %g\n", 1.0*npMean/nLeaf);
 
   }
 
