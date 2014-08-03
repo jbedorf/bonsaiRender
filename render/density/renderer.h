@@ -173,6 +173,7 @@ class SmokeRenderer
     GLuint              mVelVbo;
     GLuint              mColorVbo;
     GLuint              mSizeVbo;
+    GLuint              mSizeVao;
     GLuint              mIndexBuffer;
     GLuint              mPosBufferTexture;
 

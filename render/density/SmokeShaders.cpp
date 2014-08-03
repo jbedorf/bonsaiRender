@@ -23,7 +23,7 @@ const char *simpleVS = STRINGIFY(
 
 // particle vertex shader
 const char *particleVS = STRINGIFY(
-    in      float pointRadiusAttr;
+    attribute float pointRadiusAttr;                          \n
     uniform float pointRadius;  // point size in world space    \n
     uniform float pointScale;   // scale to calculate size in pixels \n
     uniform float overBright;
@@ -39,18 +39,21 @@ const char *particleVS = STRINGIFY(
     float mass = gl_Vertex.w;
     float type = gl_Color.w;
 
+//    float pointRadius1 = pointRadius; \n
+    float pointRadius1 = pointRadiusAttr; \n
+
     // calculate window-space point size                    \n
     vec4 eyeSpacePos = gl_ModelViewMatrix * wpos;           \n
     float dist = length(eyeSpacePos.xyz);                   \n
     //float dist = -eyeSpacePos.z; \n
 
-    //pointRadius *= 1.0 + smoothstep(overBrightThreshold, 0.0, age)*ageScale;
-    //pointRadius *= mass;
+    //pointRadius1 *= 1.0 + smoothstep(overBrightThreshold, 0.0, age)*ageScale;
+    //pointRadius1 *= mass;
     vec4 col = gl_Color;
     //    type = 3.0;
     if (type == 0.0) {
       // dust
-      pointRadius *= ageScale;	// scale up
+      pointRadius1 *= ageScale;	// scale up
       col.a = dustAlpha;
     } else if (type == 1.0) {
       col.rgb *= overBrightThreshold; // XXX hack, using this var for now!!
@@ -66,9 +69,9 @@ const char *particleVS = STRINGIFY(
       }
     }
 
-    //gl_PointSize = pointRadius*(pointScale / dist);       \n
-    gl_PointSize = max(1.0, pointRadius * (pointScale / dist)); \n
-      //float pointSize = pointRadius * (pointScale / dist);
+    //gl_PointSize = pointRadius1*(pointScale / dist);       \n
+    gl_PointSize = max(1.0, pointRadius1 * (pointScale / dist)); \n
+      //float pointSize = pointRadius1 * (pointScale / dist);
       //if (pointSize < 1.0) col.rgb *= pointSize;
       //gl_PointSize = max(1.0, pointSize);
 
@@ -152,6 +155,7 @@ const char *mblurGS =
 "#extension GL_EXT_gpu_shader4 : enable\n"
 "#extension GL_EXT_geometry_shader4 : enable\n"
 STRINGIFY(
+    attribute float pointRadiusAttr;                          \n
     uniform float pointRadius;  // point size in world space       \n
     uniform float ageScale;
     void main()                                                    \n
@@ -227,6 +231,7 @@ STRINGIFY(
     uniform sampler2D rampTex;
     //uniform sampler2DArray spriteTex;
     uniform sampler2D spriteTex;
+    attribute float pointRadiusAttr;                          \n
     uniform float pointRadius;                                         \n
     uniform float overBright = 1.0;
     uniform float overBrightThreshold;
@@ -279,6 +284,7 @@ STRINGIFY(
     uniform sampler2D spriteTex;
     uniform sampler2D shadowTex;                                       \n
     //uniform sampler2D depthTex;                                        \n
+    attribute float pointRadiusAttr;                          \n
     uniform float pointRadius;                                         \n
     uniform vec2 shadowTexScale;
     uniform float overBright = 1.0;
@@ -337,6 +343,7 @@ const char *particleAAPS =
 STRINGIFY(
     uniform sampler2D rampTex;
     uniform sampler2DArray spriteTex;
+    attribute float pointRadiusAttr;                          \n
     uniform float pointRadius;                                         \n
     uniform float overBright = 1.0;
     uniform float overBrightThreshold;
@@ -371,6 +378,7 @@ STRINGIFY(
 
 // render particle as lit sphere
 const char *particleSpherePS = STRINGIFY(
+    attribute float pointRadiusAttr;                          \n
     uniform float pointRadius;                                         \n
     uniform vec3 lightDir = vec3(0.577, 0.577, 0.577);                 \n
     void main()                                                        \n

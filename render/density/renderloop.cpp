@@ -1234,7 +1234,8 @@ class Demo
         for (int i = 0; i < n; i++)
         {
           pos[i] = make_float4(m_idata.posx(i), m_idata.posy(i), m_idata.posz(i),0);
-          sizes[i] = m_idata.attribute(RendererData::H,i);
+          sizes[i] = m_renderer.getParticleRadius(); //m_idata.attribute(RendererData::H,i);
+//          sizes[i] = m_idata.attribute(RendererData::H,i);
           int type =  m_idata.type(i);
           if (type == 0)
           {

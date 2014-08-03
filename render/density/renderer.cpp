@@ -49,6 +49,7 @@ SmokeRenderer::SmokeRenderer(int numParticles, int maxParticles) :
   mVelVbo(0),
   mColorVbo(0),
   mSizeVbo(0),
+  mSizeVao(0),
   mIndexBuffer(0),
   mParticleRadius(0.1f),
   mDisplayMode(SPRITES),
@@ -522,6 +523,15 @@ void SmokeRenderer::drawPoints(int start, int count, bool sorted)
     glEnableClientState(GL_TEXTURE_COORD_ARRAY);
   }
 
+#if 0
+  if (mSizeVbo)
+  {
+    glBindBufferARB(GL_ARRAY_BUFFER_ARB, mSizeVbo);
+    glEnableVertexAttribArray(0);
+    glVertexAttribPointer(0, 1, GL_FLOAT, GL_FALSE, 0, 0);
+  }
+#endif
+
   if (sorted) {
     glBindBufferARB(GL_ELEMENT_ARRAY_BUFFER_ARB, mIndexBuffer);
     glDrawElements(GL_POINTS, count, GL_UNSIGNED_INT, (void*) (start*sizeof(unsigned int)) );
@@ -545,7 +555,19 @@ void SmokeRenderer::drawPointSprites(GLSLProgram *prog, int start, int count, bo
   glDepthMask(GL_FALSE);  // don't write depth
   glEnable(GL_BLEND);
 
+  GLuint vertexLoc = -1;
+  if (!mSizeVao && mSizeVbo)
+  {
+    glGenVertexArrays(1, &mSizeVao);
+    glBindVertexArray(mSizeVao);
+    glBindBufferARB(GL_ARRAY_BUFFER_ARB, mSizeVbo);
+    vertexLoc = prog->getAttribLoc("pointRadiusAttr");
+    glEnableVertexAttribArray(vertexLoc);
+    glVertexAttribPointer(vertexLoc , 1, GL_FLOAT, 0, 0, 0);
+  }
+
   prog->enable();
+  glBindVertexArray(mSizeVao);
   prog->setUniform1f("pointRadius", mParticleRadius);
   prog->setUniform1f("ageScale", m_ageScale);
   prog->setUniform1f("dustAlpha", m_dustAlpha);
@@ -595,6 +617,8 @@ void SmokeRenderer::drawPointSprites(GLSLProgram *prog, int start, int count, bo
   glDisable(GL_VERTEX_PROGRAM_POINT_SIZE_ARB);
   glDepthMask(GL_TRUE);
   glDisable(GL_BLEND);
+  glBindVertexArray(0);
+
 }
 
 // calculate vectors for half-angle slice rendering
