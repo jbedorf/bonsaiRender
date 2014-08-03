@@ -50,11 +50,13 @@ class SmokeRenderer
     void setPositionBuffer(GLuint vbo) { mPosVbo = vbo; }
     void setVelocityBuffer(GLuint vbo) { mVelVbo = vbo; }
     void setColorBuffer(GLuint vbo) { mColorVbo = vbo; }
+    void setSizeBuffer(GLuint vbo) { mSizeVbo = vbo; }
     void setIndexBuffer(GLuint ib) { mIndexBuffer = ib; }
 
     void setPositions(float *pos);
     void setPositionsDevice(float *posD);
     void setColors(float *color);
+    void setSizes(float *sizes);
     void setColorsDevice(float *colorD);
 
     void setWindowSize(int w, int h);
@@ -170,6 +172,7 @@ class SmokeRenderer
     GLuint              mPosVbo;
     GLuint              mVelVbo;
     GLuint              mColorVbo;
+    GLuint              mSizeVbo;
     GLuint              mIndexBuffer;
     GLuint              mPosBufferTexture;
 

@@ -378,6 +378,7 @@ class Demo
     //m_particleColors  = new float4[arraySize];
     m_particleColors  = new float4[MAX_PARTICLES];  
     m_particlePos  = new float4[MAX_PARTICLES];  
+    m_particleSizes = new float[MAX_PARTICLES];  
     //    cudaMalloc( &m_particleColorsDev, MAX_PARTICLES * sizeof(float4)); 
     initBodyColors();
 
@@ -404,6 +405,7 @@ class Demo
       //m_tree->iterate_teardown(m_idata);
       //delete m_tree;
       delete [] m_particleColors;
+      delete [] m_particleSizes;
     }
 
     void cycleDisplayMode() {
@@ -1214,6 +1216,7 @@ class Demo
       slope = 0.1;
       float4 *colors = m_particleColors;
       float4 *pos = m_particlePos;
+      float  *sizes = m_particleSizes;
       //    darkMatterColor = make_float4(0.0f, 0.2f, 0.4f, 0.0f);      // blue
 
       float velMax = m_idata.attributeMax(RendererData::VEL);
@@ -1231,6 +1234,7 @@ class Demo
         for (int i = 0; i < n; i++)
         {
           pos[i] = make_float4(m_idata.posx(i), m_idata.posy(i), m_idata.posz(i),0);
+          sizes[i] = m_idata.attribute(RendererData::H,i);
           int type =  m_idata.type(i);
           if (type == 0)
           {
@@ -1396,6 +1400,7 @@ class Demo
 
     float4 *m_particleColors;
     float4 *m_particlePos;
+    float  *m_particleSizes;
     //  float4 *m_particleColorsDev;
 
     // view params

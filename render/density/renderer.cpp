@@ -48,6 +48,7 @@ SmokeRenderer::SmokeRenderer(int numParticles, int maxParticles) :
   m_pbo(0),
   mVelVbo(0),
   mColorVbo(0),
+  mSizeVbo(0),
   mIndexBuffer(0),
   mParticleRadius(0.1f),
   mDisplayMode(SPRITES),
@@ -387,6 +388,21 @@ void SmokeRenderer::setPositionsDevice(float *posD)
   //	cudaSetDevice(devID);
 }
 #endif
+
+void SmokeRenderer::setSizes(float *sizes)
+{
+  if (!mSizeVbo)
+  {
+    // allocate
+    glGenBuffers(1, &mSizeVbo);
+    glBindBuffer(GL_ARRAY_BUFFER_ARB, mSizeVbo);
+    glBufferData(GL_ARRAY_BUFFER_ARB, mMaxParticles * sizeof(float), sizes, GL_DYNAMIC_DRAW);                
+  }
+
+  glBindBuffer(GL_ARRAY_BUFFER_ARB, mSizeVbo);
+  glBufferSubData(GL_ARRAY_BUFFER_ARB, 0, mNumParticles * sizeof(float), sizes);
+  glBindBuffer( GL_ARRAY_BUFFER_ARB, 0);
+}
 
 void SmokeRenderer::setColors(float *color)
 {
