@@ -39,6 +39,8 @@ static inline double rtc(void)
 
 
 
+#include "colorMap"
+
 //#include "render_particles.h"
 #include "renderer.h"
 #include "vector_math.h"
@@ -1179,7 +1181,6 @@ public:
     }
   }
 
-//#include "colorMap.hpp"
   
   static void lCompressRange(
       const float compressMin,
@@ -1211,18 +1212,33 @@ public:
 
     float velMax = m_idata.attributeMax(RendererData::VEL);
     float velMin = m_idata.attributeMin(RendererData::VEL);
-    bool logScale = false;
+    float rhoMax = m_idata.attributeMax(RendererData::RHO);
+    float rhoMin = m_idata.attributeMin(RendererData::RHO);
+    const bool hasRHO = rhoMax > 0.0;
+    bool logScaleVEL = false;
+    bool logScaleRHO = false;
 //    logScale = true;
-    if (logScale)
+    logScaleRHO &= hasRHO;
+    if (logScaleVEL)
     {
       velMax = std::log(velMax);
       velMin = std::log(velMin);
     }
+    if (logScaleRHO)
+    {
+      rhoMax = std::log(rhoMax);
+      rhoMin = std::log(rhoMin);
+    }
+
+#if 0
     const float compressMax = 0.25;
     const float compressMin = 0.25;
     lCompressRange(compressMin,compressMax, velMin,velMax);
     lCompressRange(compressMin,compressMax, velMin,velMax);
-    const float scale = 1.0/(velMax - velMin);
+#endif
+
+    const float scaleVEL =          1.0/(velMax - velMin);
+    const float scaleRHO = hasRHO ? 1.0/(rhoMax - rhoMin) : 0.0;
 #pragma omp parallel
     {
       StarSampler sSampler (slope-1);
@@ -1235,6 +1251,27 @@ public:
         {
           colors[i] = darkMatterColor;
         }
+        else if (hasRHO)
+        {
+          float vel = m_idata.attribute(RendererData::VEL,i);
+          float rho = m_idata.attribute(RendererData::RHO,i);
+          if (logScaleVEL)
+            vel = std::log(vel);
+          if (logScaleRHO)
+            rho = std::log(rho);
+          vel = 255.0f*(vel - velMin) * scaleVEL;
+          rho = 255.0f*(rho - rhoMin) * scaleRHO;
+          const int ix = (int)vel;
+          const int iy = (int)rho;
+          assert(ix >= 0 && ix < 256);
+          assert(iy >= 0 && iy < 256);
+          float4 Cstar ;
+          Cstar.x = colorMap[iy][ix][0];
+          Cstar.y = colorMap[iy][ix][1];
+          Cstar.z = colorMap[iy][ix][2];
+          Cstar.w = 1.0;
+          colors[i] = Cstar;
+        }
         else
         {
           const float  Mstar = sSampler.sampleMass();
@@ -1243,10 +1280,11 @@ public:
           Cstar.z = 255.0;
 #endif
           float vel = m_idata.attribute(RendererData::VEL,i);
-          if (logScale)
+          
+          if (logScaleVEL)
             vel = std::log(vel);
           const float vmax = 255.0f;
-          Cstar.y = vmax*(vel - velMin) * scale;
+          Cstar.y = vmax*(vel - velMin) * scaleVEL;
           Cstar.y = std::max(0.0f,std::min(vmax,Cstar.y));
           Cstar.x = 0.5*(Cstar.y+Cstar.z);
           colors[i] = Cstar;

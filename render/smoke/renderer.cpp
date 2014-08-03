@@ -1539,7 +1539,7 @@ void SmokeRenderer::initParams()
 	  m_params->AddParam(new Param<int>("slices", m_numSlices, 1, 256, 1, &m_numSlices));
 	  m_params->AddParam(new Param<int>("displayed slices", m_numDisplayedSlices, 1, 256, 1, &m_numDisplayedSlices));
 
-    m_params->AddParam(new Param<float>("sprite size", mParticleRadius, 0.0f, 2.0f, 0.01f, &mParticleRadius));
+    m_params->AddParam(new Param<float>("sprite size", mParticleRadius, 0.0f, 0.1f, 0.001f, &mParticleRadius));
     m_params->AddParam(new Param<float>("dust scale", m_ageScale, 0.0f, 50.0f, 0.1f, &m_ageScale));
     m_params->AddParam(new Param<float>("dust alpha", m_dustAlpha, 0.0f, 1.0f, 0.1f, &m_dustAlpha));
 
