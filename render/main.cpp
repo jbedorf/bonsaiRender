@@ -16,6 +16,243 @@
 #include "renderloop.h"
 #include "anyoption.h"
 #include "RendererData.h"
+  
+static RendererData* readBonsaiReduced(
+    const int rank, const int nranks, const MPI_Comm &comm,
+    const std::string &fileName,
+    const int reduceDM,
+    const int reduceS)
+{
+  if (rank == 0)
+    fprintf(stderr, " ----------- \n");
+  BonsaiIO::Core in(rank, nranks, comm, BonsaiIO::READ, fileName);
+  if (rank == 0)
+    in.getHeader().printFields();
+  typedef float float5[5];
+  typedef float float3[3];
+
+  BonsaiIO::DataType<float3> posStars("Stars:XYZ:float[3]");
+  BonsaiIO::DataType<float5> attrStars("Stars:VxVyVz,DENS,H:float[5]");
+
+  if (reduceS > 0)
+  {
+    if (rank  == 0)
+      fprintf(stderr, " Reading star data \n");
+    if(!in.read(posStars,  true, reduceS)) return NULL;
+    assert(in.read(attrStars, true, reduceS));
+    assert(posStars.getNumElements() == attrStars.getNumElements());
+  }
+
+  BonsaiIO::DataType<float3> posDM("DM:XYZ:float[3]");
+  BonsaiIO::DataType<float5> attrDM("DM:VxVyVz,DENS,H:float[5]");
+
+  if (reduceDM > 0)
+  {
+    if (rank  == 0)
+      fprintf(stderr, " Reading DM data \n");
+    if (!in.read(posDM,  true, reduceDM)) return NULL;
+    assert(in.read(attrDM, true, reduceDM));
+    assert(posDM.getNumElements() == attrDM.getNumElements());
+  }
+
+
+
+  const int nS  = posStars.getNumElements();
+  const int nDM = posDM.getNumElements();
+  long long int nSloc = nS, nSglb;
+  long long int nDMloc = nDM, nDMglb;
+
+  MPI_Allreduce(&nSloc, &nSglb, 1, MPI_LONG, MPI_SUM, comm);
+  MPI_Allreduce(&nDMloc, &nDMglb, 1, MPI_LONG, MPI_SUM, comm);
+  if (rank == 0)
+  {
+    fprintf(stderr, "nStars = %lld\n", nSglb);
+    fprintf(stderr, "nDM    = %lld\n", nDMglb);
+  }
+
+
+  RendererData *rDataPtr = new RendererData(nS+nDM);
+  auto &rData = *rDataPtr;
+  for (int i = 0; i < nS; i++)
+  {
+    const int ip = i;
+    rData.posx(ip) = posStars[i][0];
+    rData.posy(ip) = posStars[i][1];
+    rData.posz(ip) = posStars[i][2];
+    rData.ID  (ip) = i;
+    rData.type(ip) = 1;
+    rData.attribute(RendererData::MASS, ip) = 1.0/nS;
+    rData.attribute(RendererData::VEL,  ip) =
+      std::sqrt(
+          attrStars[i][0]*attrStars[i][0] +
+          attrStars[i][1]*attrStars[i][1] +
+          attrStars[i][2]*attrStars[i][2]);
+    rData.attribute(RendererData::RHO, ip) = attrStars[i][3];
+    rData.attribute(RendererData::H,   ip) = attrStars[i][4];
+  }
+
+  for (int i = 0; i < nDM; i++)
+  {
+    const int ip = i + nS;
+    rData.posx(ip) = posDM[i][0];
+    rData.posy(ip) = posDM[i][1];
+    rData.posz(ip) = posDM[i][2];
+    rData.ID  (ip) = i+1000000000;
+    rData.type(ip) = 0;
+    rData.attribute(RendererData::MASS, ip) = 1.0/nDM;
+    rData.attribute(RendererData::VEL,  ip) =
+      std::sqrt(
+          attrDM[i][0]*attrDM[i][0] +
+          attrDM[i][1]*attrDM[i][1] +
+          attrDM[i][2]*attrDM[i][2]);
+    rData.attribute(RendererData::RHO, ip) = attrDM[i][3];
+    rData.attribute(RendererData::H,   ip) = attrDM[i][4];
+  }
+  return rDataPtr;
+}
+
+static RendererData* readBonsaiFull(
+    const int rank, const int nranks, const MPI_Comm &comm,
+    const std::string &fileName,
+    const int reduceDM,
+    const int reduceS)
+{
+  if (rank == 0)
+    fprintf(stderr, " ----------- \n");
+  BonsaiIO::Core out(rank, nranks, comm, BonsaiIO::READ, fileName);
+  if (rank == 0)
+    out.getHeader().printFields();
+  typedef float float4[4];
+  typedef float float3[3];
+  typedef float float2[2];
+
+  BonsaiIO::DataType<IDType> IDListS("Stars:IDType");
+  BonsaiIO::DataType<float4> posS("Stars:POS:real4");
+  BonsaiIO::DataType<float3> velS("Stars:VEL:float[3]");
+  BonsaiIO::DataType<float2> rhohS("Stars:RHOH:float[2]");
+
+  if (reduceS > 0)
+  {
+    if (rank  == 0)
+      fprintf(stderr, " Reading star data \n");
+    if (!out.read(IDListS, true, reduceS)) return NULL;
+    assert(out.read(posS,    true, reduceS));
+    assert(out.read(velS,    true, reduceS));
+    bool renderDensity = true;
+    if (!out.read(rhohS,  true, reduceS))
+    {
+      if (rank == 0)
+      {
+        fprintf(stderr , " -- Stars RHOH data is found \n");
+        fprintf(stderr , " -- rendering stars w/o density info \n");
+      }
+      renderDensity = false;
+    }
+    assert(IDListS.getNumElements() == posS.getNumElements());
+    assert(IDListS.getNumElements() == velS.getNumElements());
+    if (renderDensity)
+      assert(IDListS.getNumElements() == posS.getNumElements());
+  }
+
+  BonsaiIO::DataType<IDType> IDListDM("DM:IDType");
+  BonsaiIO::DataType<float4> posDM("DM:POS:real4");
+  BonsaiIO::DataType<float3> velDM("DM:VEL:float[3]");
+  BonsaiIO::DataType<float2> rhohDM("DM:RHOH:float[2]");
+  if (reduceDM > 0)
+  {
+    if (rank  == 0)
+      fprintf(stderr, " Reading DM data \n");
+    if(!out.read(IDListDM, true, reduceDM)) return NULL;
+    assert(out.read(posDM,    true, reduceDM));
+    assert(out.read(velDM,    true, reduceDM));
+    bool renderDensity = true;
+    if (!out.read(rhohDM,  true, reduceDM))
+    {
+      if (rank == 0)
+      {
+        fprintf(stderr , " -- DM RHOH data is found \n");
+        fprintf(stderr , " -- rendering stars w/o density info \n");
+      }
+      renderDensity = false;
+    }
+    assert(IDListS.getNumElements() == posS.getNumElements());
+    assert(IDListS.getNumElements() == velS.getNumElements());
+    if (renderDensity)
+      assert(IDListS.getNumElements() == posS.getNumElements());
+  }
+
+
+  const int nS  = IDListS.getNumElements();
+  const int nDM = IDListDM.getNumElements();
+  long long int nSloc = nS, nSglb;
+  long long int nDMloc = nDM, nDMglb;
+
+  MPI_Allreduce(&nSloc, &nSglb, 1, MPI_LONG, MPI_SUM, comm);
+  MPI_Allreduce(&nDMloc, &nDMglb, 1, MPI_LONG, MPI_SUM, comm);
+  if (rank == 0)
+  {
+    fprintf(stderr, "nStars = %lld\n", nSglb);
+    fprintf(stderr, "nDM    = %lld\n", nDMglb);
+  }
+
+
+  RendererData *rDataPtr = new RendererData(nS+nDM);
+  auto &rData = *rDataPtr;
+  for (int i = 0; i < nS; i++)
+  {
+    const int ip = i;
+    rData.posx(ip) = posS[i][0];
+    rData.posy(ip) = posS[i][1];
+    rData.posz(ip) = posS[i][2];
+    rData.ID  (ip) = IDListS[i].getID();
+    rData.type(ip) = IDListS[i].getType();
+    assert(rData.type(ip) == 1); /* sanity check */
+    rData.attribute(RendererData::MASS, ip) = posS[i][3];
+    rData.attribute(RendererData::VEL,  ip) =
+      std::sqrt(
+          velS[i][0]*velS[i][0] +
+          velS[i][1]*velS[i][1] +
+          velS[i][2]*velS[i][2]);
+    if (rhohS.size() > 0)
+    {
+      rData.attribute(RendererData::RHO, ip) = rhohS[i][0];
+      rData.attribute(RendererData::H,  ip)  = rhohS[i][1];
+    }
+    else
+    {
+      rData.attribute(RendererData::RHO, ip) = 0.0;
+      rData.attribute(RendererData::H,   ip) = 0.0;
+    }
+  }
+  for (int i = 0; i < nDM; i++)
+  {
+    const int ip = i + nS;
+    rData.posx(ip) = posDM[i][0];
+    rData.posy(ip) = posDM[i][1];
+    rData.posz(ip) = posDM[i][2];
+    rData.ID  (ip) = IDListDM[i].getID();
+    rData.type(ip) = IDListDM[i].getType();
+    assert(rData.type(ip) == 0); /* sanity check */
+    rData.attribute(RendererData::MASS, ip) = posDM[i][3];
+    rData.attribute(RendererData::VEL,  ip) =
+      std::sqrt(
+          velDM[i][0]*velDM[i][0] +
+          velDM[i][1]*velDM[i][1] +
+          velDM[i][2]*velDM[i][2]);
+    if (rhohDM.size() > 0)
+    {
+      rData.attribute(RendererData::RHO, ip) = rhohDM[i][0];
+      rData.attribute(RendererData::H,   ip) = rhohDM[i][1];
+    }
+    else
+    {
+      rData.attribute(RendererData::RHO, ip) = 0.0;
+      rData.attribute(RendererData::H,   ip) = 0.0;
+    }
+  }
+
+  return rDataPtr;
+}
 
 
 
@@ -32,7 +269,6 @@ int main(int argc, char * argv[])
   assert(rank   == 0);
 
   std::string fileName;
-  bool useReducedFormat = false;
 #ifdef OLDIO
   int nDomains     = -1;
 #endif
@@ -55,7 +291,6 @@ int main(int argc, char * argv[])
 		ADDUSAGE(" ");
 		ADDUSAGE(" -h  --help             Prints this help ");
 		ADDUSAGE(" -i  --infile #         Input snapshot filename ");
-    ADDUSAGE(" -r  --usereduced       Use reduce format [false] ");
 #ifdef OLDIO
     ADDUSAGE(" -n  --ndomains #       Number of domains ");
 #endif
@@ -69,7 +304,6 @@ int main(int argc, char * argv[])
 
 
 		opt.setFlag  ( "help" ,        'h');
-		opt.setFlag  ( "usereduced" ,  'r');
 		opt.setOption( "infile",       'i');
 #ifdef OLDIO
 		opt.setOption( "ndomains",     'n');
@@ -91,7 +325,6 @@ int main(int argc, char * argv[])
 
     char *optarg = NULL;
     if ((optarg = opt.getValue("infile")))       fileName           = std::string(optarg);
-    if (opt.getFlag("usereduced"))              useReducedFormat = true;
 #ifdef OLDIO
     if ((optarg = opt.getValue("ndomains")))     nDomains           = atoi(optarg);
 #endif
@@ -175,236 +408,28 @@ int main(int argc, char * argv[])
 #else  /* end OLDIO */
 
   RendererData *rDataPtr;
-  if (useReducedFormat)
-  {
-    BonsaiIO::Core in(rank, nranks, comm, BonsaiIO::READ, fileName);
-    if (rank == 0)
-      in.getHeader().printFields();
-    typedef float float5[5];
-    typedef float float3[3];
-
-    BonsaiIO::DataType<float3> posStars("Stars:XYZ:float[3]");
-    BonsaiIO::DataType<float5> attrStars("Stars:VxVyVz,DENS,H:float[5]");
-
-    if (reduceS > 0)
-    {
-      if (rank  == 0)
-        fprintf(stderr, " Reading star data \n");
-      assert(in.read(posStars,  true, reduceS));
-      assert(in.read(attrStars, true, reduceS));
-      assert(posStars.getNumElements() == attrStars.getNumElements());
-    }
-
-    BonsaiIO::DataType<float3> posDM("DM:XYZ:float[3]");
-    BonsaiIO::DataType<float5> attrDM("DM:VxVyVz,DENS,H:float[5]");
-    
-    if (reduceDM > 0)
-    {
-      if (rank  == 0)
-        fprintf(stderr, " Reading DM data \n");
-      assert(in.read(posDM,  true, reduceDM));
-      assert(in.read(attrDM, true, reduceDM));
-      assert(posDM.getNumElements() == attrDM.getNumElements());
-    }
-
-
-
-    const int nS  = posStars.getNumElements();
-    const int nDM = posDM.getNumElements();
-    long long int nSloc = nS, nSglb;
-    long long int nDMloc = nDM, nDMglb;
-
-    MPI_Allreduce(&nSloc, &nSglb, 1, MPI_LONG, MPI_SUM, comm);
-    MPI_Allreduce(&nDMloc, &nDMglb, 1, MPI_LONG, MPI_SUM, comm);
-    if (rank == 0)
-    {
-      fprintf(stderr, "nStars = %lld\n", nSglb);
-      fprintf(stderr, "nDM    = %lld\n", nDMglb);
-    }
-
-
-    rDataPtr = new RendererData(nS+nDM);
-    auto &rData = *rDataPtr;
-    for (int i = 0; i < nS; i++)
-    {
-      const int ip = i;
-      rData.posx(ip) = posStars[i][0];
-      rData.posy(ip) = posStars[i][1];
-      rData.posz(ip) = posStars[i][2];
-      rData.ID  (ip) = i;
-      rData.type(ip) = 1;
-      rData.attribute(RendererData::MASS, ip) = 1.0/nS;
-      rData.attribute(RendererData::VEL,  ip) =
-        std::sqrt(
-            attrStars[i][0]*attrStars[i][0] +
-            attrStars[i][1]*attrStars[i][1] +
-            attrStars[i][2]*attrStars[i][2]);
-      rData.attribute(RendererData::RHO, ip) = attrStars[i][3];
-      rData.attribute(RendererData::H,   ip) = attrStars[i][4];
-    }
-
-    for (int i = 0; i < nDM; i++)
-    {
-      const int ip = i + nS;
-      rData.posx(ip) = posDM[i][0];
-      rData.posy(ip) = posDM[i][1];
-      rData.posz(ip) = posDM[i][2];
-      rData.ID  (ip) = i+1000000000;
-      rData.type(ip) = 0;
-      rData.attribute(RendererData::MASS, ip) = 1.0/nDM;
-      rData.attribute(RendererData::VEL,  ip) =
-        std::sqrt(
-            attrDM[i][0]*attrDM[i][0] +
-            attrDM[i][1]*attrDM[i][1] +
-            attrDM[i][2]*attrDM[i][2]);
-      rData.attribute(RendererData::RHO, ip) = attrDM[i][3];
-      rData.attribute(RendererData::H,   ip) = attrDM[i][4];
-    }
-  }
+  if ((rDataPtr = readBonsaiFull(rank, nranks, comm, fileName, reduceDM, reduceS))) {}
+  else if ((rDataPtr = readBonsaiReduced(rank, nranks, comm, fileName, reduceDM, reduceS))) {}
   else
   {
-    BonsaiIO::Core out(rank, nranks, comm, BonsaiIO::READ, fileName);
     if (rank == 0)
-      out.getHeader().printFields();
-    typedef float float4[4];
-    typedef float float3[3];
-    typedef float float2[2];
-
-    BonsaiIO::DataType<IDType> IDListS("Stars:IDType");
-    BonsaiIO::DataType<float4> posS("Stars:POS:real4");
-    BonsaiIO::DataType<float3> velS("Stars:VEL:float[3]");
-    BonsaiIO::DataType<float2> rhohS("Stars:RHOH:float[2]");
-
-    if (reduceS > 0)
-    {
-      if (rank  == 0)
-        fprintf(stderr, " Reading star data \n");
-      assert(out.read(IDListS, true, reduceS));
-      assert(out.read(posS,    true, reduceS));
-      assert(out.read(velS,    true, reduceS));
-      bool renderDensity = true;
-      if (!out.read(rhohS,  true, reduceS))
-      {
-        if (rank == 0)
-        {
-          fprintf(stderr , " -- Stars RHOH data is found \n");
-          fprintf(stderr , " -- rendering stars w/o density info \n");
-        }
-        renderDensity = false;
-      }
-      assert(IDListS.getNumElements() == posS.getNumElements());
-      assert(IDListS.getNumElements() == velS.getNumElements());
-      if (renderDensity)
-        assert(IDListS.getNumElements() == posS.getNumElements());
-    }
-
-    BonsaiIO::DataType<IDType> IDListDM("DM:IDType");
-    BonsaiIO::DataType<float4> posDM("DM:POS:real4");
-    BonsaiIO::DataType<float3> velDM("DM:VEL:float[3]");
-    BonsaiIO::DataType<float2> rhohDM("DM:RHOH:float[2]");
-    if (reduceDM > 0)
-    {
-      if (rank  == 0)
-        fprintf(stderr, " Reading DM data \n");
-      assert(out.read(IDListDM, true, reduceDM));
-      assert(out.read(posDM,    true, reduceDM));
-      assert(out.read(velDM,    true, reduceDM));
-      bool renderDensity = true;
-      if (!out.read(rhohDM,  true, reduceDM))
-      {
-        if (rank == 0)
-        {
-          fprintf(stderr , " -- DM RHOH data is found \n");
-          fprintf(stderr , " -- rendering stars w/o density info \n");
-        }
-        renderDensity = false;
-      }
-      assert(IDListS.getNumElements() == posS.getNumElements());
-      assert(IDListS.getNumElements() == velS.getNumElements());
-      if (renderDensity)
-        assert(IDListS.getNumElements() == posS.getNumElements());
-    }
-
-
-    const int nS  = IDListS.getNumElements();
-    const int nDM = IDListDM.getNumElements();
-    long long int nSloc = nS, nSglb;
-    long long int nDMloc = nDM, nDMglb;
-
-    MPI_Allreduce(&nSloc, &nSglb, 1, MPI_LONG, MPI_SUM, comm);
-    MPI_Allreduce(&nDMloc, &nDMglb, 1, MPI_LONG, MPI_SUM, comm);
-    if (rank == 0)
-    {
-      fprintf(stderr, "nStars = %lld\n", nSglb);
-      fprintf(stderr, "nDM    = %lld\n", nDMglb);
-    }
-
-
-    rDataPtr = new RendererData(nS+nDM);
-    auto &rData = *rDataPtr;
-    for (int i = 0; i < nS; i++)
-    {
-      const int ip = i;
-      rData.posx(ip) = posS[i][0];
-      rData.posy(ip) = posS[i][1];
-      rData.posz(ip) = posS[i][2];
-      rData.ID  (ip) = IDListS[i].getID();
-      rData.type(ip) = IDListS[i].getType();
-      assert(rData.type(ip) == 1); /* sanity check */
-      rData.attribute(RendererData::MASS, ip) = posS[i][3];
-      rData.attribute(RendererData::VEL,  ip) =
-        std::sqrt(
-            velS[i][0]*velS[i][0] +
-            velS[i][1]*velS[i][1] +
-            velS[i][2]*velS[i][2]);
-      if (rhohS.size() > 0)
-      {
-        rData.attribute(RendererData::RHO, ip) = rhohS[i][0];
-        rData.attribute(RendererData::H,  ip)  = rhohS[i][1];
-      }
-      else
-      {
-        rData.attribute(RendererData::RHO, ip) = 0.0;
-        rData.attribute(RendererData::H,   ip) = 0.0;
-      }
-    }
-    for (int i = 0; i < nDM; i++)
-    {
-      const int ip = i + nS;
-      rData.posx(ip) = posDM[i][0];
-      rData.posy(ip) = posDM[i][1];
-      rData.posz(ip) = posDM[i][2];
-      rData.ID  (ip) = IDListDM[i].getID();
-      rData.type(ip) = IDListDM[i].getType();
-      assert(rData.type(ip) == 0); /* sanity check */
-      rData.attribute(RendererData::MASS, ip) = posDM[i][3];
-      rData.attribute(RendererData::VEL,  ip) =
-        std::sqrt(
-            velDM[i][0]*velDM[i][0] +
-            velDM[i][1]*velDM[i][1] +
-            velDM[i][2]*velDM[i][2]);
-      if (rhohDM.size() > 0)
-      {
-        rData.attribute(RendererData::RHO, ip) = rhohDM[i][0];
-        rData.attribute(RendererData::H,   ip) = rhohDM[i][1];
-      }
-      else
-      {
-        rData.attribute(RendererData::RHO, ip) = 0.0;
-        rData.attribute(RendererData::H,   ip) = 0.0;
-      }
-    }
+      fprintf(stderr, " I don't recognize the format ... please try again , or recompile to use with old tipsy if that is what you use ..\n");
+    MPI_Finalize();
+    exit(-1);
   }
+
 #endif
+
+  assert(rDataPtr != 0);
   rDataPtr->computeMinMax();
 
   if (rDataPtr->attributeMin(RendererData::RHO) > 0.0)
   {
     rDataPtr->rescaleLinear(RendererData::RHO, 0, 60000.0);
-//    rDataPtr->scaleLog(RendererData::RHO);
+    rDataPtr->scaleLog(RendererData::RHO);
   }
   rDataPtr->rescaleLinear(RendererData::VEL, 0, 3000.0);
-//  rDataPtr->scaleLog(RendererData::VEL);
+  rDataPtr->scaleLog(RendererData::VEL);
   
 
   initAppRenderer(argc, argv, *rDataPtr
