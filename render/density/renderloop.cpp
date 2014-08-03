@@ -1278,6 +1278,7 @@ class Demo
       m_renderer.setNumParticles(m_idata.n());
       m_renderer.setPositions((float*)pos);
       m_renderer.setColors((float*)colors);
+      m_renderer.setSizes((float*)sizes);
       m_renderer.depthSort(pos);
     }
 
