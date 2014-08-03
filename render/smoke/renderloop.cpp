@@ -746,7 +746,6 @@ public:
         drawStats(fps);
 
     glutReportErrors();
-    fprintf(stderr, " --- frame --- \n");
   }
 
   void mouse(int button, int state, int x, int y)
@@ -1201,8 +1200,6 @@ public:
     //Above is safe since it is 0 if we dont use dust
 
 //    darkMatterColor = make_float4(0.0f, 1.0f, 1.0f, 0.0f);      // blue
-    fprintf(stderr, "%g %g %g \n",
-        darkMatterColor.x, darkMatterColor.y, darkMatterColor.z);
 
     float slope = +1.35; // reversed MF, low mass depleted
     slope = 0.1;
