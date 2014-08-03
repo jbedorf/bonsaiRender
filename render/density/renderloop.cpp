@@ -1019,6 +1019,10 @@ public:
     case '<':
       m_cameraRoll -= 2.0f;
       break;
+
+    case 'Q':
+      exit(-1);
+      break;
     case 'W':
     default:
       break;
