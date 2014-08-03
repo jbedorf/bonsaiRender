@@ -55,7 +55,7 @@ int main(int argc, char * argv[])
           (int)color_array[2 + 3*(w+h*width)],
           w < width-1 ? ',':' ');
     }
-    fprintf(ostream, "};\n");
+    fprintf(ostream, "},\n");
   }
   fprintf(ostream, "};\n");
 

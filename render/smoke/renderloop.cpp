@@ -1178,6 +1178,8 @@ public:
       m_particleColors[i] = make_float4(1.0f, 1.0f, 1.0f, 1.0f);
     }
   }
+
+//#include "colorMap.hpp"
   
   static void lCompressRange(
       const float compressMin,
