@@ -4,11 +4,12 @@ LD  = mpic++
 F90  = mpif90
 
 CUDA_TK  = /usr/local/cuda
-CUDA_TK = $(HOME)/usr/local/cuda-5.5
+#CUDA_TK = $(HOME)/usr/local/cuda-5.5
 CXXFLAGS = -O3 -g -Wall -fopenmp -std=c++11
 CXXFLAGS += -Wno-reorder
 CXXFLAGS += -Wno-write-strings
 CFLAGS = -O3 -g -Wall
+
 
 NVCC=$(CUDATK)/bin/nvcc
 NVCCFLAGS=-arch=sm_35
@@ -20,9 +21,15 @@ ENGINE=splotch
 
 
 INCLUDE_FLAGS= -I./ -I./$(ENGINE)/
-INCLUDE_FLAGS += -I$(CUDA_TK)/include
+INCLUDE_FLAGS += -I$(CUDA_TK)/include 
 LDFLAGS = -lGL -lGLU -lglut -lGLEW -fopenmp
 #-L$(PWD)/lib/linux -lGLEW_x86_64
+
+ifeq ($(APPLEOSX),1)
+	INCLUDE_FLAGS += -I/opt/local/include
+	CXXFLAGS +=-Wno-deprecated-declarations
+	LDFLAGS = -framework OpenGL -L/opt/local/lib -lglut -lglew
+endif
 
 OBJ = main.o $(ENGINE)/renderloop.o anyoption.o $(ENGINE)/renderer.o paramgl.o
 ifeq ($(ENGINE),smoke)
