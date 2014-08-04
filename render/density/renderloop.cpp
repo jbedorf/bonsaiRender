@@ -607,7 +607,9 @@ class Demo
           fitCamera(); //Try to get the model back in view
         }
 
-        getBodyData();
+        static bool sortOnly = false;
+        getBodyData(sortOnly);
+        sortOnly = true;
         //getBodyDataTime = GetTimer();
 
         moveCamera();
@@ -1205,8 +1207,13 @@ class Demo
     }
 #endif
 
-    void getBodyData() 
+    void getBodyData(const bool sortOnly = false)
     {
+      if (sortOnly)
+      {
+        m_renderer.depthSort(m_particlePos);
+        return;
+      }
       int n = m_idata.n();
       //Above is safe since it is 0 if we dont use dust
 
