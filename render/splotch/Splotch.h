@@ -15,13 +15,13 @@ class Splotch
     using pos2d_t = Pos2D<float>;
     using pos3d_t = Pos3D<float>;
     using attr_t  = Attribute<float>;  
-    using colorT  = std::valarray<float>
 
   private:
 
     using VertexArray     = VertexArrayT<pos3d_t,attr_t>;
     using VertexArrayView = VertexArrayT<pos2d_t,attr_t>;
     using Vertex          = VertexArray::Vertex;
+    using VertexRef       = VertexArray::VertexRef;
     using VertexView      = VertexArrayView::Vertex;
     using Exp             = std::exp;
     using ShortVec3       = MathArray<float,3>;
@@ -44,6 +44,10 @@ class Splotch
 
     double  modelViewMatrix[4][4];
     double projectionMatrix[4][4];
+
+    float4 baseColor;
+    float spriteSizeScale;
+
 
   public:
     Splotch() {}
@@ -76,6 +80,12 @@ class Splotch
         for (int i = 0; i < 4; j++)
           projectionMatrix[j][i] = m[j][i];
     }
+
+    void resize(const int n)
+    {
+      vtxArray.resize(n)
+    }
+    VertexRef vertex_at(const int i) {return vtxArray[i]; }
 
   private:
     float4 modelView(const float4 pos) const

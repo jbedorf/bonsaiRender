@@ -5,7 +5,7 @@ struct Pos2D
 {
   real_t x, y, h;
   Pos2D() {}
-  Pos2D(const real_t &_x, const real_t &_y, const real_t &_h) : x(_x), y(_y), h(_h) {}
+  Pos2D(const real_t _x, const real_t _y, const real_t _h) : x(_x), y(_y), h(_h) {}
   bool isVisible() const { return h > 0.0f; }
 };
 template<typename real_t>
@@ -13,14 +13,14 @@ struct Pos3D
 {
   real_t x,y,z,h;
   Pos3D() {}
-  Pos3D(const real_t &_x, const real_t &_y, const real_t &_z, const real_t &_h) : x(_x), y(_y), z(_z), h(_h) {}
+  Pos3D(const real_t _x, const real_t _y, const real_t _z, const real_t _h) : x(_x), y(_y), z(_z), h(_h) {}
 };
 template<typename real_t>
 struct Attribute
 {
-  real_t rho, vel, I;
+  real_t rho, vel, I, type;
   Attribute() {}
-  Attribute(const real_t &_rho, const real_t &_vel, const real_t &_I) : rho(_rho), vel(_vel), I(_I) {}
+  Attribute(const real_t _rho, const real_t _vel, const real_t _I = 1.0f, const real_t _type = 1.0f ) : rho(_rho), vel(_vel), I(_I), type(_type) {}
 };
 
 template<typename Tpos, typename Tattr, typename Tcolor)

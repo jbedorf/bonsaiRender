@@ -17,8 +17,6 @@
 #include <GL/freeglut.h>
 #endif
 
-//#include <cuda_runtime_api.h>
-
 #include <algorithm>
 #include "renderloop.h"
 #include "renderer.h"
@@ -79,51 +77,6 @@ void glPrintf(float x, float y, const char* format, ...)
   va_end(args);                                                                         
 } 
 
-void drawWireBox(float3 boxMin, float3 boxMax) 
-{
-  glLineWidth(1.0);
-  glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);  
-  glColor3f(0.0, 1.0, 0.0);
-  glBegin(GL_QUADS);
-    // Front Face
-    glNormal3f( 0.0, 0.0, 1.0);
-    glTexCoord2f(0.0, 0.0); glVertex3f(boxMin.x, boxMin.y, boxMax.z);
-    glTexCoord2f(1.0, 0.0); glVertex3f(boxMax.x, boxMin.y, boxMax.z);
-    glTexCoord2f(1.0, 1.0); glVertex3f(boxMax.x, boxMax.y, boxMax.z);
-    glTexCoord2f(0.0, 1.0); glVertex3f(boxMin.x, boxMax.y, boxMax.z);
-    // Back Face
-    glNormal3f( 0.0, 0.0,-1.0);
-    glTexCoord2f(0.0, 0.0); glVertex3f(boxMax.x, boxMin.y, boxMin.z);
-    glTexCoord2f(1.0, 0.0); glVertex3f(boxMin.x, boxMin.y, boxMin.z);
-    glTexCoord2f(1.0, 1.0); glVertex3f(boxMin.x, boxMax.y, boxMin.z);
-    glTexCoord2f(0.0, 1.0); glVertex3f(boxMax.x, boxMax.y, boxMin.z);
-    // Top Face
-    glNormal3f( 0.0, 1.0, 0.0);
-    glTexCoord2f(0.0, 0.0); glVertex3f(boxMin.x, boxMax.y, boxMax.z);
-    glTexCoord2f(1.0, 0.0); glVertex3f(boxMax.x, boxMax.y, boxMax.z);
-    glTexCoord2f(1.0, 1.0); glVertex3f(boxMax.x, boxMax.y, boxMin.z);
-    glTexCoord2f(0.0, 1.0); glVertex3f(boxMin.x, boxMax.y, boxMin.z);
-    // Bottom Face
-    glNormal3f( 0.0,-1.0, 0.0);
-    glTexCoord2f(0.0, 0.0); glVertex3f(boxMax.x, boxMin.y, boxMin.z);
-    glTexCoord2f(1.0, 0.0); glVertex3f(boxMin.x, boxMin.y, boxMin.z);
-    glTexCoord2f(1.0, 1.0); glVertex3f(boxMin.x, boxMin.y, boxMax.z);
-    glTexCoord2f(0.0, 1.0); glVertex3f(boxMax.x, boxMin.y, boxMax.z);
-    // Right face
-    glNormal3f( 1.0, 0.0, 0.0);
-    glTexCoord2f(0.0, 0.0); glVertex3f(boxMax.x, boxMin.y, boxMax.z);
-    glTexCoord2f(1.0, 0.0); glVertex3f(boxMax.x, boxMin.y, boxMin.z);
-    glTexCoord2f(1.0, 1.0); glVertex3f(boxMax.x, boxMax.y, boxMin.z);
-    glTexCoord2f(0.0, 1.0); glVertex3f(boxMax.x, boxMax.y, boxMax.z);
-    // Left Face
-    glNormal3f(-1.0, 0.0, 0.0);
-    glTexCoord2f(0.0, 0.0); glVertex3f(boxMin.x, boxMin.y, boxMin.z);
-    glTexCoord2f(1.0, 0.0); glVertex3f(boxMin.x, boxMin.y, boxMax.z);
-    glTexCoord2f(1.0, 1.0); glVertex3f(boxMin.x, boxMax.y, boxMax.z);
-    glTexCoord2f(0.0, 1.0); glVertex3f(boxMin.x, boxMax.y, boxMin.z);
-  glEnd();
-  glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);  
-}
 
 
 
@@ -151,50 +104,19 @@ public:
     m_cameraRotLag = m_cameraRot;
             
     //float color[4] = { 0.8f, 0.7f, 0.95f, 0.5f};
-	float color[4] = { 1.0f, 1.0f, 1.0f, 1.0f};
+    float4 color = make_float4(1.0f, 1.0f, 1.0f, 1.0f);
     m_renderer.setBaseColor(color);
-    m_renderer.setPointSize(0.00001f);
-    //tree->iterate_setup(m_idata);
+    m_renderer.setSpriteSizeScale(0.01f);
   }
+  ~Demo() {}
 
-  ~Demo() {
-    //m_tree->iterate_teardown(m_idata);
-    //delete m_tree;
-  }
+  void cycleDisplayMode() {}
 
-  void cycleDisplayMode() {
-    m_displayMode = (ParticleRenderer::DisplayMode)
-      ((m_displayMode + 1) % ParticleRenderer::PARTICLE_NUM_MODES);
-    // MJH todo: add body color support and remove this
-    //if (ParticleRenderer::PARTICLE_SPRITES_COLOR == m_displayMode)
-    //  cycleDisplayMode();
-  }
-
-  void togglePause() { m_paused = !m_paused; }
-  void toggleBoxes() { m_displayBoxes = !m_displayBoxes; }
   void toggleSliders() { m_displaySliders = !m_displaySliders; }                        
-  void toggleFps() { m_displayFps = !m_displayFps; }                        
-  void incrementOctreeDisplayLevel(int inc) { 
-    m_octreeDisplayLevel += inc;
-    m_octreeDisplayLevel = std::max(0, std::min(m_octreeDisplayLevel, 30));
-  }
-
-  void step() { 
-#if 0
-    if (!m_paused && iterationsRemaining)
-      iterationsRemaining = !m_tree->iterate_once(m_idata); 
-    if (!iterationsRemaining)
-      printf("No iterations Remaining!\n");
-#endif
-  }
+  void toggleFps()     { m_displayFps = !m_displayFps; }                        
 
   void drawStats()
   {
-#if 0
-    if (!m_enableStats)
-      return;
-#endif
-
     const float fps = fpsCount/(rtc() - timeBegin);
     if (fpsCount > 10*fps)
     {
@@ -202,38 +124,19 @@ public:
       timeBegin = rtc();
     }
 
-//    int bodies = m_tree->localTree.n;
-//    int dust = m_tree->localTree.n_dust;
 
     beginDeviceCoords();
     glScalef(0.25f, 0.25f, 1.0f);
 
     glEnable(GL_LINE_SMOOTH);
-    //glBlendFunc(GL_SRC_ALPHA, GL_ONE);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     glEnable(GL_BLEND);
     glDisable(GL_DEPTH_TEST);
     glColor4f(0.0f, 1.0f, 0.0f, 1.0f);
 
     float x = 100.0f;
-    //float y = 50.0f;
     float y = glutGet(GLUT_WINDOW_HEIGHT)*4.0f - 200.0f;
-	const float lineSpacing = 140.0f;
-
-#if 0
-    float Myr = m_tree->get_t_current() * 9.78f;
-    glPrintf(x, y, "MYears:    %.2f", Myr);
-    y -= lineSpacing;
-
-    glPrintf(x, y, "BODIES:    %d", bodies + dust);
-    y -= lineSpacing;
-
-    if (m_displayBodiesSec) {
-	  double frameTime = 1.0 / fps;
-      glPrintf(x, y, "BODIES/SEC:%.0f", bodies / frameTime);
-	  y -= lineSpacing;
-    }
-#endif
+    const float lineSpacing = 140.0f;
 
     if (m_displayFps)
     {
@@ -251,7 +154,8 @@ public:
     glutSetWindowTitle(str);
   }
 
-  void display() { 
+  void display() 
+  { 
     getBodyData();
     fpsCount++;
 
@@ -268,17 +172,13 @@ public:
       glRotatef(m_cameraRotLag.y, 0.0, 1.0, 0.0);
     }
 
-    if (m_displayBoxes) {
-//      displayOctree();  
-    }
-
     if (m_displaySliders)
     {
       m_params->Render(0, 0);    
     }
 
     drawStats();
-    m_renderer.display(m_displayMode);
+    m_renderer.genImage();
   }
 
   void mouse(int button, int state, int x, int y)
@@ -365,90 +265,37 @@ public:
   }
 
 private:
-  void getBodyData() {
-    //m_tree->localTree.bodies_pos.d2h();
-    //m_tree->localTree.bodies_ids.d2h();
-    //m_tree->localTree.bodies_vel.d2h();
-
+  void getBodyData() 
+  {
     int n = m_idata.n();
-
-    float4 darkMatterColor = make_float4(1.0f, 0.5f, 0.1f, 0.1f);
-    darkMatterColor = make_float4(0.0f, 0.0f, 0.9f, 0.4f);
-//    darkMatterColor = make_float4(0.0f, 0.2f, 0.4f, 0.0f);      // blue
-
-    float4 starColor =       make_float4(0.1f, 0.0f, 1.0f, 0.2f);
-
-    float4 *colors = new float4[n];
-    float4 *pos    = new float4[n];
-
-    const float velMin = m_idata.attributeMin(RendererData::VEL);
+      
     const float velMax = m_idata.attributeMax(RendererData::VEL);
-    for (int i = 0; i < n; i++) {
-      int type = m_idata.type(i); //m_tree->localTree.bodies_ids[i];
-      const float vel = m_idata.attribute(RendererData::VEL,i);
-      const float f = (vel - velMin)/velMax;
-      float4 color;
-      switch(type)
-      {
-        case 0:
-          color = darkMatterColor;
-          break;
-        case 1:
-//          color = starColor;
-          color = starColor;
-//          color.x = 0;
-          color.y = f;
-//          color.z = 0;
-          break;
-        default:
-          assert(0);
-          color = make_float4(0, 0, 0, 0); // dust -- not used yet
-      }
-      pos[i] = make_float4(m_idata.posx(i), m_idata.posy(i), m_idata.posz(i),0);
-      colors[i] = color;
-    }
+    const float velMin = m_idata.attributeMin(RendererData::VEL);
+    const float rhoMax = m_idata.attributeMax(RendererData::RHO);
+    const float rhoMin = m_idata.attributeMin(RendererData::RHO);
+    const bool hasRHO = rhoMax > 0.0f;
+    const float scaleVEL =          1.0/(velMax - velMin);
+    const float scaleRHO = hasRHO ? 1.0/(rhoMax - rhoMin) : 0.0;
 
-    m_renderer.setPositions((float*)pos, n);
-    m_renderer.setColors((float*)colors, n);
-
-    delete [] colors;
-    delete [] pos;
-  }
-
-#if 0
-  void displayOctree() {
-    float3 boxMin = make_float3(m_idata.rmin());
-    float3 boxMax = make_float3(m_idata.rmax());
-
-    drawWireBox(boxMin, boxMax);
-      
-    /m_tree->localTree.boxCenterInfo.d2h();
-    m_tree->localTree.boxSizeInfo.d2h();
-    m_tree->localTree.node_level_list.d2h(); //Should not be needed is created on host
-           
-    int displayLevel = min(m_octreeDisplayLevel, m_tree->localTree.n_levels);
-      
-    for(uint i=0; i < m_tree->localTree.level_list[displayLevel].y; i++)
+    m_renderer.resize(n);
+#pragma omp parallel for
+    for (int i = 0; i < n; i++)
     {
-      float3 boxMin, boxMax;
-      boxMin.x = m_tree->localTree.boxCenterInfo[i].x-m_tree->localTree.boxSizeInfo[i].x;
-      boxMin.y = m_tree->localTree.boxCenterInfo[i].y-m_tree->localTree.boxSizeInfo[i].y;
-      boxMin.z = m_tree->localTree.boxCenterInfo[i].z-m_tree->localTree.boxSizeInfo[i].z;
-
-      boxMax.x = m_tree->localTree.boxCenterInfo[i].x+m_tree->localTree.boxSizeInfo[i].x;
-      boxMax.y = m_tree->localTree.boxCenterInfo[i].y+m_tree->localTree.boxSizeInfo[i].y;
-      boxMax.z = m_tree->localTree.boxCenterInfo[i].z+m_tree->localTree.boxSizeInfo[i].z;
-      drawWireBox(boxMin, boxMax);
+      auto &vtx = m_renderer.vertex_at(i);
+      vtx.pos = Splotch::pos3d_t(m_idata.posx(i), m_idata.posy(i), m_idata.posz(i), m_spriteSize);
+      vtx.color = make_float4(1.0f);
+      float vel = m_idata.attribute(RendererData::VEL,i);
+      float rho = m_idata.attribute(RendererData::RHO,i);
+      vel = (vel - velMin) * scaleVEL;
+      rho = hasRHO ? (rho - rhoMin) * scaleRHO : 0.5f;
+      vtx.attr  = Splotch::attr_t(rho, vel, m_brightness, m_idata.type(i));
     }
   }
-#endif
+
 
   RendererData &m_idata;
-  bool iterationsRemaining;
 
-  ParticleRenderer m_renderer;
-  ParticleRenderer::DisplayMode m_displayMode; 
-  int m_octreeDisplayLevel;
+  Splotch m_renderer;
 
   // view params
   int m_ox; // = 0
