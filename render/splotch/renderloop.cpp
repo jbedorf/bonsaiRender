@@ -42,14 +42,14 @@ double timeBegin;
 
 void beginDeviceCoords(void)
 {
-    glMatrixMode(GL_PROJECTION);
-    glPushMatrix();
-    glLoadIdentity();
-    glOrtho(0, glutGet(GLUT_WINDOW_WIDTH), 0, glutGet(GLUT_WINDOW_HEIGHT), -1, 1);
+  glMatrixMode(GL_PROJECTION);
+  glPushMatrix();
+  glLoadIdentity();
+  glOrtho(0, glutGet(GLUT_WINDOW_WIDTH), 0, glutGet(GLUT_WINDOW_HEIGHT), -1, 1);
 
-    glMatrixMode(GL_MODELVIEW);
-    glPushMatrix();
-    glLoadIdentity();
+  glMatrixMode(GL_MODELVIEW);
+  glPushMatrix();
+  glLoadIdentity();
 }
 
 void glutStrokePrint(float x, float y, const char *s, void *font)
@@ -82,9 +82,9 @@ void glPrintf(float x, float y, const char* format, ...)
 
 class Demo
 {
-public:
-  Demo(RendererData &idata) 
-    : m_idata(idata), iterationsRemaining(true),
+  public:
+    Demo(RendererData &idata) 
+      : m_idata(idata), iterationsRemaining(true),
       m_displayMode(ParticleRenderer::PARTICLE_SPRITES_COLOR),
       m_octreeDisplayLevel(3),
       m_ox(0), 
@@ -102,217 +102,217 @@ public:
     m_cameraTransLag = m_cameraTrans;
     m_cameraRot = make_float3(0, 0, 0);
     m_cameraRotLag = m_cameraRot;
-            
+
     //float color[4] = { 0.8f, 0.7f, 0.95f, 0.5f};
     float4 color = make_float4(1.0f, 1.0f, 1.0f, 1.0f);
     m_renderer.setBaseColor(color);
     m_renderer.setSpriteSizeScale(0.01f);
   }
-  ~Demo() {}
+    ~Demo() {}
 
-  void cycleDisplayMode() {}
+    void cycleDisplayMode() {}
 
-  void toggleSliders() { m_displaySliders = !m_displaySliders; }                        
-  void toggleFps()     { m_displayFps = !m_displayFps; }                        
+    void toggleSliders() { m_displaySliders = !m_displaySliders; }                        
+    void toggleFps()     { m_displayFps = !m_displayFps; }                        
 
-  void drawStats()
-  {
-    const float fps = fpsCount/(rtc() - timeBegin);
-    if (fpsCount > 10*fps)
+    void drawStats()
     {
-      fpsCount = 0;
-      timeBegin = rtc();
+      const float fps = fpsCount/(rtc() - timeBegin);
+      if (fpsCount > 10*fps)
+      {
+        fpsCount = 0;
+        timeBegin = rtc();
+      }
+
+
+      beginDeviceCoords();
+      glScalef(0.25f, 0.25f, 1.0f);
+
+      glEnable(GL_LINE_SMOOTH);
+      glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+      glEnable(GL_BLEND);
+      glDisable(GL_DEPTH_TEST);
+      glColor4f(0.0f, 1.0f, 0.0f, 1.0f);
+
+      float x = 100.0f;
+      float y = glutGet(GLUT_WINDOW_HEIGHT)*4.0f - 200.0f;
+      const float lineSpacing = 140.0f;
+
+      if (m_displayFps)
+      {
+        glPrintf(x, y, "FPS:       %.2f", fps);
+        y -= lineSpacing;
+      }
+
+      glDisable(GL_BLEND);
+      endWinCoords();
+
+      char str[256];
+      sprintf(str, "N-Body Renderer: %0.1f fps",
+          fps);
+
+      glutSetWindowTitle(str);
     }
 
+    void display() 
+    { 
+      getBodyData();
+      fpsCount++;
 
-    beginDeviceCoords();
-    glScalef(0.25f, 0.25f, 1.0f);
+      // view transform
+      {
+        glMatrixMode(GL_MODELVIEW);
+        glLoadIdentity();
 
-    glEnable(GL_LINE_SMOOTH);
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-    glEnable(GL_BLEND);
-    glDisable(GL_DEPTH_TEST);
-    glColor4f(0.0f, 1.0f, 0.0f, 1.0f);
+        m_cameraTransLag += (m_cameraTrans - m_cameraTransLag) * m_inertia;
+        m_cameraRotLag += (m_cameraRot - m_cameraRotLag) * m_inertia;
 
-    float x = 100.0f;
-    float y = glutGet(GLUT_WINDOW_HEIGHT)*4.0f - 200.0f;
-    const float lineSpacing = 140.0f;
+        glTranslatef(m_cameraTransLag.x, m_cameraTransLag.y, m_cameraTransLag.z);
+        glRotatef(m_cameraRotLag.x, 1.0, 0.0, 0.0);
+        glRotatef(m_cameraRotLag.y, 0.0, 1.0, 0.0);
+      }
 
-    if (m_displayFps)
-    {
-      glPrintf(x, y, "FPS:       %.2f", fps);
-      y -= lineSpacing;
+      if (m_displaySliders)
+      {
+        m_params->Render(0, 0);    
+      }
+
+      drawStats();
+      m_renderer.genImage();
     }
 
-    glDisable(GL_BLEND);
-    endWinCoords();
-
-    char str[256];
-    sprintf(str, "N-Body Renderer: %0.1f fps",
-            fps);
-
-    glutSetWindowTitle(str);
-  }
-
-  void display() 
-  { 
-    getBodyData();
-    fpsCount++;
-
-    // view transform
+    void mouse(int button, int state, int x, int y)
     {
-      glMatrixMode(GL_MODELVIEW);
-      glLoadIdentity();
+      int mods;
 
-      m_cameraTransLag += (m_cameraTrans - m_cameraTransLag) * m_inertia;
-      m_cameraRotLag += (m_cameraRot - m_cameraRotLag) * m_inertia;
-      
-      glTranslatef(m_cameraTransLag.x, m_cameraTransLag.y, m_cameraTransLag.z);
-      glRotatef(m_cameraRotLag.x, 1.0, 0.0, 0.0);
-      glRotatef(m_cameraRotLag.y, 0.0, 1.0, 0.0);
-    }
-
-    if (m_displaySliders)
-    {
-      m_params->Render(0, 0);    
-    }
-
-    drawStats();
-    m_renderer.genImage();
-  }
-
-  void mouse(int button, int state, int x, int y)
-  {
-    int mods;
-
-    if (state == GLUT_DOWN) {
+      if (state == GLUT_DOWN) {
         m_buttonState |= 1<<button;
-    }
-    else if (state == GLUT_UP) {
+      }
+      else if (state == GLUT_UP) {
         m_buttonState = 0;
-    }
+      }
 
-    mods = glutGetModifiers();
+      mods = glutGetModifiers();
 
-    if (mods & GLUT_ACTIVE_SHIFT) {
+      if (mods & GLUT_ACTIVE_SHIFT) {
         m_buttonState = 2;
-    }
-    else if (mods & GLUT_ACTIVE_CTRL) {
+      }
+      else if (mods & GLUT_ACTIVE_CTRL) {
         m_buttonState = 3;
+      }
+
+      m_ox = x;
+      m_oy = y;
     }
 
-    m_ox = x;
-    m_oy = y;
-  }
-
-  void motion(int x, int y)
-  {
-    float dx = (float)(x - m_ox);
-    float dy = (float)(y - m_oy);
-
-    if (m_displaySliders)
+    void motion(int x, int y)
     {
-      if (m_params->Motion(x, y))                                                       
-        return;                                                                         
-    }       
+      float dx = (float)(x - m_ox);
+      float dy = (float)(y - m_oy);
 
-    if (m_buttonState == 3) {
-      // left+middle = zoom
-      m_cameraTrans.z += (dy / 100.0f) * 0.5f * fabs(m_cameraTrans.z);
+      if (m_displaySliders)
+      {
+        if (m_params->Motion(x, y))                                                       
+          return;                                                                         
+      }       
+
+      if (m_buttonState == 3) {
+        // left+middle = zoom
+        m_cameraTrans.z += (dy / 100.0f) * 0.5f * fabs(m_cameraTrans.z);
+      }
+      else if (m_buttonState & 2) {
+        // middle = translate
+        m_cameraTrans.x += dx / 10.0f;
+        m_cameraTrans.y -= dy / 10.0f;
+      }
+      else if (m_buttonState & 1) {
+        // left = rotate
+        m_cameraRot.x += dy / 5.0f;
+        m_cameraRot.y += dx / 5.0f;
+      }
+
+      m_ox = x;
+      m_oy = y;
     }
-    else if (m_buttonState & 2) {
-      // middle = translate
-      m_cameraTrans.x += dx / 10.0f;
-      m_cameraTrans.y -= dy / 10.0f;
-    }
-    else if (m_buttonState & 1) {
-      // left = rotate
-      m_cameraRot.x += dy / 5.0f;
-      m_cameraRot.y += dx / 5.0f;
+
+    void reshape(int w, int h) {
+      m_windowDims = make_int2(w, h);
+      fitCamera();
+      glMatrixMode(GL_MODELVIEW);
+      glViewport(0, 0, m_windowDims.x, m_windowDims.y);
     }
 
-    m_ox = x;
-    m_oy = y;
-  }
+    void fitCamera() {
+      float3 boxMin = make_float3(m_idata.rmin());
+      float3 boxMax = make_float3(m_idata.rmax());
 
-  void reshape(int w, int h) {
-    m_windowDims = make_int2(w, h);
-    fitCamera();
-    glMatrixMode(GL_MODELVIEW);
-    glViewport(0, 0, m_windowDims.x, m_windowDims.y);
-  }
+      const float pi = 3.1415926f;
+      float3 center = 0.5f * (boxMin + boxMax);
+      float radius = std::max(length(boxMax), length(boxMin));
+      const float fovRads = (m_windowDims.x / (float)m_windowDims.y) * pi / 3.0f ; // 60 degrees
 
-  void fitCamera() {
-    float3 boxMin = make_float3(m_idata.rmin());
-    float3 boxMax = make_float3(m_idata.rmax());
+      float distanceToCenter = radius / sinf(0.5f * fovRads);
 
-    const float pi = 3.1415926f;
-    float3 center = 0.5f * (boxMin + boxMax);
-    float radius = std::max(length(boxMax), length(boxMin));
-    const float fovRads = (m_windowDims.x / (float)m_windowDims.y) * pi / 3.0f ; // 60 degrees
+      m_cameraTrans = center + make_float3(0, 0, - distanceToCenter);
+      m_cameraTransLag = m_cameraTrans;
 
-    float distanceToCenter = radius / sinf(0.5f * fovRads);
-    
-    m_cameraTrans = center + make_float3(0, 0, - distanceToCenter);
-	m_cameraTransLag = m_cameraTrans;
+      glMatrixMode(GL_PROJECTION);
+      glLoadIdentity();
+      gluPerspective(60.0, 
+          (float) m_windowDims.x / (float) m_windowDims.y, 
+          0.0001 * distanceToCenter, 
+          4 * (radius + distanceToCenter));
+    }
 
-    glMatrixMode(GL_PROJECTION);
-    glLoadIdentity();
-    gluPerspective(60.0, 
-                   (float) m_windowDims.x / (float) m_windowDims.y, 
-                   0.0001 * distanceToCenter, 
-                   4 * (radius + distanceToCenter));
-  }
+  private:
+    void getBodyData() 
+    {
+      int n = m_idata.n();
 
-private:
-  void getBodyData() 
-  {
-    int n = m_idata.n();
-      
-    const float velMax = m_idata.attributeMax(RendererData::VEL);
-    const float velMin = m_idata.attributeMin(RendererData::VEL);
-    const float rhoMax = m_idata.attributeMax(RendererData::RHO);
-    const float rhoMin = m_idata.attributeMin(RendererData::RHO);
-    const bool hasRHO = rhoMax > 0.0f;
-    const float scaleVEL =          1.0/(velMax - velMin);
-    const float scaleRHO = hasRHO ? 1.0/(rhoMax - rhoMin) : 0.0;
+      const float velMax = m_idata.attributeMax(RendererData::VEL);
+      const float velMin = m_idata.attributeMin(RendererData::VEL);
+      const float rhoMax = m_idata.attributeMax(RendererData::RHO);
+      const float rhoMin = m_idata.attributeMin(RendererData::RHO);
+      const bool hasRHO = rhoMax > 0.0f;
+      const float scaleVEL =          1.0/(velMax - velMin);
+      const float scaleRHO = hasRHO ? 1.0/(rhoMax - rhoMin) : 0.0;
 
-    m_renderer.resize(n);
+      m_renderer.resize(n);
 #pragma omp parallel for
-    for (int i = 0; i < n; i++)
-    {
-      auto &vtx = m_renderer.vertex_at(i);
-      vtx.pos = Splotch::pos3d_t(m_idata.posx(i), m_idata.posy(i), m_idata.posz(i), m_spriteSize);
-      vtx.color = make_float4(1.0f);
-      float vel = m_idata.attribute(RendererData::VEL,i);
-      float rho = m_idata.attribute(RendererData::RHO,i);
-      vel = (vel - velMin) * scaleVEL;
-      rho = hasRHO ? (rho - rhoMin) * scaleRHO : 0.5f;
-      vtx.attr  = Splotch::attr_t(rho, vel, m_brightness, m_idata.type(i));
+      for (int i = 0; i < n; i++)
+      {
+        auto &vtx = m_renderer.vertex_at(i);
+        vtx.pos = Splotch::pos3d_t(m_idata.posx(i), m_idata.posy(i), m_idata.posz(i), m_spriteSize);
+        vtx.color = make_float4(1.0f);
+        float vel = m_idata.attribute(RendererData::VEL,i);
+        float rho = m_idata.attribute(RendererData::RHO,i);
+        vel = (vel - velMin) * scaleVEL;
+        rho = hasRHO ? (rho - rhoMin) * scaleRHO : 0.5f;
+        vtx.attr  = Splotch::attr_t(rho, vel, m_brightness, m_idata.type(i));
+      }
     }
-  }
 
 
-  RendererData &m_idata;
+    RendererData &m_idata;
 
-  Splotch m_renderer;
+    Splotch m_renderer;
 
-  // view params
-  int m_ox; // = 0
-  int m_oy; // = 0;
-  int m_buttonState;     
-  int2 m_windowDims;
-  float3 m_cameraTrans;   
-  float3 m_cameraRot;     
-  float3 m_cameraTransLag;
-  float3 m_cameraRotLag;
-  const float m_inertia;
+    // view params
+    int m_ox; // = 0
+    int m_oy; // = 0;
+    int m_buttonState;     
+    int2 m_windowDims;
+    float3 m_cameraTrans;   
+    float3 m_cameraRot;     
+    float3 m_cameraTransLag;
+    float3 m_cameraRotLag;
+    const float m_inertia;
 
-  bool m_paused;
-  bool m_displayBoxes;
-  bool m_displayFps;
-  bool m_displaySliders;
-  ParamListGL *m_params;
+    bool m_paused;
+    bool m_displayBoxes;
+    bool m_displayFps;
+    bool m_displaySliders;
+    ParamListGL *m_params;
 };
 
 Demo *theDemo = NULL;
@@ -324,10 +324,10 @@ void onexit() {
 void display()
 {
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-  
+
   theDemo->step();
   theDemo->display();
-  
+
   glutSwapBuffers();
 }
 
@@ -353,50 +353,50 @@ void motion(int x, int y)
 void key(unsigned char key, int /*x*/, int /*y*/)
 {
   switch (key) {
-  case ' ':
-    theDemo->togglePause();
-    break;
-  case 27: // escape
-  case 'q':
-  case 'Q':
-//    cudaDeviceReset();
-    exit(0);
-    break;
-  /*case '`':
-     bShowSliders = !bShowSliders;
-     break;*/
-  case 'p':
-  case 'P':
-    theDemo->cycleDisplayMode();
-    break;
-  case 'b':
-  case 'B':
-    theDemo->toggleBoxes();
-    break;
-  case 'd':
-  case 'D':
-    //displayEnabled = !displayEnabled;
-    break;
-  case 'f':
-  case 'F':
-    theDemo->fitCamera();
-    break;
-  case ',':
-  case '<':
-    theDemo->incrementOctreeDisplayLevel(-1);
-    break;
-  case '.':
-  case '>':
-    theDemo->incrementOctreeDisplayLevel(+1);
-    break;
-  case 'h':
-  case 'H':
-    theDemo->toggleSliders();
-//    m_enableStats = !m_displaySliders;
-    break;
-  case '0':
-    theDemo->toggleFps();
-    break;
+    case ' ':
+      theDemo->togglePause();
+      break;
+    case 27: // escape
+    case 'q':
+    case 'Q':
+      //    cudaDeviceReset();
+      exit(0);
+      break;
+      /*case '`':
+        bShowSliders = !bShowSliders;
+        break;*/
+    case 'p':
+    case 'P':
+      theDemo->cycleDisplayMode();
+      break;
+    case 'b':
+    case 'B':
+      theDemo->toggleBoxes();
+      break;
+    case 'd':
+    case 'D':
+      //displayEnabled = !displayEnabled;
+      break;
+    case 'f':
+    case 'F':
+      theDemo->fitCamera();
+      break;
+    case ',':
+    case '<':
+      theDemo->incrementOctreeDisplayLevel(-1);
+      break;
+    case '.':
+    case '>':
+      theDemo->incrementOctreeDisplayLevel(+1);
+      break;
+    case 'h':
+    case 'H':
+      theDemo->toggleSliders();
+      //    m_enableStats = !m_displaySliders;
+      break;
+    case '0':
+      theDemo->toggleFps();
+      break;
   }
 
   glutPostRedisplay();
@@ -404,13 +404,13 @@ void key(unsigned char key, int /*x*/, int /*y*/)
 
 void special(int key, int x, int y)
 {
-    //paramlist->Special(key, x, y);
-    glutPostRedisplay();
+  //paramlist->Special(key, x, y);
+  glutPostRedisplay();
 }
 
 void idle(void)
 {
-    glutPostRedisplay();
+  glutPostRedisplay();
 }
 
 void initGL(int argc, char** argv)
@@ -429,13 +429,13 @@ void initGL(int argc, char** argv)
   if (GLEW_OK != err)
   {
     fprintf(stderr, "GLEW Error: %s\n", glewGetErrorString(err));
-//    cudaDeviceReset();
+    //    cudaDeviceReset();
     exit(-1);
   }
   else if (!glewIsSupported("GL_VERSION_2_0 "
-    "GL_VERSION_1_5 "
-    "GL_ARB_multitexture "
-    "GL_ARB_vertex_buffer_object")) 
+        "GL_VERSION_1_5 "
+        "GL_ARB_multitexture "
+        "GL_ARB_vertex_buffer_object")) 
   {
     fprintf(stderr, "Required OpenGL extensions missing.");
     exit(-1);

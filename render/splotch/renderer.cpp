@@ -1,13 +1,13 @@
 /*
-* Copyright 1993-2012 NVIDIA Corporation.  All rights reserved.
-*
-* Please refer to the NVIDIA end user license agreement (EULA) associated
-* with this source code for terms and conditions that govern your use of
-* this software. Any use, reproduction, disclosure, or distribution of
-* this software and related documentation outside the terms of the EULA
-* is strictly prohibited.
-*
-*/
+ * Copyright 1993-2012 NVIDIA Corporation.  All rights reserved.
+ *
+ * Please refer to the NVIDIA end user license agreement (EULA) associated
+ * with this source code for terms and conditions that govern your use of
+ * this software. Any use, reproduction, disclosure, or distribution of
+ * this software and related documentation outside the terms of the EULA
+ * is strictly prohibited.
+ *
+ */
 
 #include <GL/glew.h>
 #include "renderer.h"
@@ -38,8 +38,8 @@ void checkGLErrors(const char *s)
   }
 }
 
-ParticleRenderer::ParticleRenderer()
-  : m_pos(0),
+  ParticleRenderer::ParticleRenderer()
+: m_pos(0),
   m_numParticles(0),
   m_pointSize(1.0f),
   m_spriteSize(2.0f),
@@ -172,84 +172,84 @@ void ParticleRenderer::display(DisplayMode mode /* = PARTICLE_POINTS */)
 {
   switch (mode)
   {
-  case PARTICLE_POINTS:
-    {
-      glColor3f(1, 1, 1);
-      glPointSize(m_pointSize);
-      glUseProgram(m_programPoints);
-      _drawPoints();
-      glUseProgram(0);
-    }
-    break;
-  case PARTICLE_SPRITES:
-  default:
-    {
-      // setup point sprites
-      glEnable(GL_POINT_SPRITE_ARB);
-      glTexEnvi(GL_POINT_SPRITE_ARB, GL_COORD_REPLACE_ARB, GL_TRUE);
-      glEnable(GL_VERTEX_PROGRAM_POINT_SIZE_NV);
-      glPointSize(m_spriteSize);
-      glBlendFunc(GL_SRC_ALPHA, GL_ONE);
-      glEnable(GL_BLEND);
-      glDepthMask(GL_FALSE);
+    case PARTICLE_POINTS:
+      {
+        glColor3f(1, 1, 1);
+        glPointSize(m_pointSize);
+        glUseProgram(m_programPoints);
+        _drawPoints();
+        glUseProgram(0);
+      }
+      break;
+    case PARTICLE_SPRITES:
+    default:
+      {
+        // setup point sprites
+        glEnable(GL_POINT_SPRITE_ARB);
+        glTexEnvi(GL_POINT_SPRITE_ARB, GL_COORD_REPLACE_ARB, GL_TRUE);
+        glEnable(GL_VERTEX_PROGRAM_POINT_SIZE_NV);
+        glPointSize(m_spriteSize);
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE);
+        glEnable(GL_BLEND);
+        glDepthMask(GL_FALSE);
 
-      glUseProgram(m_programSprites);
-      GLuint texLoc = glGetUniformLocation(m_programSprites, "splatTexture");
-      glUniform1i(texLoc, 0);
+        glUseProgram(m_programSprites);
+        GLuint texLoc = glGetUniformLocation(m_programSprites, "splatTexture");
+        glUniform1i(texLoc, 0);
 
-	  GLuint loc = glGetUniformLocation(m_programSprites, "baseColor");
-	  glUniform4fv(loc, 1, m_baseColor);
+        GLuint loc = glGetUniformLocation(m_programSprites, "baseColor");
+        glUniform4fv(loc, 1, m_baseColor);
 
-      glActiveTextureARB(GL_TEXTURE0_ARB);
-      glBindTexture(GL_TEXTURE_2D, m_texture);
+        glActiveTextureARB(GL_TEXTURE0_ARB);
+        glBindTexture(GL_TEXTURE_2D, m_texture);
 
-      glColor3f(1, 1, 1);
-      //glSecondaryColor3fv(m_baseColor);
+        glColor3f(1, 1, 1);
+        //glSecondaryColor3fv(m_baseColor);
 
-      _drawPoints();
+        _drawPoints();
 
-      glUseProgram(0);
+        glUseProgram(0);
 
-      glDisable(GL_POINT_SPRITE_ARB);
-      glDisable(GL_BLEND);
-      glDepthMask(GL_TRUE);
-    }
+        glDisable(GL_POINT_SPRITE_ARB);
+        glDisable(GL_BLEND);
+        glDepthMask(GL_TRUE);
+      }
 
-    break;
-  case PARTICLE_SPRITES_COLOR:
-    {
-      // setup point sprites
-      glEnable(GL_POINT_SPRITE_ARB);
-      glTexEnvi(GL_POINT_SPRITE_ARB, GL_COORD_REPLACE_ARB, GL_TRUE);
-      glEnable(GL_VERTEX_PROGRAM_POINT_SIZE_ARB);
-      glPointSize(m_spriteSize);
-      glBlendFunc(GL_SRC_ALPHA, GL_ONE);
-      glEnable(GL_BLEND);
-      glDepthMask(GL_FALSE);
+      break;
+    case PARTICLE_SPRITES_COLOR:
+      {
+        // setup point sprites
+        glEnable(GL_POINT_SPRITE_ARB);
+        glTexEnvi(GL_POINT_SPRITE_ARB, GL_COORD_REPLACE_ARB, GL_TRUE);
+        glEnable(GL_VERTEX_PROGRAM_POINT_SIZE_ARB);
+        glPointSize(m_spriteSize);
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE);
+        glEnable(GL_BLEND);
+        glDepthMask(GL_FALSE);
 
-      glUseProgram(m_programSprites);
-      GLuint texLoc = glGetUniformLocation(m_programSprites, "splatTexture");
-      glUniform1i(texLoc, 0);
+        glUseProgram(m_programSprites);
+        GLuint texLoc = glGetUniformLocation(m_programSprites, "splatTexture");
+        glUniform1i(texLoc, 0);
 
-	  GLuint loc = glGetUniformLocation(m_programSprites, "baseColor");
-	  glUniform4fv(loc, 1, m_baseColor);
+        GLuint loc = glGetUniformLocation(m_programSprites, "baseColor");
+        glUniform4fv(loc, 1, m_baseColor);
 
-      glActiveTextureARB(GL_TEXTURE0_ARB);
-      glBindTexture(GL_TEXTURE_2D, m_texture);
+        glActiveTextureARB(GL_TEXTURE0_ARB);
+        glBindTexture(GL_TEXTURE_2D, m_texture);
 
-      glColor3f(1, 1, 1);
-      //glSecondaryColor3fv(m_baseColor);
+        glColor3f(1, 1, 1);
+        //glSecondaryColor3fv(m_baseColor);
 
-      _drawPoints(true);
+        _drawPoints(true);
 
-      glUseProgram(0);
+        glUseProgram(0);
 
-      glDisable(GL_POINT_SPRITE_ARB);
-      glDisable(GL_BLEND);
-      glDepthMask(GL_TRUE);
-    }
+        glDisable(GL_POINT_SPRITE_ARB);
+        glDisable(GL_BLEND);
+        glDepthMask(GL_TRUE);
+      }
 
-    break;
+      break;
   }
 
   checkGLErrors("ParticleRenderer::display");
@@ -258,38 +258,38 @@ void ParticleRenderer::display(DisplayMode mode /* = PARTICLE_POINTS */)
 const char vertexShaderPoints[] = 
 {    
   "void main()                                                            \n"
-  "{                                                                      \n"
-  "    vec4 vert = vec4(gl_Vertex.xyz, 1.0);  			                      \n"
-  "    gl_Position = gl_ProjectionMatrix * gl_ModelViewMatrix * vert;                           \n"
-  "    gl_FrontColor = gl_Color;                                          \n"
-  "}                                                                      \n"
+    "{                                                                      \n"
+    "    vec4 vert = vec4(gl_Vertex.xyz, 1.0);  			                      \n"
+    "    gl_Position = gl_ProjectionMatrix * gl_ModelViewMatrix * vert;                           \n"
+    "    gl_FrontColor = gl_Color;                                          \n"
+    "}                                                                      \n"
 };
 
 
 const char vertexShader[] = 
 {    
   "void main()                                                            \n"
-  "{                                                                      \n"
-  "    float pointSize = 500.0 * gl_Point.size;                           \n"
-  "    vec4 vert = vec4(gl_Vertex.xyz, 1.0);  			                      \n"
-  "    vec3 pos_eye = vec3 (gl_ModelViewMatrix * vert);                   \n"
-  "    gl_PointSize = max(1.0, pointSize / - pos_eye.z);			      \n"
-  "    gl_TexCoord[0] = gl_MultiTexCoord0;                                \n"
-  //"    gl_TexCoord[1] = gl_MultiTexCoord1;                                \n"
-  "    gl_Position = gl_ProjectionMatrix * gl_ModelViewMatrix * vert;                           \n"
-  "    gl_FrontColor = gl_Color;                                          \n"
-  "}                                                                      \n"
+    "{                                                                      \n"
+    "    float pointSize = 500.0 * gl_Point.size;                           \n"
+    "    vec4 vert = vec4(gl_Vertex.xyz, 1.0);  			                      \n"
+    "    vec3 pos_eye = vec3 (gl_ModelViewMatrix * vert);                   \n"
+    "    gl_PointSize = max(1.0, pointSize / - pos_eye.z);			      \n"
+    "    gl_TexCoord[0] = gl_MultiTexCoord0;                                \n"
+    //"    gl_TexCoord[1] = gl_MultiTexCoord1;                                \n"
+    "    gl_Position = gl_ProjectionMatrix * gl_ModelViewMatrix * vert;                           \n"
+    "    gl_FrontColor = gl_Color;                                          \n"
+    "}                                                                      \n"
 };
 
 const char pixelShader[] =
 {
   "uniform sampler2D splatTexture;                                        \n"
-  "uniform float4 baseColor;\n"
-  "void main()                                                            \n"
-  "{                                                                      \n"
-  "    vec4 tex = texture2D(splatTexture, gl_TexCoord[0].st); \n"
-  "    gl_FragColor = gl_Color * baseColor * tex;						  \n"
-  "}                                                                      \n"
+    "uniform float4 baseColor;\n"
+    "void main()                                                            \n"
+    "{                                                                      \n"
+    "    vec4 tex = texture2D(splatTexture, gl_TexCoord[0].st); \n"
+    "    gl_FragColor = gl_Color * baseColor * tex;						  \n"
+    "}                                                                      \n"
 };
 
 
@@ -299,7 +299,7 @@ void ParticleRenderer::_initGL()
   m_vertexShader = glCreateShader(GL_VERTEX_SHADER);
   m_vertexShaderPoints = glCreateShader(GL_VERTEX_SHADER);
   m_pixelShader = glCreateShader(GL_FRAGMENT_SHADER);
-  
+
   const char *v = vertexShader;
   const char *p = pixelShader;
   glShaderSource(m_vertexShader, 1, &v, 0);
@@ -333,9 +333,9 @@ void ParticleRenderer::_initGL()
 // Description	    : 
 //------------------------------------------------------------------------------
 /**
-* EvalHermite(float pA, float pB, float vA, float vB, float u)
-* @brief Evaluates Hermite basis functions for the specified coefficients.
-*/ 
+ * EvalHermite(float pA, float pB, float vA, float vB, float u)
+ * @brief Evaluates Hermite basis functions for the specified coefficients.
+ */ 
 inline float evalHermite(float pA, float pB, float vA, float vB, float u)
 {
   float u2=(u*u), u3=u2*u;
@@ -383,13 +383,13 @@ void ParticleRenderer::_createTexture(int resolution)
   //glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
   glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, resolution, resolution, 0, 
-    GL_RGBA, GL_UNSIGNED_BYTE, data);
+      GL_RGBA, GL_UNSIGNED_BYTE, data);
 
 }
 
 void ParticleRenderer::initParams()
 {
-    m_params = new ParamListGL("render_params");
+  m_params = new ParamListGL("render_params");
 
-    m_params->AddParam(new Param<float>("test", m_testParam, 0.0f, 1.0f, 0.01f, &m_testParam));
+  m_params->AddParam(new Param<float>("test", m_testParam, 0.0f, 1.0f, 0.01f, &m_testParam));
 }
