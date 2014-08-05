@@ -1,83 +1,13 @@
 #pragma once
 #include <omp.h>
 #include <parallel/algorithm>
+#include <cmath>
+#include <valarray>
 
+#include "Texture.h"
+#include "Vertex.h"
+#include "Blending.h"
 
-template<typename real_t>
-struct Pos2D
-{
-  real_t x, y, h;
-  Pos2D() {}
-  Pos2D(const real_t &_x, const real_t &_y, const real_t &_h) : x(_x), y(_y), h(_h) {}
-  bool isVisible() const { return h > 0.0f; }
-};
-template<typename real_t>
-struct Pos3D
-{
-  real_t x,y,z,h;
-  Pos3D() {}
-  Pos3D(const real_t &_x, const real_t &_y, const real_t &_z, const real_t &_h) : x(_x), y(_y), z(_z), h(_h) {}
-};
-template<typename real_t>
-struct Attribute
-{
-  real_t rho, vel, I;
-  Attribute() {}
-  Attribute(const real_t &_rho, const real_t &_vel, const real_t &_I) : rho(_rho), vel(_vel), I(_I) {}
-};
-
-
-
-template<typename Tpos, typename Tattr>
-class VertexArrayT
-{
-  private:
-    Tpos  *_pos;
-    Tattr *_attr;
-    int    _size;
-    int    _capacity;
-  public:
-    struct Vertex
-    {
-      Tpos &pos;
-      Tattr &attr;
-      Attr(Tpos &_pos, Tattr &_attr) :
-        pos(_pos) ,attr(_attr);
-    };
-    DataVector() : _pos(NULL), _attr(NULL), _size(0) {}
-    DataVector(const Tpos *pos, const Tattr *attr, const int size) 
-    {
-      assert(size > 0);
-      _size = size;
-      _capacity = size;
-      _pos  = new Tpos[_size];
-      _attr = new Tattr[_size];
-#pragma omp parallel for schedule(static)
-      for (int i = 0; i < _size; i++)
-      {
-        _pos [i] = pos [i];
-        _attr[i] = attr[i];
-      }
-    }
-    ~DataVector() 
-    {
-      if (_size > 0)
-      {
-        delete[] _pos;
-        delete[] _attr;
-        _pos  = NULL;
-        _attr = NULL;
-      }
-    }
-    Tpos& pos(const int i) {return _pos[i];}
-    const Tpos& pos(const int i) const {return _pos[i];}
-    Tattr& attr(const int i) {return _attr[i];}
-    const Tattr& attr(const int i) const {return _attr[i];}
-
-    Vertex& operator[](const int i) {return Vertex(_pos[i], _attr[i]);}
-    const Vertex& operator[](const int i) const {return const Attr(_pos[i],_attr[i]);}
-    int size() const {return _size;}
-};
 
 class Splotch
 {
@@ -85,18 +15,22 @@ class Splotch
     using pos2d_t = Pos2D<float>;
     using pos3d_t = Pos3D<float>;
     using attr_t  = Attribute<float>;  
+    using colorT  = std::valarray<float>
 
   private:
 
     using VertexArray     = VertexArrayT<pos3d_t,attr_t>;
-    using VertexArrayProj = VertexArrayT<pos2d_t,attr_t>;
+    using VertexArrayView = VertexArrayT<pos2d_t,attr_t>;
     using Vertex          = VertexArray::Vertex;
-    using VertexProj      = VertexArrayProj::Vertex;
-    using Exp     = std::exp;
+    using VertexView      = VertexArrayView::Vertex;
+    using Exp             = std::exp;
 
     VertexArray     vtxArray;
-    VertexArrayProj vtxArrayProj, vtxArrayView;
+    VertexArrayView vtxArrayView;
+    std::vector<float> depthArray;
     real2_t invProjRange;
+
+    Texture2D<float3> colorMapTex;
     
     struct Quad
     {
@@ -104,67 +38,71 @@ class Splotch
       float y0,y1;
     };
     
-    enum BlendType {BLEND_ONE, BLEND_ZERO, BLEND_SRC_ALPHA, BLEND_ONE_MINUS_SRC_ALPHA};
-
-    template<BlendType BLEND>
-    float4 BLendColorT(const float4 col, const float4 src, const float4 dst)
-    {
-      float4 res;
-      switch (BLEND)
-      {
-        case BLEND_ONE_MINUS_SRC_ALPHA:
-          res.x *= 1.0f - src.w;
-          res.y *= 1.0f - src.w;
-          res.z *= 1.0f - src.w;
-          res.w *= 1.0f - src.w;
-        case BLEND_SRC_ALPHA:
-          res.x *= src.w;
-          res.y *= src.w;
-          res.z *= src.w;
-          res.w *= src.w;
-        case BLEND_ZERO:
-          res.x = res.y = res.z = rez.w = 0;
-          break;
-        case BLEND_ONE:
-          break;
-        default:
-          assert(0);
-      }
-      return res;
-    }
-
-    template<BlendType SRC, BlendType DST>
-    float4 BlendT(const float4 d, const float4 s)
-    {
-      float4 res;
-
-
-      const float4 src = BlendColorT<SRC>(s,d,s);
-      const float4 dst = BlendColorT<DST>(d,d,s);
-
-      res.x = src.x + dst.x;
-      res.y = src.y + dst.y;
-      res.z = src.z + dst.z;
-      res.w = src.w + dst.w;
-
-      using max = std::max;
-      res.w = min(1.0f, res.w);
-
-      return res;
-    }
-
     int width, height;
     std::vector<float4> image;
+
+    double  modelViewMatrix[4][4];
+    double projectionMatrix[4][4];
 
   public:
     Splotch() {}
     ~Splotch() {}
+   
+    /* getters/setters */ 
+    void  setColorMap(const float3 *img, const int w, const int h)  { colorMapTex = Texture2D<float3>(img, w, h); }
+    const std::vector<float4>& getImage() const {return image;}
+    float4 getPixel(const int i, const int j)
+    {
+      assert(i >= 0 && i < width);
+      assert(j >= 0 && j < height);
+      return image[j*width + i];
+    }
 
-    void modelView(const bool project = true)
+    void setWidth(const int w)  {width = w;}
+    void setHeight(const int h) {height = h;}
+    int  getWidth()  const {return width;}
+    int  getHeight() const {return height;}
+
+    void setModelViewMatrix(const double m[4][4])
+    {
+      for (int j = 0; j < 4; i++)
+        for (int i = 0; i < 4; j++)
+          modelViewMatrix[j][i] = m[j][i];
+    }
+    void setProjectionMatrix(const double m[4][4])
+    {
+      for (int j = 0; j < 4; i++)
+        for (int i = 0; i < 4; j++)
+          projectionMatrix[j][i] = m[j][i];
+    }
+
+  private:
+    float4 modelView(const float4 pos) const
+    {
+      using m = modelViewMatrix;
+      return make_float4(
+          m[0][0]*pos.x + m[0][1]*pos.y + m[0][2]*pos.z + m[0][3]*poz.w,
+          m[1][0]*pos.x + m[1][1]*pos.y + m[1][2]*pos.z + m[1][3]*poz.w,
+          m[2][0]*pos.x + m[2][1]*pos.y + m[2][2]*pos.z + m[2][3]*poz.w,
+          m[3][0]*pos.x + m[3][1]*pos.y + m[3][2]*pos.z + m[3][3]*poz.w);
+    }
+    float4 projection(const float4 pos) const
+    {
+      using m = projectionMatrix;
+      return make_float4(
+          m[0][0]*pos.x + m[0][1]*pos.y + m[0][2]*pos.z + m[0][3]*poz.w,
+          m[1][0]*pos.x + m[1][1]*pos.y + m[1][2]*pos.z + m[1][3]*poz.w,
+          m[2][0]*pos.x + m[2][1]*pos.y + m[2][2]*pos.z + m[2][3]*poz.w,
+          m[3][0]*pos.x + m[3][1]*pos.y + m[3][2]*pos.z + m[3][3]*poz.w);
+    }
+
+    void transform(const bool perspective)
     {
       const int np = vtxArray.size();
-      vtxArrayView = VertexArrayProj(np);
-      vtxArrayProj = VertexArrayProj(np);
+      vtxArrayView = VertexArrayView(np);
+      depthArray.resize(np);
+
+      float3 col = make_float3(1.0f);
 
       int nActive = 0;
 #pragma omp parallel for schedule(runtime) reduction(+:nActive)
@@ -172,49 +110,42 @@ class Splotch
       {
         const auto &vtx = vtxArray[i];
         const float4 posO(vtx.pos.x,vtx.pos.y,vtx.pos.z,1.0f);
-        float4 posV = modelViewMatrix * posO;
-        posV.w = -1.0f;
-        float4 posP = posV;
+        float4 posV = modelView(posO);
+        const float depth = posV.z;
+        const float dist  = length(posV);
+        float3 col = make_float3(-1.0f);
 
-        if (posT.z > depthMin && posT.z > depthMax)
+        if (depth >= depthMax && depth <= depthMax)
         {
-          const float dist = project ? posT.z : zDist;
-          const float xfac = project ? 1.0f/(fovfct*posT.z)  : scaleFactor;
-          posV.x = res2*(posV.x+fovfct*zDist)*scaleFactor;                                          
-          posV.y = res2*(posV.y+fovfct*zDist)*scaleFactor + yCorr;   
-          posV.w = posO.h * res2*scaleFactor;
+          posV = projection(posV);
 
-          posP = posV;
+          posV.x = (posV.x + 1.0f) * 0.5f * width;
+          posV.y = (1.0f - posV.y) * 0.5f * height;
+          posV.w = -1.0;
 
-          if (project)
+          if ( posV.x - posV.w <= width
+            && posV.x + posV.w >= 0
+            && posV.y - posV.w <= height
+            && posV.y + posV.w >= 0)
           {
-            const float xfac = 1.0f/(fovfct*posT.z);
-            posP.x = res2*(posP.x+fovfct*posP.z)*xfac;
-            posP.y = res2*(posP.y+fovfct*posP.z)*xfac + yCorr;   
-            posP.w = posO.h * res2*xfac;
+            posV.w = posO.h * 0.5 * width / dist;
+            posV.w *= std::sqrt(posV.w*posV.w + minHpix*minHpix)/posV.w;
 
-            const float rcorr = std::sqrt(posP.w*posP.w + minHpix*minHpix)/posP.w;
-            posP.w *= rcorr;
+            const float s = vtx.attr.rho;
+            const float t = vtx.attr.vel;
+            assert(s>=0.0f && s<=1.0f);
+            assert(t>=0.0f && t<=1.0f);
+            col = colorMapTex(s,t);
           }
-            
-          if ( posP.x - posP.w > width
-            || posP.x + posP.w < 0
-            || posP.y - posP.w > height
-            || posP.y + posP.w < 0)
-            posV.w = posP.w = -1.0;
         }
 
-        Vertex vtxProj;
-        vtxProj.pos  = pos2d_t(posP.x,posP.y,posP.w);
-        vtxProj.attr = vtx.attr;
-        vtxArrayProj[i] = vtxProj;
-       
-        Vertex vtxView;
-        vtxView.pos  = pos2d_t(posV.x,posV.y,posV.w);
-        vtxView.attr = vtx.attr;
-        vtxArrayView[i] = vtxView;
+        depthArray  [i] = depth;
+        vtxArrayView[i] = Vertex(
+            pos2d_t(posV.x, posV.y, posV.w),
+            make_float4(col, 1.0f),
+            vtx.attr);
 
-        nVisible += vtxView.pos.isVisible();
+        nVisible += vtxarrayView[i].isVisible();
       }
       fprintf(stderr, "nParticles= %d nVisible= %d\n", np, nVisible);
     }
@@ -228,25 +159,24 @@ class Splotch
       depthMap.reserve(np);
 
       for (int i = 0; i < np; i++)
-        if (posView.pos.isVisible())
-          depthMap.push_back(std::make_pair(posView.pos.z,i));
+        if (vtxArrayView[i].isVisible())
+          depthMap.push_back(std::make_pair(depthArray[i],i));
       
       __gnu_parallel::sort(depthMap.begin(), depthMap.end(),
           [](const pair &a, const pair &b) { return a.first < b.first;} );
 
       const int npVis = depthMap.size();
-      VertexArrayProj vtxProj(npVis);
+      VertexArrayView vtxView(npVis);
 
 #pragma omp parallel for 
       for (int i = 0; i < npVis; i++)
       {
         const auto &map = depthMap[i];
-        vtxProj[i] = vtxArrayProj[map.second];
+        vtxView[i] = vtxArrayView[map.second];
       }
 
-      vtxArrayProj = vtxProj;
+      swap(vtxArrayView,vtxView);
     }
-
 
     // assumes atomic execution
     Quad rasterize(const VertexProj &vtx, const Quad &range, Vector<float4> &fb)
@@ -273,15 +203,11 @@ class Splotch
           const float qx = dx*dx * invh2;
           const float facx = Exp(-qx);
 
-          const float3 col3 = assignColor(vtx.attr.rho, vtx.attr.vel);
-          float4 color;
-          color.x = col3.x;
-          color.y = col3.y;
-          color.z = col3.z;
+          float4 color = vtx.color;
           color.w = facx*facy; /* alpha */
 
           const int idx = lineIdx + (idx - range.x0);
-          using blend = BlendT<BLEND_ONE,BLEND_SRC_ALPHA>;
+          using blend = Blending::getColor<Blending::ONE,Blending::SRC_ALPHA>;
           fb[idx] = blend(fb[idx], color);
         }
       }
@@ -318,7 +244,7 @@ class Splotch
             const int idx = j*width + i;
             for (int k = 0; k < nt; k++)
             {
-              using blend = BlendT<BLEND_ONE,BLEND_SRC_ALPHA>;
+              using blend = Blending::getColor<Blending::ONE,Blending::SRC_ALPHA>;
               image[idx] = blend(image[idx], fbVec[k][idx]);
             }
           }
@@ -344,9 +270,11 @@ class Splotch
         }
     }
 
-    void genImage()
+  public:
+    void genImage(const bool perspective = true)
     {
       modelView();
+      transform(perspective);
       depthSort();
       rasterize();
       finalize();
