@@ -1,5 +1,6 @@
 #pragma once
 #include <omp.h>
+#include <parallel/algorithm>
 
 
 template<typename real_t>
@@ -8,6 +9,7 @@ struct Pos2D
   real_t x, y, h;
   Pos2D() {}
   Pos2D(const real_t &_x, const real_t &_y, const real_t &_h) : x(_x), y(_y), h(_h) {}
+  bool isVisible() const { return h > 0.0f; }
 };
 template<typename real_t>
 struct Pos3D
@@ -19,9 +21,9 @@ struct Pos3D
 template<typename real_t>
 struct Attribute
 {
-  real_t rho, vel;
+  real_t rho, vel, I;
   Attribute() {}
-  Attribute(const real_t &_rho, const real_t &_vel) : rho(_rho), vel(_vel) {}
+  Attribute(const real_t &_rho, const real_t &_vel, const real_t &_I) : rho(_rho), vel(_vel), I(_I) {}
 };
 
 
@@ -33,6 +35,7 @@ class VertexArrayT
     Tpos  *_pos;
     Tattr *_attr;
     int    _size;
+    int    _capacity;
   public:
     struct Vertex
     {
@@ -46,6 +49,7 @@ class VertexArrayT
     {
       assert(size > 0);
       _size = size;
+      _capacity = size;
       _pos  = new Tpos[_size];
       _attr = new Tattr[_size];
 #pragma omp parallel for schedule(static)
@@ -78,11 +82,9 @@ class VertexArrayT
 class Splotch
 {
   public:
-    using real_t  = float;
-
-    using pos2d_t = Pos2D<real_t>;
-    using pos3d_t = Pos3D<real_t>;
-    using attr_t  = Attribute<real_t>;  /* radius, density, velocity */
+    using pos2d_t = Pos2D<float>;
+    using pos3d_t = Pos3D<float>;
+    using attr_t  = Attribute<float>;  
 
   private:
 
@@ -93,13 +95,13 @@ class Splotch
     using Exp     = std::exp;
 
     VertexArray     vtxArray;
-    VertexArrayProj vtxArrayProj;
+    VertexArrayProj vtxArrayProj, vtxArrayView;
     real2_t invProjRange;
     
     struct Quad
     {
-      real_t x0,x1;
-      real_t y0,y1;
+      float x0,x1;
+      float y0,y1;
     };
     
     enum BlendType {BLEND_ONE, BLEND_ZERO, BLEND_SRC_ALPHA, BLEND_ONE_MINUS_SRC_ALPHA};
@@ -151,34 +153,125 @@ class Splotch
       return res;
     }
 
+    int width, height;
+    std::vector<float4> image;
+
   public:
     Splotch() {}
     ~Splotch() {}
 
+    void modelView(const bool project = true)
+    {
+      const int np = vtxArray.size();
+      vtxArrayView = VertexArrayProj(np);
+      vtxArrayProj = VertexArrayProj(np);
 
-    Quad rasterize(const VertexProj &vtx, const real_t width, const real_t height, Vector<float4> &fb)
+      int nActive = 0;
+#pragma omp parallel for schedule(runtime) reduction(+:nActive)
+      for (int i = 0; i < np; i++)
+      {
+        const auto &vtx = vtxArray[i];
+        const float4 posO(vtx.pos.x,vtx.pos.y,vtx.pos.z,1.0f);
+        float4 posV = modelViewMatrix * posO;
+        posV.w = -1.0f;
+        float4 posP = posV;
+
+        if (posT.z > depthMin && posT.z > depthMax)
+        {
+          const float dist = project ? posT.z : zDist;
+          const float xfac = project ? 1.0f/(fovfct*posT.z)  : scaleFactor;
+          posV.x = res2*(posV.x+fovfct*zDist)*scaleFactor;                                          
+          posV.y = res2*(posV.y+fovfct*zDist)*scaleFactor + yCorr;   
+          posV.w = posO.h * res2*scaleFactor;
+
+          posP = posV;
+
+          if (project)
+          {
+            const float xfac = 1.0f/(fovfct*posT.z);
+            posP.x = res2*(posP.x+fovfct*posP.z)*xfac;
+            posP.y = res2*(posP.y+fovfct*posP.z)*xfac + yCorr;   
+            posP.w = posO.h * res2*xfac;
+
+            const float rcorr = std::sqrt(posP.w*posP.w + minHpix*minHpix)/posP.w;
+            posP.w *= rcorr;
+          }
+            
+          if ( posP.x - posP.w > width
+            || posP.x + posP.w < 0
+            || posP.y - posP.w > height
+            || posP.y + posP.w < 0)
+            posV.w = posP.w = -1.0;
+        }
+
+        Vertex vtxProj;
+        vtxProj.pos  = pos2d_t(posP.x,posP.y,posP.w);
+        vtxProj.attr = vtx.attr;
+        vtxArrayProj[i] = vtxProj;
+       
+        Vertex vtxView;
+        vtxView.pos  = pos2d_t(posV.x,posV.y,posV.w);
+        vtxView.attr = vtx.attr;
+        vtxArrayView[i] = vtxView;
+
+        nVisible += vtxView.pos.isVisible();
+      }
+      fprintf(stderr, "nParticles= %d nVisible= %d\n", np, nVisible);
+    }
+ 
+    void depthSort()
+    {
+      const int np = vtxView.size();
+
+      using pair = std::pair<float,int>;
+      std::vector<pair> depthMap;
+      depthMap.reserve(np);
+
+      for (int i = 0; i < np; i++)
+        if (posView.pos.isVisible())
+          depthMap.push_back(std::make_pair(posView.pos.z,i));
+      
+      __gnu_parallel::sort(depthMap.begin(), depthMap.end(),
+          [](const pair &a, const pair &b) { return a.first < b.first;} );
+
+      const int npVis = depthMap.size();
+      VertexArrayProj vtxProj(npVis);
+
+#pragma omp parallel for 
+      for (int i = 0; i < npVis; i++)
+      {
+        const auto &map = depthMap[i];
+        vtxProj[i] = vtxArrayProj[map.second];
+      }
+
+      vtxArrayProj = vtxProj;
+    }
+
+
+    // assumes atomic execution
+    Quad rasterize(const VertexProj &vtx, const Quad &range, Vector<float4> &fb)
     {
       using max = std::max;
       using min = std::min;
       Quad q;
-      q.x0  = max(0.0f,   vtx.pos.x - vtx.pos.h);
-      q.x1  = mix(width,  vtx.pos.x + vtx.pos.h);
-      q.y0  = max(0.0f,   vtx.pos.y - vtx.pos.h);
-      q.y1  = max(height, vtx.pos.y + vtx.pos.h);
+      q.x0  = max(range.x0, vtx.pos.x - vtx.pos.h);
+      q.x1  = mix(range.x1, vtx.pos.x + vtx.pos.h);
+      q.y0  = max(range.y0, vtx.pos.y - vtx.pos.h);
+      q.y1  = max(range.y1, vtx.pos.y + vtx.pos.h);
 
-      int lineIdx = q.y0*width;
-      const real_t invh  = 1.0f/vtx.pos.h;
-      const real_t invh2 = invh*invh;
-      for (real_t iy = q.y0; iy < q.y1; iy++, lineIdx += width)
+      int lineIdx = (q.y0-range.y0)*width;
+      const float invh  = 1.0f/vtx.pos.h;
+      const float invh2 = invh*invh;
+      for (float iy = q.y0; iy < q.y1; iy++, lineIdx += width)
       {
-        const real_t dy   = iy - pos.vtx.y;
-        const real_t qy   = dy*dy * invh2;
-        const real_t facy = Exp(-qy);
-        for(real_t ix = q.x0; ix < q.x1; ix++)
+        const float dy   = iy - pos.vtx.y;
+        const float qy   = dy*dy * invh2;
+        const float facy = Exp(-qy);
+        for(float ix = q.x0; ix < q.x1; ix++)
         {
-          const real_t dx = ix - pos.vtx.x;
-          const real_t qx = dx*dx * invh2;
-          const real_t facx = Exp(-qx);
+          const float dx = ix - pos.vtx.x;
+          const float qx = dx*dx * invh2;
+          const float facx = Exp(-qx);
 
           const float3 col3 = assignColor(vtx.attr.rho, vtx.attr.vel);
           float4 color;
@@ -187,14 +280,15 @@ class Splotch
           color.z = col3.z;
           color.w = facx*facy; /* alpha */
 
+          const int idx = lineIdx + (idx - range.x0);
           using blend = BlendT<BLEND_ONE,BLEND_SRC_ALPHA>;
-          fb[lineIdx+ix] = blend(fb[lineIdx+ix], color);
+          fb[idx] = blend(fb[idx], color);
         }
       }
       return q;
     }
 
-    void render(const int height, const int width, std::vector<float4> &image)
+    void render()
     {
       const int np = vtxArrayProj.size();
 
@@ -215,7 +309,7 @@ class Splotch
 
 #pragma omp for schedule(runtime)
         for (int i = 0; i < np; i++)
-          rasterize(vtxArrayProj[i], height, widhth, fb);
+          rasterize(vtxArrayProj[i], range, fb);
 
 #pragma omp for schedule(runtime) collapse(2)
         for (int j = 0; j < height; j++)
@@ -231,7 +325,7 @@ class Splotch
       }
     }
 
-    void finalize(const int height, const int width, std::vector<float4> &image)
+    void finalize()
     {
 #pragma omp for schedule(runtime) collapse(2)
       for (int j = 0; j < height; j++)
@@ -250,8 +344,13 @@ class Splotch
         }
     }
 
-
-
+    void genImage()
+    {
+      modelView();
+      depthSort();
+      rasterize();
+      finalize();
+    }
 
 };
 
