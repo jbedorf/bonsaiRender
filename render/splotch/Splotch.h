@@ -24,14 +24,15 @@ class Splotch
     using Vertex          = VertexArray::Vertex;
     using VertexView      = VertexArrayView::Vertex;
     using Exp             = std::exp;
+    using ShortVec3       = MathArray<float,3>;
 
     VertexArray     vtxArray;
     VertexArrayView vtxArrayView;
     std::vector<float> depthArray;
     real2_t invProjRange;
 
-    Texture2D<float3> colorMapTex;
-    
+    Texture2D<ShortVec3> colorMapTex;
+
     struct Quad
     {
       float x0,x1;
@@ -135,7 +136,8 @@ class Splotch
             const float t = vtx.attr.vel;
             assert(s>=0.0f && s<=1.0f);
             assert(t>=0.0f && t<=1.0f);
-            col = colorMapTex(s,t);
+            const auto &tex = colorMapTex(s,t);
+            col = make_float3(tex[0],tex[1],tex[2]);
           }
         }
 
