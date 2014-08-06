@@ -23,7 +23,7 @@ struct Attribute
   Attribute(const real_t _rho, const real_t _vel, const real_t _I = 1.0f, const real_t _type = 1.0f ) : rho(_rho), vel(_vel), I(_I), type(_type) {}
 };
 
-template<typename Tpos, typename Tattr, typename Tcolor)
+template<typename Tpos, typename Tattr, typename Tcolor>
 class VertexArrayT
 {
   private:
@@ -37,22 +37,40 @@ class VertexArrayT
       Tpos pos;
       Tattr attr;
       Tcolor color;
-      Vertex(Tpos &_pos, Tattr &_attr, Tcolor &_color) :
+      Vertex(const Tpos &_pos, const Tcolor &_color, const Tattr &_attr) :
         pos(_pos), color(_color), attr(_attr) {}
       bool isVisible() const { return pos.isVisible(); }
+      Vertex operator=(const Vertex &v) 
+      {
+        pos   = v.pos;
+        color = v.color;
+        attr  = v.attr;
+      }
     };
     struct VertexRef
     {
       Tpos &pos;
       Tcolor &color;
       Tattr &attr;
-      VertexRef(Tpos &_pos, Tattr &_attr, Tcolor &_color) :
+      VertexRef(Tpos &_pos, Tcolor &_color, Tattr &_attr) :
         pos(_pos), color(_color), attr(_attr) {}
       VertexRef operator=(const Vertex &v) 
       {
         pos   = v.pos;
         color = v.color;
         attr  = v.attr;
+        return *this;
+      }
+      VertexRef operator=(const VertexRef &v) 
+      {
+        pos   = v.pos;
+        color = v.color;
+        attr  = v.attr;
+        return *this;
+      }
+      operator Vertex() const 
+      {
+        return Vertex(pos,color,attr);
       }
       bool isVisible() const {return pos.isVisible(); }
     };
@@ -71,7 +89,9 @@ class VertexArrayT
       _color = NULL;
       _attr  = NULL;
     }
-    void malloc(const int size)
+
+  public:
+    void realloc(const int size)
     {
       free();
       _size = size;
@@ -82,12 +102,10 @@ class VertexArrayT
         _attr  = (Tattr *)::malloc(sizeof(Tattr )*_size);
       }
     }
-
-  public:
     VertexArrayT(const int size = 0) : _pos(NULL), _color(NULL), _attr(NULL), _size(size) { malloc(size); }
-    VertexArrayT(const Tpos *pos, const Tcolor, *color, const Tattr *attr, const int size) 
+    VertexArrayT(const Tpos *pos, const Tcolor *color, const Tattr *attr, const int size) 
     {
-      malloc(size);
+      realloc(size);
 #pragma omp parallel for schedule(static)
       for (int i = 0; i < _size; i++)
       {
@@ -105,7 +123,7 @@ class VertexArrayT
       return *this;
     }
 
-    friend static void swap(VertexArrayT &a, const VertexArrayT &b)
+    friend void swap(VertexArrayT &a, VertexArrayT &b)
     {
       std::swap(a._pos,   b._pos);
       std::swap(a._color, b._color);
@@ -114,7 +132,7 @@ class VertexArrayT
     }
 
 
-    VertexRef operator[](const int i) {return Vertex(_pos[i], _attr[i]);}
-    const VertexRef operator[](const int i) const {return const Attr(_pos[i],_attr[i]);}
+    VertexRef operator[](const int i) {return VertexRef(_pos[i], _color[i], _attr[i]);}
+    const VertexRef operator[](const int i) const {return VertexRef(_pos[i], _color[i], _attr[i]);}
     int size() const {return _size;}
 };

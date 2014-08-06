@@ -2,11 +2,11 @@
 #include <omp.h>
 #include <parallel/algorithm>
 #include <cmath>
-#include <valarray>
 
 #include "Texture.h"
 #include "Vertex.h"
 #include "Blending.h"
+#include "MathArray.h"
 
 
 class Splotch
@@ -15,21 +15,21 @@ class Splotch
     using pos2d_t = Pos2D<float>;
     using pos3d_t = Pos3D<float>;
     using attr_t  = Attribute<float>;  
+    using color_t = float4;
 
   private:
 
-    using VertexArray     = VertexArrayT<pos3d_t,attr_t>;
-    using VertexArrayView = VertexArrayT<pos2d_t,attr_t>;
+    using VertexArray     = VertexArrayT<pos3d_t,attr_t,color_t>;
+    using VertexArrayView = VertexArrayT<pos2d_t,attr_t,color_t>;
     using Vertex          = VertexArray::Vertex;
     using VertexRef       = VertexArray::VertexRef;
     using VertexView      = VertexArrayView::Vertex;
-    using Exp             = std::exp;
     using ShortVec3       = MathArray<float,3>;
 
     VertexArray     vtxArray;
     VertexArrayView vtxArrayView;
     std::vector<float> depthArray;
-    real2_t invProjRange;
+    float2 invProjRange;
 
     Texture2D<ShortVec3> colorMapTex;
 
@@ -48,13 +48,32 @@ class Splotch
     float4 baseColor;
     float spriteSizeScale;
 
+    float depthMin;
+    float depthMax;
+    float minHpix;
+
 
   public:
-    Splotch() {}
+    Splotch() :
+      spriteSizeScale(1.0f),
+      depthMin(0.2f),
+      depthMax(1.0f),
+      minHpix(1.0f) 
+  {}
     ~Splotch() {}
    
     /* getters/setters */ 
-    void  setColorMap(const float3 *img, const int w, const int h)  { colorMapTex = Texture2D<float3>(img, w, h); }
+    void  setColorMap(const float3 *img, const int w, const int h)  
+    { 
+      std::vector<ShortVec3> tex(w*h);
+      for (int i = 0; i < w*h; i++)
+      {
+        tex[i][0] = img[i].x;
+        tex[i][1] = img[i].y;
+        tex[i][2] = img[i].z;
+      }
+      colorMapTex = Texture2D<ShortVec3>(&tex[0], w, h); 
+    }
     const std::vector<float4>& getImage() const {return image;}
     float4 getPixel(const int i, const int j)
     {
@@ -67,44 +86,49 @@ class Splotch
     void setHeight(const int h) {height = h;}
     int  getWidth()  const {return width;}
     int  getHeight() const {return height;}
+    
+    void  setDepthMin(const float x) {depthMin = x;}
+    void  setDepthMax(const float x) {depthMax = x;}
+    float getDepthMin() const {return depthMin;}
+    float getDepthMax() const {return depthMax;}
 
     void setModelViewMatrix(const double m[4][4])
     {
-      for (int j = 0; j < 4; i++)
-        for (int i = 0; i < 4; j++)
+      for (int j = 0; j < 4; j++)
+        for (int i = 0; i < 4; i++)
           modelViewMatrix[j][i] = m[j][i];
     }
     void setProjectionMatrix(const double m[4][4])
     {
-      for (int j = 0; j < 4; i++)
-        for (int i = 0; i < 4; j++)
+      for (int j = 0; j < 4; j++)
+        for (int i = 0; i < 4; i++)
           projectionMatrix[j][i] = m[j][i];
     }
 
     void resize(const int n)
     {
-      vtxArray.resize(n)
+      vtxArray.realloc(n);
     }
     VertexRef vertex_at(const int i) {return vtxArray[i]; }
 
   private:
     float4 modelView(const float4 pos) const
     {
-      using m = modelViewMatrix;
+      auto &m = modelViewMatrix;
       return make_float4(
-          m[0][0]*pos.x + m[0][1]*pos.y + m[0][2]*pos.z + m[0][3]*poz.w,
-          m[1][0]*pos.x + m[1][1]*pos.y + m[1][2]*pos.z + m[1][3]*poz.w,
-          m[2][0]*pos.x + m[2][1]*pos.y + m[2][2]*pos.z + m[2][3]*poz.w,
-          m[3][0]*pos.x + m[3][1]*pos.y + m[3][2]*pos.z + m[3][3]*poz.w);
+          m[0][0]*pos.x + m[0][1]*pos.y + m[0][2]*pos.z + m[0][3]*pos.w,
+          m[1][0]*pos.x + m[1][1]*pos.y + m[1][2]*pos.z + m[1][3]*pos.w,
+          m[2][0]*pos.x + m[2][1]*pos.y + m[2][2]*pos.z + m[2][3]*pos.w,
+          m[3][0]*pos.x + m[3][1]*pos.y + m[3][2]*pos.z + m[3][3]*pos.w);
     }
     float4 projection(const float4 pos) const
     {
-      using m = projectionMatrix;
+      auto &m = projectionMatrix;
       return make_float4(
-          m[0][0]*pos.x + m[0][1]*pos.y + m[0][2]*pos.z + m[0][3]*poz.w,
-          m[1][0]*pos.x + m[1][1]*pos.y + m[1][2]*pos.z + m[1][3]*poz.w,
-          m[2][0]*pos.x + m[2][1]*pos.y + m[2][2]*pos.z + m[2][3]*poz.w,
-          m[3][0]*pos.x + m[3][1]*pos.y + m[3][2]*pos.z + m[3][3]*poz.w);
+          m[0][0]*pos.x + m[0][1]*pos.y + m[0][2]*pos.z + m[0][3]*pos.w,
+          m[1][0]*pos.x + m[1][1]*pos.y + m[1][2]*pos.z + m[1][3]*pos.w,
+          m[2][0]*pos.x + m[2][1]*pos.y + m[2][2]*pos.z + m[2][3]*pos.w,
+          m[3][0]*pos.x + m[3][1]*pos.y + m[3][2]*pos.z + m[3][3]*pos.w);
     }
 
     void transform(const bool perspective)
@@ -113,14 +137,13 @@ class Splotch
       vtxArrayView = VertexArrayView(np);
       depthArray.resize(np);
 
-      float3 col = make_float3(1.0f);
 
-      int nActive = 0;
-#pragma omp parallel for schedule(runtime) reduction(+:nActive)
+      int nVisible = 0;
+#pragma omp parallel for schedule(runtime) reduction(+:nVisible)
       for (int i = 0; i < np; i++)
       {
         const auto &vtx = vtxArray[i];
-        const float4 posO(vtx.pos.x,vtx.pos.y,vtx.pos.z,1.0f);
+        const float4 posO = make_float4(vtx.pos.x,vtx.pos.y,vtx.pos.z,1.0f);
         float4 posV = modelView(posO);
         const float depth = posV.z;
         const float dist  = length(posV);
@@ -139,8 +162,9 @@ class Splotch
             && posV.y - posV.w <= height
             && posV.y + posV.w >= 0)
           {
-            posV.w = posO.h * 0.5 * width / dist;
-            posV.w *= std::sqrt(posV.w*posV.w + minHpix*minHpix)/posV.w;
+            posV.w = vtx.pos.h * 0.5 * width / dist;
+            using std::sqrt;
+            posV.w *= sqrt(posV.w*posV.w + minHpix*minHpix)/posV.w;
 
             const float s = vtx.attr.rho;
             const float t = vtx.attr.vel;
@@ -152,19 +176,21 @@ class Splotch
         }
 
         depthArray  [i] = depth;
-        vtxArrayView[i] = Vertex(
-            pos2d_t(posV.x, posV.y, posV.w),
-            make_float4(col, 1.0f),
-            vtx.attr);
+        vtxArrayView[i] = 
+        {
+          pos2d_t(posV.x, posV.y, posV.w),
+          make_float4(col, 1.0f),
+          vtx.attr
+        };
 
-        nVisible += vtxarrayView[i].isVisible();
+        nVisible += vtxArrayView[i].isVisible();
       }
       fprintf(stderr, "nParticles= %d nVisible= %d\n", np, nVisible);
     }
  
     void depthSort()
     {
-      const int np = vtxView.size();
+      const int np = depthArray.size();
 
       using pair = std::pair<float,int>;
       std::vector<pair> depthMap;
@@ -191,36 +217,37 @@ class Splotch
     }
 
     // assumes atomic execution
-    Quad rasterize(const VertexProj &vtx, const Quad &range, Vector<float4> &fb)
+    Quad rasterize(const VertexView &vtx, const Quad &range, std::vector<color_t> &fb)
     {
-      using max = std::max;
-      using min = std::min;
+      using std::max;
+      using std::min;
+      using std::exp;
+
       Quad q;
       q.x0  = max(range.x0, vtx.pos.x - vtx.pos.h);
-      q.x1  = mix(range.x1, vtx.pos.x + vtx.pos.h);
+      q.x1  = min(range.x1, vtx.pos.x + vtx.pos.h);
       q.y0  = max(range.y0, vtx.pos.y - vtx.pos.h);
-      q.y1  = max(range.y1, vtx.pos.y + vtx.pos.h);
+      q.y1  = min(range.y1, vtx.pos.y + vtx.pos.h);
 
       int lineIdx = (q.y0-range.y0)*width;
       const float invh  = 1.0f/vtx.pos.h;
       const float invh2 = invh*invh;
       for (float iy = q.y0; iy < q.y1; iy++, lineIdx += width)
       {
-        const float dy   = iy - pos.vtx.y;
+        const float dy   = iy - vtx.pos.y;
         const float qy   = dy*dy * invh2;
-        const float facy = Exp(-qy);
+        const float facy = exp(-qy);
         for(float ix = q.x0; ix < q.x1; ix++)
         {
-          const float dx = ix - pos.vtx.x;
+          const float dx = ix - vtx.pos.x;
           const float qx = dx*dx * invh2;
-          const float facx = Exp(-qx);
+          const float facx = exp(-qx);
 
           float4 color = vtx.color;
           color.w = facx*facy; /* alpha */
 
-          const int idx = lineIdx + (idx - range.x0);
-          using blend = Blending::getColor<Blending::ONE,Blending::SRC_ALPHA>;
-          fb[idx] = blend(fb[idx], color);
+          const int idx = lineIdx + (ix - range.x0);
+          fb[idx] = Blending::getColor<Blending::ONE,Blending::SRC_ALPHA>(fb[idx],color);
         }
       }
       return q;
@@ -228,13 +255,13 @@ class Splotch
 
     void render()
     {
-      const int np = vtxArrayProj.size();
+      const int np = vtxArrayView.size();
 
       image.resize(width*height);
-      std::fill(image.begin(), image.end(), make_floa43(0.0f));
+      std::fill(image.begin(), image.end(), make_float4(0.0f));
 
 #define NTHREADMAX 256
-      std::vector<float4> fbVec[NTHREADMAX];
+      std::vector<color_t> fbVec[NTHREADMAX];
 
 #pragma omp parallel
       {
@@ -245,9 +272,16 @@ class Splotch
         fb.resize(width*height);
         std::fill(fb.begin(), fb.end(), make_float4(0.0f));
 
+        Quad range;
+        range.x0 = 0;
+        range.x1 = width;
+        range.y0 = 0;
+        range.y1 = height;
+
+
 #pragma omp for schedule(runtime)
         for (int i = 0; i < np; i++)
-          rasterize(vtxArrayProj[i], range, fb);
+          rasterize(vtxArrayView[i], range, fb);
 
 #pragma omp for schedule(runtime) collapse(2)
         for (int j = 0; j < height; j++)
@@ -256,8 +290,7 @@ class Splotch
             const int idx = j*width + i;
             for (int k = 0; k < nt; k++)
             {
-              using blend = Blending::getColor<Blending::ONE,Blending::SRC_ALPHA>;
-              image[idx] = blend(image[idx], fbVec[k][idx]);
+              image[idx] = Blending::getColor<Blending::ONE,Blending::SRC_ALPHA>(image[idx], fbVec[k][idx]);
             }
           }
       }
@@ -273,9 +306,9 @@ class Splotch
           const float4 src = image[idx];
           float4 dst;
 
-          dst.x = 1.0f - Exp(-src.x);
-          dst.y = 1.0f - Exp(-src.y);
-          dst.z = 1.0f - Exp(-src.z);
+          dst.x = 1.0f - exp(-src.x);
+          dst.y = 1.0f - exp(-src.y);
+          dst.z = 1.0f - exp(-src.z);
           dst.w = 1.0f;
 
           image[idx] = dst;
@@ -285,10 +318,9 @@ class Splotch
   public:
     void genImage(const bool perspective = true)
     {
-      modelView();
       transform(perspective);
       depthSort();
-      rasterize();
+      render();
       finalize();
     }
 

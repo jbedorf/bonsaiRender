@@ -23,6 +23,8 @@
 #include "vector_math.h"
 #include <cstdarg>
 
+#include "Splotch.h"
+
 
 #include <sys/time.h>
 static inline double rtc(void)
@@ -84,18 +86,15 @@ class Demo
 {
   public:
     Demo(RendererData &idata) 
-      : m_idata(idata), iterationsRemaining(true),
-      m_displayMode(ParticleRenderer::PARTICLE_SPRITES_COLOR),
-      m_octreeDisplayLevel(3),
+      : m_idata(idata), 
       m_ox(0), 
       m_oy(0), 
       m_buttonState(0), 
       m_inertia(0.1f),
       m_paused(false), 
-      m_displayBoxes(false),
       m_displayFps(true),
-      m_displaySliders(true),
-      m_params(m_renderer.getParams())
+      m_displaySliders(true)
+//      m_params(m_renderer.getParams())
   {
     m_windowDims = make_int2(720, 480);
     m_cameraTrans = make_float3(0, -2, -10);
@@ -104,9 +103,9 @@ class Demo
     m_cameraRotLag = m_cameraRot;
 
     //float color[4] = { 0.8f, 0.7f, 0.95f, 0.5f};
-    float4 color = make_float4(1.0f, 1.0f, 1.0f, 1.0f);
-    m_renderer.setBaseColor(color);
-    m_renderer.setSpriteSizeScale(0.01f);
+//    float4 color = make_float4(1.0f, 1.0f, 1.0f, 1.0f);
+//    m_renderer.setBaseColor(color);
+//    m_renderer.setSpriteSizeScale(1.0f);
   }
     ~Demo() {}
 
@@ -281,14 +280,14 @@ class Demo
 #pragma omp parallel for
       for (int i = 0; i < n; i++)
       {
-        auto &vtx = m_renderer.vertex_at(i);
+        auto vtx = m_renderer.vertex_at(i);
         vtx.pos = Splotch::pos3d_t(m_idata.posx(i), m_idata.posy(i), m_idata.posz(i), m_spriteSize);
         vtx.color = make_float4(1.0f);
         float vel = m_idata.attribute(RendererData::VEL,i);
         float rho = m_idata.attribute(RendererData::RHO,i);
         vel = (vel - velMin) * scaleVEL;
         rho = hasRHO ? (rho - rhoMin) * scaleRHO : 0.5f;
-        vtx.attr  = Splotch::attr_t(rho, vel, m_brightness, m_idata.type(i));
+        vtx.attr  = Splotch::attr_t(rho, vel, m_spriteIntensity, m_idata.type(i));
       }
     }
 
@@ -313,6 +312,9 @@ class Demo
     bool m_displayFps;
     bool m_displaySliders;
     ParamListGL *m_params;
+
+    float m_spriteSize;
+    float m_spriteIntensity;
 };
 
 Demo *theDemo = NULL;
@@ -325,7 +327,6 @@ void display()
 {
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-  theDemo->step();
   theDemo->display();
 
   glutSwapBuffers();
@@ -354,7 +355,7 @@ void key(unsigned char key, int /*x*/, int /*y*/)
 {
   switch (key) {
     case ' ':
-      theDemo->togglePause();
+//      theDemo->togglePause();
       break;
     case 27: // escape
     case 'q':
@@ -371,7 +372,7 @@ void key(unsigned char key, int /*x*/, int /*y*/)
       break;
     case 'b':
     case 'B':
-      theDemo->toggleBoxes();
+//      theDemo->toggleBoxes();
       break;
     case 'd':
     case 'D':
@@ -383,11 +384,11 @@ void key(unsigned char key, int /*x*/, int /*y*/)
       break;
     case ',':
     case '<':
-      theDemo->incrementOctreeDisplayLevel(-1);
+//      theDemo->incrementOctreeDisplayLevel(-1);
       break;
     case '.':
     case '>':
-      theDemo->incrementOctreeDisplayLevel(+1);
+//      theDemo->incrementOctreeDisplayLevel(+1);
       break;
     case 'h':
     case 'H':

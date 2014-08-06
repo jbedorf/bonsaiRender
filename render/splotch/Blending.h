@@ -9,7 +9,7 @@ class Blending
     template<Type TYPE>
     static float4 blendColor(const float4 col, const float4 src, const float4 dst)
     {
-      float4 res;
+      float4 res = col;
       switch (TYPE)
       {
         case ONE_MINUS_SRC_ALPHA:
@@ -23,7 +23,7 @@ class Blending
           res.z *= src.w;
           res.w *= src.w;
         case ZERO:
-          res.x = res.y = res.z = rez.w = 0;
+          res.x = res.y = res.z = res.w = 0;
           break;
         case ONE:
           break;
@@ -35,21 +35,23 @@ class Blending
 
   public:
 
-    template<Method SRC, Method DST>
+    template<Type TYPE_SRC, Type TYPE_DST>
     static float4 getColor(const float4 d, const float4 s)
     {
       float4 res;
 
-      const float4 src = blendColor<SRC>(s,d,s);
-      const float4 dst = blendColor<DST>(d,d,s);
+      const float4 src = blendColor<TYPE_SRC>(s,d,s);
+      const float4 dst = blendColor<TYPE_DST>(d,d,s);
 
       res.x = src.x + dst.x;
       res.y = src.y + dst.y;
       res.z = src.z + dst.z;
       res.w = src.w + dst.w;
 
-      using max = std::max;
+#if 0
+      using std::min;
       res.w = min(1.0f, res.w);
+#endif
 
       return res;
     }

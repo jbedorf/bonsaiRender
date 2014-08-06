@@ -27,8 +27,8 @@ LDFLAGS = -lGL -lGLU -lglut -lGLEW -fopenmp
 
 ifeq ($(APPLEOSX),1)
 	INCLUDE_FLAGS += -I/opt/local/include
-	CXXFLAGS +=-Wno-deprecated-declarations
-	LDFLAGS = -framework OpenGL -L/opt/local/lib -lglut -lglew
+	CXXFLAGS +=-Wno-deprecated-declarations 
+	LDFLAGS = -framework OpenGL -L/opt/local/lib -lglut -lglew -fopenmp
 endif
 
 OBJ = main.o $(ENGINE)/renderloop.o anyoption.o $(ENGINE)/renderer.o paramgl.o
