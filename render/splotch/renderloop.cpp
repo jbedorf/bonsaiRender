@@ -171,13 +171,17 @@ class Demo
         glRotatef(m_cameraRotLag.y, 0.0, 1.0, 0.0);
       }
 
+#if 0
       if (m_displaySliders)
       {
         m_params->Render(0, 0);    
       }
+#endif
 
       drawStats();
+#if 0
       m_renderer.genImage();
+#endif
     }
 
     void mouse(int button, int state, int x, int y)
@@ -209,11 +213,13 @@ class Demo
       float dx = (float)(x - m_ox);
       float dy = (float)(y - m_oy);
 
+#if 0
       if (m_displaySliders)
       {
         if (m_params->Motion(x, y))                                                       
           return;                                                                         
       }       
+#endif
 
       if (m_buttonState == 3) {
         // left+middle = zoom
