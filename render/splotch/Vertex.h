@@ -54,14 +54,14 @@ class VertexArrayT
       Tattr &attr;
       VertexRef(Tpos &_pos, Tcolor &_color, Tattr &_attr) :
         pos(_pos), color(_color), attr(_attr) {}
-      VertexRef operator=(const Vertex &v) 
+      VertexRef& operator=(const Vertex &v) 
       {
         pos   = v.pos;
         color = v.color;
         attr  = v.attr;
         return *this;
       }
-      VertexRef operator=(const VertexRef &v) 
+      VertexRef& operator=(const VertexRef &v) 
       {
         pos   = v.pos;
         color = v.color;
