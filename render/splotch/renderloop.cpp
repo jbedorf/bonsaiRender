@@ -191,7 +191,7 @@ class Demo
       glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
       glEnable(GL_BLEND);
       glDisable(GL_DEPTH_TEST);
-      glColor4f(1.0f, 1.0f, 1.0f, 1.0f);
+      glColor4f(0.0f, 1.0f, 0.0f, 1.0f);
 
       float x = 100.0f;
       float y = glutGet(GLUT_WINDOW_HEIGHT)*4.0f - 200.0f;
@@ -258,11 +258,9 @@ class Demo
 
 #endif
       
-    //  displayTexture(m_texture);
+      displayTexture(m_texture);
       drawStats();
       //glutPostRedisplay();
-      glutSwapBuffers();
-      glFlush();
     }
 
     void mouse(int button, int state, int x, int y)
