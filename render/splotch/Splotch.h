@@ -31,7 +31,6 @@ class Splotch
     std::vector<float> depthArray;
     float2 invProjRange;
 
-    Texture2D<ShortVec3> colorMapTex;
 
     struct Quad
     {
@@ -52,15 +51,20 @@ class Splotch
     float depthMax;
     float minHpix;
 
+    Texture2D<ShortVec3> *colorMapTexPtr;
 
   public:
     Splotch() :
       spriteSizeScale(1.0f),
       depthMin(0.2f),
       depthMax(1.0f),
-      minHpix(1.0f) 
+      minHpix(1.0f) ,
+      colorMapTexPtr(NULL)
   {}
-    ~Splotch() {}
+    ~Splotch() 
+    {
+      if (colorMapTexPtr) delete colorMapTexPtr;
+    }
    
     /* getters/setters */ 
     void  setColorMap(const float3 *img, const int w, const int h)  
@@ -72,7 +76,7 @@ class Splotch
         tex[i][1] = img[i].y;
         tex[i][2] = img[i].z;
       }
-      colorMapTex = Texture2D<ShortVec3>(&tex[0], w, h); 
+      colorMapTexPtr = new Texture2D<ShortVec3>(&tex[0], w, h); 
     }
     const std::vector<float4>& getImage() const {return image;}
     float4 getPixel(const int i, const int j)
@@ -136,6 +140,8 @@ class Splotch
       const int np = vtxArray.size();
       vtxArrayView = VertexArrayView(np);
       depthArray.resize(np);
+
+      const auto &colorMapTex = *colorMapTexPtr;
 
 
       int nVisible = 0;

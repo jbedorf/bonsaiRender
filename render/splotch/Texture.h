@@ -13,7 +13,7 @@ class Texture1D
     Texture1D(const T *_data, const int _size) :
       data(new T[_size]), size(_size)
     {
-#pragma omp parallel for
+// #pragma omp parallel for
       for (int i = 0; i < size; i++)
         data[i] = _data[i];
     }
@@ -50,9 +50,11 @@ class Texture2D
       data(new T[_width*_height]), width(_width), height(_height) 
     {
       const int n = width*height;
-#pragma omp parallel for
+// #pragma omp parallel for
       for (int i = 0; i < n; i++)
+      {
         data[i] = _data[i];
+      }
     }
     ~Texture2D()
     {
