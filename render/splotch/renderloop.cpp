@@ -181,6 +181,36 @@ class Demo
       drawStats();
 #if 0
       m_renderer.genImage();
+#else
+      glMatrixMode(GL_PROJECTION);
+      glLoadIdentity();
+      gluPerspective(60,1,1,10);
+      gluLookAt(
+          0,0,-2,  /* eye */
+          0,0, 2,  /* center */
+          0,1, 0   /* up */
+          );
+      glMatrixMode(GL_MODELVIEW);
+      glLoadIdentity();
+
+      glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+      glPushAttrib(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+      glEnable(GL_TEXTURE_2D);
+
+      glBegin(GL_QUADS);
+      glNormal3f(0.0f, 0.0f, 1.0f);
+      glTexCoord2d(1, 1); glVertex3f(0.0f, 0.0f, 0.0f);
+      glTexCoord2d(1, 0); glVertex3f(0.0f, 1.0f, 0.0f);
+      glTexCoord2d(0, 0); glVertex3f(1.0f, 1.0f, 0.0f);
+      glTexCoord2d(0, 1); glVertex3f(1.0f, 0.0f, 0.0f);
+      glEnd();
+
+      glDisable(GL_TEXTURE_2D);
+      glPopAttrib();
+
+      glFlush();
+      glutSwapBuffers();
+
 #endif
     }
 
