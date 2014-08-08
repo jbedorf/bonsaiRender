@@ -117,6 +117,7 @@ class Demo
       m_displaySliders(true),
       m_texture(0),
       m_displayTexProg(0)
+//      m_fov(40.0f)k
 //      m_params(m_renderer.getParams())
   {
     m_windowDims = make_int2(720, 480);
@@ -131,6 +132,11 @@ class Demo
 //    m_renderer.setSpriteSizeScale(1.0f);
   
     m_displayTexProg = new GLSLProgram(passThruVS, texture2DPS);
+
+//    m_renderer.setColorMap(reinterpret_cast<float3*>(colorMap),256,256);
+
+    m_renderer.setWidth (m_windowDims.x);
+    m_renderer.setHeight(m_windowDims.y);
   }
     ~Demo() 
     {
@@ -240,6 +246,10 @@ class Demo
 
 #if 0
       m_renderer.genImage();
+      const int width  = m_renderer.getWidth();
+      const int height = m_renderer.getHeight();
+      const float4 *img = &m_renderer.getImage()[0];
+      m_texture = createTexture(GL_TEXTURE_2D, width, height, GL_RGBA, GL_RGBA, (void*)img);
 #else
       const int width = 256;
       const int height = 256;
@@ -252,15 +262,11 @@ class Demo
           data[2 + 4*(i + width*j)] = colorMap[j][i][2]/255.0f;
           data[3 + 4*(i + width*j)] = 1.0f;
         }
-        m_texture = createTexture(GL_TEXTURE_2D, width, height, GL_RGBA, GL_RGBA, data);
-
-
-
+      m_texture = createTexture(GL_TEXTURE_2D, width, height, GL_RGBA, GL_RGBA, data);
 #endif
       
       displayTexture(m_texture);
       drawStats();
-      //glutPostRedisplay();
     }
 
     void mouse(int button, int state, int x, int y)
@@ -324,6 +330,8 @@ class Demo
       fitCamera();
       glMatrixMode(GL_MODELVIEW);
       glViewport(0, 0, m_windowDims.x, m_windowDims.y);
+      m_renderer.setWidth (w);
+      m_renderer.setHeight(h);
     }
 
     void fitCamera() {
