@@ -48,6 +48,9 @@ ifeq ($(ENGINE),density)
 #	OBJ += density/depthSort.cu_o
 	OBJ += density/depthSort.o
 endif
+ifeq ($(ENGINE),splotch)
+	OBJ += density/GLSLProgram.o
+endif
 
 PROG= renderer
 

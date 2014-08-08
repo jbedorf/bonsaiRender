@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include "GLSLProgram.h"
 
 #ifdef WIN32
 #define NOMINMAX
@@ -23,8 +24,8 @@
 #include "vector_math.h"
 #include <cstdarg>
 
+#include "colorMap"
 #include "Splotch.h"
-
 
 #include <sys/time.h>
 static inline double rtc(void)
@@ -41,6 +42,26 @@ static inline double rtc(void)
 
 unsigned long long fpsCount;
 double timeBegin;
+
+const char passThruVS[] = 
+{    
+" void main()                                                        \n "
+" {                                                                  \n "
+"   gl_Position = gl_Vertex;                                         \n "
+"   gl_TexCoord[0] = gl_MultiTexCoord0;                              \n "
+"   gl_FrontColor = gl_Color;                                        \n "
+" }                                                                  \n "
+};
+
+const char texture2DPS[]  =
+{
+" uniform sampler2D tex;                                             \n "
+" void main()                                                        \n "
+" {                                                                  \n "
+"   vec4 c = texture2D(tex, gl_TexCoord[0].xy);                      \n "
+"   gl_FragColor = c;                                                \n "
+" }                                                                  \n "
+};
 
 void beginDeviceCoords(void)
 {
@@ -93,7 +114,9 @@ class Demo
       m_inertia(0.1f),
       m_paused(false), 
       m_displayFps(true),
-      m_displaySliders(true)
+      m_displaySliders(true),
+      m_texture(0),
+      m_displayTexProg(0)
 //      m_params(m_renderer.getParams())
   {
     m_windowDims = make_int2(720, 480);
@@ -106,13 +129,50 @@ class Demo
 //    float4 color = make_float4(1.0f, 1.0f, 1.0f, 1.0f);
 //    m_renderer.setBaseColor(color);
 //    m_renderer.setSpriteSizeScale(1.0f);
+  
+    m_displayTexProg = new GLSLProgram(passThruVS, texture2DPS);
   }
-    ~Demo() {}
+    ~Demo() 
+    {
+      delete m_displayTexProg;
+    }
 
     void cycleDisplayMode() {}
 
     void toggleSliders() { m_displaySliders = !m_displaySliders; }                        
     void toggleFps()     { m_displayFps = !m_displayFps; }                        
+    void drawQuad(const float s = 1.0f, const float z = 0.0f)
+    {
+      glBegin(GL_QUADS);
+      glTexCoord2f(0.0, 0.0); glVertex3f(-s, -s, z);
+      glTexCoord2f(1.0, 0.0); glVertex3f(s, -s, z);
+      glTexCoord2f(1.0, 1.0); glVertex3f(s, s, z);
+      glTexCoord2f(0.0, 1.0); glVertex3f(-s, s, z);
+      glEnd();
+    }
+
+    void displayTexture(const GLuint tex)
+    {
+      m_displayTexProg->enable();
+      m_displayTexProg->bindTexture("tex", tex, GL_TEXTURE_2D, 0);
+      drawQuad();
+      m_displayTexProg->disable();
+    }
+
+    GLuint createTexture(GLenum target, int w, int h, GLint internalformat, GLenum format, void *data)
+    {
+      GLuint texid;
+      glGenTextures(1, &texid);
+      glBindTexture(target, texid);
+
+      glTexParameteri(target, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+      glTexParameteri(target, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+      glTexParameteri(target, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+      glTexParameteri(target, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
+      glTexImage2D(target, 0, internalformat, w, h, 0, format, GL_FLOAT, data);
+      return texid;
+    }
 
     void drawStats()
     {
@@ -131,7 +191,7 @@ class Demo
       glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
       glEnable(GL_BLEND);
       glDisable(GL_DEPTH_TEST);
-      glColor4f(0.0f, 1.0f, 0.0f, 1.0f);
+      glColor4f(1.0f, 1.0f, 1.0f, 1.0f);
 
       float x = 100.0f;
       float y = glutGet(GLUT_WINDOW_HEIGHT)*4.0f - 200.0f;
@@ -178,40 +238,31 @@ class Demo
       }
 #endif
 
-      drawStats();
 #if 0
       m_renderer.genImage();
 #else
-      glMatrixMode(GL_PROJECTION);
-      glLoadIdentity();
-      gluPerspective(60,1,1,10);
-      gluLookAt(
-          0,0,-2,  /* eye */
-          0,0, 2,  /* center */
-          0,1, 0   /* up */
-          );
-      glMatrixMode(GL_MODELVIEW);
-      glLoadIdentity();
+      const int width = 256;
+      const int height = 256;
+      float *data = new float[4*width*height];
+      for (int j = 0; j < height; j++)
+        for (int i = 0; i < width; i++)
+        {
+          data[0 + 4*(i + width*j)] = colorMap[j][i][0]/255.0f;
+          data[1 + 4*(i + width*j)] = colorMap[j][i][1]/255.0f;
+          data[2 + 4*(i + width*j)] = colorMap[j][i][2]/255.0f;
+          data[3 + 4*(i + width*j)] = 1.0f;
+        }
+        m_texture = createTexture(GL_TEXTURE_2D, width, height, GL_RGBA, GL_RGBA, data);
 
-      glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-      glPushAttrib(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-      glEnable(GL_TEXTURE_2D);
 
-      glBegin(GL_QUADS);
-      glNormal3f(0.0f, 0.0f, 1.0f);
-      glTexCoord2d(1, 1); glVertex3f(0.0f, 0.0f, 0.0f);
-      glTexCoord2d(1, 0); glVertex3f(0.0f, 1.0f, 0.0f);
-      glTexCoord2d(0, 0); glVertex3f(1.0f, 1.0f, 0.0f);
-      glTexCoord2d(0, 1); glVertex3f(1.0f, 0.0f, 0.0f);
-      glEnd();
-
-      glDisable(GL_TEXTURE_2D);
-      glPopAttrib();
-
-      glFlush();
-      glutSwapBuffers();
 
 #endif
+      
+    //  displayTexture(m_texture);
+      drawStats();
+      //glutPostRedisplay();
+      glutSwapBuffers();
+      glFlush();
     }
 
     void mouse(int button, int state, int x, int y)
@@ -351,6 +402,10 @@ class Demo
 
     float m_spriteSize;
     float m_spriteIntensity;
+
+    unsigned int m_texture;
+
+    GLSLProgram *m_displayTexProg;
 };
 
 Demo *theDemo = NULL;
@@ -455,9 +510,9 @@ void initGL(int argc, char** argv)
   // First initialize OpenGL context, so we can properly set the GL for CUDA.
   // This is necessary in order to achieve optimal performance with OpenGL/CUDA interop.
   glutInit(&argc, argv);
-  glutInitDisplayMode(GLUT_RGB | GLUT_DEPTH | GLUT_DOUBLE);
   //glutInitWindowSize(720, 480);
   glutInitWindowSize(1024, 768);
+  glutInitDisplayMode(GLUT_RGB | GLUT_DEPTH | GLUT_DOUBLE);
   glutCreateWindow("Bonsai Tree-code Gravitational N-body Simulation");
   //if (bFullscreen)
   //  glutFullScreen();
