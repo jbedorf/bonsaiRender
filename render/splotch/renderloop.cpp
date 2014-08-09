@@ -405,6 +405,7 @@ class Demo
       const bool hasRHO = rhoMax > 0.0f;
       const float scaleVEL =          1.0/(velMax - velMin);
       const float scaleRHO = hasRHO ? 1.0/(rhoMax - rhoMin) : 0.0;
+      assert(hasRHO);
 
       m_renderer.resize(n);
 #pragma omp parallel for
@@ -417,6 +418,8 @@ class Demo
         float rho = m_idata.attribute(RendererData::RHO,i);
         vel = (vel - velMin) * scaleVEL;
         rho = hasRHO ? (rho - rhoMin) * scaleRHO : 0.5f;
+        assert(vel >= 0.0f && vel <= 1.0f);
+        assert(rho >= 0.0f && rho <= 1.0f);
         vtx.attr  = Splotch::attr_t(rho, vel, m_spriteIntensity, m_idata.type(i));
       }
     }

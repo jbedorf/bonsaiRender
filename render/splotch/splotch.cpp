@@ -195,15 +195,12 @@ void Splotch::render()
     if (tid == 0)
       fprintf(stderr, "rasterize begin .. \n");
 
-#pragma omp for schedule(runtime)
-    for (int i = 0; i < np; i++)
+    const int ipert  = (np+nt-1)/nt;
+    const int ibeg = tid * ipert;
+    const int iend = std::min(ibeg+ipert, np);
+
+    for (int i = ibeg; i < iend; i++)
     {
-#if 0
-      fprintf(stderr, "i:= %d  np= %d: x= %g  y= %g  h= %g\n",
-          i, np, 
-          vtxArrayView[i].pos.x, vtxArrayView[i].pos.y, 
-          vtxArrayView[i].pos.h);
-#endif
       rasterize(vtxArrayView[i], range, fb);
     }
 
