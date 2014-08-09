@@ -63,6 +63,26 @@ const char texture2DPS[]  =
 " }                                                                  \n "
 };
 
+const char splotchVS[] =
+{
+  " attribute float spriteSize;                                      \n "
+  " uniform float pointScale;                                        \n "
+  " void main()                                                      \n "
+  " {                                                                \n "
+  "    vec4 wpos = vec4(gl_Vertex.xyz, 1.0);                         \n "
+  "    gl_Position = gl_ModelViewPorjectionMatrix * wpos;            \n "
+  "    vec4 eyeSpacePos = gl_ModelViewMatrix * wpos;                 \n "
+  "    float dist = length(eyeSpacePos.xyz);                         \n "
+  "    float pointSize = spriteSize*pointScale;                      \n "
+  "    gl_PointSize = max(1.0, pointSize / dist);                    \n "
+  "    gl_FrontColor = vec4(gl_Color.xyz, 1.0);                      \n "
+  " }                                                                \n "
+};
+
+const char splotchPS[] =
+{
+};
+
 void beginDeviceCoords(void)
 {
   glMatrixMode(GL_PROJECTION);
