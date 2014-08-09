@@ -232,17 +232,40 @@ void Splotch::finalize()
     for (int i = 0; i < width; i++)
     {
       const int idx = j*width + i;
-      const float4 src = image[idx];
+      float4 src = image[idx];
       float4 dst;
 #if 0
       fprintf(stderr, " (%3d,%3d): %g %g %g \n",
           i,j, src.x,src.y,src.z);
 #endif
 
+#if 1
+      const float scale = 0.05f;
+      const float gamma = 0.5f;
+      src.x *= scale;
+      src.y *= scale;
+      src.z *= scale;
+      src.x = std::pow(src.x, gamma);
+      src.y = std::pow(src.y, gamma);
+      src.z = std::pow(src.z, gamma);
+#endif
+
       dst.x = 1.0f - exp(-src.x);
       dst.y = 1.0f - exp(-src.y);
       dst.z = 1.0f - exp(-src.z);
       dst.w = 1.0f;
+
+#if 0
+      const float scale = 1.0f;
+      const float gamma = 0.2f;
+      dst.x *= scale;
+      dst.y *= scale;
+      dst.z *= scale;
+      dst.x = std::pow(dst.x, gamma);
+      dst.y = std::pow(dst.y, gamma);
+      dst.z = std::pow(dst.z, gamma);
+#endif
+      
 
       image[idx] = dst;
     }

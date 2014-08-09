@@ -418,7 +418,7 @@ void main()                                                        \n
 {                                                                  \n
     vec4 c = texture2D(tex, gl_TexCoord[0].xy);                    \n
     c.rgb *= scale;
-	c.rgb = pow(c.rgb, gamma);
+    c.rgb = pow(c.rgb, gamma);
     gl_FragColor = c;                                              \n
 }                                                                  \n
 );

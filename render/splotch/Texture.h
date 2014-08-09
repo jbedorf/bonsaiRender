@@ -73,8 +73,8 @@ class Texture2D
       using std::min;
       s = max(0.0f,min(1.0f,s));
       t = max(0.0f,min(1.0f,t));
-      const float x = s*(width-1);
-      const float y = t*(height-1);
+      const float x = s*(width-2);
+      const float y = t*(height-2);
       const float x1 = floor(x);
       const float y1 = floor(y);
       const float x2 = min(x1+1.0f,width-1);

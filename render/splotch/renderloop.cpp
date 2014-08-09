@@ -257,23 +257,9 @@ class Demo
       const float4 *img = &m_renderer.getImage()[0];
       m_texture = createTexture(GL_TEXTURE_2D, width, height, GL_RGBA, GL_RGBA, (void*)img);
 #else
-#if 0
-      const int width = 256;
-      const int height = 256;
-      float *data = new float[4*width*height];
-      for (int j = 0; j < height; j++)
-        for (int i = 0; i < width; i++)
-        {
-          data[0 + 4*(i + width*j)] = colorMap[j][i][0]/255.0f;
-          data[1 + 4*(i + width*j)] = colorMap[j][i][1]/255.0f;
-          data[2 + 4*(i + width*j)] = colorMap[j][i][2]/255.0f;
-          data[3 + 4*(i + width*j)] = 1.0f;
-        }
-#else
-      const int width = 256;
-      const int height = 256;
-      float *data = new float[4*width*height];
-
+      const int width = 128;
+      const int height = 128;
+      std::vector<float> data(4*width*height);
       {
         using ShortVec3       = MathArray<float,3>;
         std::vector<ShortVec3> tex(256*256);
@@ -290,16 +276,15 @@ class Demo
         for (int j = 0; j < height; j++)
           for (int i = 0; i < width; i++)
           {
-            const auto f = texMap(1.0f*i/width, j*1.0f/height);
+            auto f = texMap(1.0f*i/width, j*1.0f/height);
+//            f = texMap(1.0f, j*1.0f/height);
             data[0 + 4*(i + width*j)] = f[0];
             data[1 + 4*(i + width*j)] = f[1];
             data[2 + 4*(i + width*j)] = f[2];
             data[3 + 4*(i + width*j)] = 1.0f;
           }
       }
-#endif
-      m_texture = createTexture(GL_TEXTURE_2D, width, height, GL_RGBA, GL_RGBA, data);
-      delete [] data;
+      m_texture = createTexture(GL_TEXTURE_2D, width, height, GL_RGBA, GL_RGBA, &data[0]);
 #endif
       
       displayTexture(m_texture);
@@ -412,11 +397,13 @@ class Demo
       {
         auto vtx = m_renderer.vertex_at(i);
         vtx.pos = Splotch::pos3d_t(m_idata.posx(i), m_idata.posy(i), m_idata.posz(i), m_spriteSize);
-        vtx.pos.h = m_idata.attribute(RendererData::H,i)*2;
+//        vtx.pos.h = m_idata.attribute(RendererData::H,i)*2;
+//        vtx.pos.h *= m_spriteScale;
         vtx.color = make_float4(1.0f);
         float vel = m_idata.attribute(RendererData::VEL,i);
         float rho = m_idata.attribute(RendererData::RHO,i);
         vel = (vel - velMin) * scaleVEL;
+        vel = std::pow(vel, 1.0f);
         rho = hasRHO ? (rho - rhoMin) * scaleRHO : 0.5f;
         assert(vel >= 0.0f && vel <= 1.0f);
         assert(rho >= 0.0f && rho <= 1.0f);
