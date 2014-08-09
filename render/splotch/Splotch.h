@@ -70,14 +70,14 @@ class Splotch
     }
    
     /* getters/setters */ 
-    void  setColorMap(const float3 *img, const int w, const int h)  
+    void  setColorMap(const float3 *img, const int w, const int h, const float scale = 1.0f)
     { 
       std::vector<ShortVec3> tex(w*h);
       for (int i = 0; i < w*h; i++)
       {
-        tex[i][0] = img[i].x;
-        tex[i][1] = img[i].y;
-        tex[i][2] = img[i].z;
+        tex[i][0] = img[i].x * scale;
+        tex[i][1] = img[i].y * scale;
+        tex[i][2] = img[i].z * scale;
       }
       colorMapTexPtr = new Texture2D<ShortVec3>(&tex[0], w, h); 
     }

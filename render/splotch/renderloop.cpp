@@ -133,7 +133,7 @@ class Demo
   
     m_displayTexProg = new GLSLProgram(passThruVS, texture2DPS);
 
-    m_renderer.setColorMap(reinterpret_cast<float3*>(colorMap),256,256);
+    m_renderer.setColorMap(reinterpret_cast<float3*>(colorMap),256,256, 1.0f/255.0f);
 
     m_renderer.setWidth (m_windowDims.x);
     m_renderer.setHeight(m_windowDims.y);

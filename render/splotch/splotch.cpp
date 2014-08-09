@@ -38,12 +38,13 @@ void Splotch::transform(const bool perspective)
     const float depth = posV.z;
     const float dist  = length(posV);
     float3 col = make_float3(-1.0f);
-    posV.w = -1.0;
 
 
     if (depth >= depthMin && depth <= depthMax)
     {
       posV = projection(posV);
+      posV.x *= 1.0f/posV.z;
+      posV.y *= 1.0f/posV.z;
 
       posV.x = (posV.x + 1.0f) * 0.5f * width;
       posV.y = (1.0f - posV.y) * 0.5f * height;
@@ -71,6 +72,8 @@ void Splotch::transform(const bool perspective)
       else
         posV.w = -1.0;
     }
+    else
+      posV.w = -1.0f;
 
     depthArray  [i] = depth;
     vtxArrayView[i] = 
@@ -229,6 +232,10 @@ void Splotch::finalize()
       const int idx = j*width + i;
       const float4 src = image[idx];
       float4 dst;
+#if 0
+      fprintf(stderr, " (%3d,%3d): %g %g %g \n",
+          i,j, src.x,src.y,src.z);
+#endif
 
       dst.x = 1.0f - exp(-src.x);
       dst.y = 1.0f - exp(-src.y);
