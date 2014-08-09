@@ -1,5 +1,17 @@
 #include "Splotch.h"
 
+static inline float Wkernel(const float q2)
+{
+  const float q = std::sqrt(q2);
+  const float sigma = 8.0f/M_PI;
+
+  const float qm = 1.0f - q;
+  if      (q < 0.5f) return sigma * (1.0f + (-6.0f)*q*q*qm);
+  else if (q < 1.0f) return sigma * 2.0f*qm*qm*qm;
+
+  return 0.0f;
+}
+
 template<typename T>
 static inline float4 lMatVec(const T m[4][4], const float4 pos)
 {
@@ -130,7 +142,6 @@ Splotch::Quad Splotch::rasterize(const VertexView &vtx, const Splotch::Quad &ran
 {
   using std::max;
   using std::min;
-  using std::exp;
   using std::floor;
   using std::ceil;
 
@@ -145,25 +156,22 @@ Splotch::Quad Splotch::rasterize(const VertexView &vtx, const Splotch::Quad &ran
   const float width  = range.x1 - range.x0;
   const float height = range.y1 - range.y0;
   for (float iy = q.y0; iy < q.y1; iy++)
-  {
-    const float dy   = iy - vtx.pos.y;
-    const float qy   = dy*dy * invh2;
-    const float facy = exp(-qy);
     for(float ix = q.x0; ix < q.x1; ix++)
     {
       const float dx = ix - vtx.pos.x;
-      const float qx = dx*dx * invh2;
-      const float facx = exp(-qx);
+      const float dy = iy - vtx.pos.y;
+      const float q2 = (dx*dx + dy*dy) * invh2;
+      const float fac = Wkernel(q2);
 
       float4 color = vtx.color;
-      color.w = facx*facy; /* alpha */
+      color.w = fac; /* alpha */
 
       const int idx = (ix - range.x0) + width*(iy - range.y0);
       assert(idx >= 0);
       assert(idx < width*height);
       fb[idx] = Blending::getColor<Blending::ONE,Blending::SRC_ALPHA>(fb[idx],color);
     }
-  }
+
   return q;
 }
 

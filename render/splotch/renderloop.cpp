@@ -412,6 +412,7 @@ class Demo
       {
         auto vtx = m_renderer.vertex_at(i);
         vtx.pos = Splotch::pos3d_t(m_idata.posx(i), m_idata.posy(i), m_idata.posz(i), m_spriteSize);
+        vtx.pos.h = m_idata.attribute(RendererData::H,i)*2;
         vtx.color = make_float4(1.0f);
         float vel = m_idata.attribute(RendererData::VEL,i);
         float rho = m_idata.attribute(RendererData::RHO,i);

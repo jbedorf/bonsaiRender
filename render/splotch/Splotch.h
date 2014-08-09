@@ -59,7 +59,7 @@ class Splotch
     Splotch() :
       spriteSizeScale(1.0f),
       depthMin(0.2f),
-      depthMax(2000.0f),
+      depthMax(1.0f),
       minHpix(0.1f),
       maxHpix(100.0f),
       colorMapTexPtr(NULL)
