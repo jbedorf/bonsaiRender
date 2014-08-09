@@ -70,7 +70,6 @@ const char splotchVS[] =
   "   gl_FrontColor = vec4(gl_Color.xyz, 1.0);                       \n "
   " }                                                                \n "
 };
-
 const char splotchPS[] =
 {
   " uniform sampler2D spriteTex; \n" 
