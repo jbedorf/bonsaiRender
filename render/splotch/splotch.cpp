@@ -1,22 +1,22 @@
 #include "Splotch.h"
 
+template<typename T>
+static inline float4 lMatVec(const T m[4][4], const float4 pos)
+{
+  return make_float4(
+      m[0][0]*pos.x + m[1][0]*pos.y + m[2][0]*pos.z + m[3][0]*pos.w,
+      m[0][1]*pos.x + m[1][1]*pos.y + m[2][1]*pos.z + m[3][1]*pos.w,
+      m[0][2]*pos.x + m[1][2]*pos.y + m[2][2]*pos.z + m[3][2]*pos.w,
+      m[0][3]*pos.x + m[1][3]*pos.y + m[2][3]*pos.z + m[3][3]*pos.w);
+}
+
 float4 Splotch::modelView(const float4 pos) const
 {
-  auto &m = modelViewMatrix;
-  return make_float4(
-      m[0][0]*pos.x + m[0][1]*pos.y + m[0][2]*pos.z + m[0][3]*pos.w,
-      m[1][0]*pos.x + m[1][1]*pos.y + m[1][2]*pos.z + m[1][3]*pos.w,
-      m[2][0]*pos.x + m[2][1]*pos.y + m[2][2]*pos.z + m[2][3]*pos.w,
-      m[3][0]*pos.x + m[3][1]*pos.y + m[3][2]*pos.z + m[3][3]*pos.w);
+  return lMatVec(modelViewMatrix,pos);
 }
 float4 Splotch::projection(const float4 pos) const
 {
-  auto &m = projectionMatrix;
-  return make_float4(
-      m[0][0]*pos.x + m[0][1]*pos.y + m[0][2]*pos.z + m[0][3]*pos.w,
-      m[1][0]*pos.x + m[1][1]*pos.y + m[1][2]*pos.z + m[1][3]*pos.w,
-      m[2][0]*pos.x + m[2][1]*pos.y + m[2][2]*pos.z + m[2][3]*pos.w,
-      m[3][0]*pos.x + m[3][1]*pos.y + m[3][2]*pos.z + m[3][3]*pos.w);
+  return lMatVec(projectionMatrix,pos);
 }
 
 void Splotch::transform(const bool perspective)
@@ -33,24 +33,28 @@ void Splotch::transform(const bool perspective)
   for (int i = 0; i < np; i++)
   {
     const auto &vtx = vtxArray[i];
-    const float4 posO = make_float4(vtx.pos.x,vtx.pos.y,vtx.pos.z,1.0f);
-    float4 posV = modelView(posO);
-    const float depth = posV.z;
-    const float dist  = length(posV);
+    const float4 pos0 = make_float4(vtx.pos.x,vtx.pos.y,vtx.pos.z,1.0f);
+    const float4 posO = modelView(pos0);
+    const float4 posP = projection(posO);
+
+    const float  wclip = -1.0f/posO.z;
+    float4 posV = make_float4(posP.x*wclip, posP.y*wclip, posP.z*wclip, -1.0f);
     float3 col = make_float3(-1.0f);
 
-
+    const float depth = posV.z;
     if (depth >= depthMin && depth <= depthMax)
     {
-      posV = projection(posV);
-      posV.x *= 1.0f/posV.z;
-      posV.y *= 1.0f/posV.z;
 
+#if 0
       posV.x = (posV.x + 1.0f) * 0.5f * width;
       posV.y = (1.0f - posV.y) * 0.5f * height;
-        
-      posV.w = vtx.pos.h * 0.5f * width / dist;
+#else
+      posV.x = (posV.x + 1.0f)*0.5f*width;
+      posV.y = (posV.y + 1.0f)*0.5f*height;
+#endif
+      posV.w = vtx.pos.h * 0.5f * width * wclip;
       assert(vtx.pos.h > 0.0f);
+
       using std::sqrt;
       using std::max;
       posV.w = sqrt(posV.w*posV.w + minHpix*minHpix);
@@ -72,8 +76,6 @@ void Splotch::transform(const bool perspective)
       else
         posV.w = -1.0;
     }
-    else
-      posV.w = -1.0f;
 
     depthArray  [i] = depth;
     vtxArrayView[i] = 

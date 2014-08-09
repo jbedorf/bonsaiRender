@@ -10,7 +10,7 @@ CXXFLAGS += -Wno-reorder
 CXXFLAGS += -Wno-write-strings
 CFLAGS =  -Wall
 
-OPT += -O0 -g
+OPT += -O3 -g
 
 CFLAGS += $(OPT)
 CXXFLAGS += $(OPT)
