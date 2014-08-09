@@ -244,7 +244,11 @@ class Demo
       }
 #endif
 
-#if 0
+#if 1
+      glGetDoublev( GL_MODELVIEW_MATRIX, (GLdouble*)m_modelView);
+      glGetDoublev(GL_PROJECTION_MATRIX, (GLdouble*)m_projection);
+      m_renderer. setModelViewMatrix(m_modelView);
+      m_renderer.setProjectionMatrix(m_projection);
       m_renderer.genImage();
       const int width  = m_renderer.getWidth();
       const int height = m_renderer.getHeight();
@@ -412,6 +416,9 @@ class Demo
     unsigned int m_texture;
 
     GLSLProgram *m_displayTexProg;
+
+    double m_modelView [4][4];
+    double m_projection[4][4];
 };
 
 Demo *theDemo = NULL;
