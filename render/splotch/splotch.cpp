@@ -38,6 +38,7 @@ void Splotch::transform(const bool perspective)
     const float depth = posV.z;
     const float dist  = length(posV);
     float3 col = make_float3(-1.0f);
+    posV.w = -1.0;
 
     if (depth >= depthMax && depth <= depthMax)
     {
@@ -45,18 +46,21 @@ void Splotch::transform(const bool perspective)
 
       posV.x = (posV.x + 1.0f) * 0.5f * width;
       posV.y = (1.0f - posV.y) * 0.5f * height;
-      posV.w = -1.0;
+        
+      posV.w = vtx.pos.h * 0.5 * width / dist;
+      using std::sqrt;
+      using std::max;
+      posV.w *= sqrt(posV.w*posV.w + minHpix*minHpix)/posV.w;
+      posV.w  = min(posV.w, maxHpix);
 
-      if ( posV.x - posV.w <= width
+      if (   posV.x - posV.w <= width
           && posV.x + posV.w >= 0
           && posV.y - posV.w <= height
           && posV.y + posV.w >= 0)
       {
-        posV.w = vtx.pos.h * 0.5 * width / dist;
-        using std::sqrt;
-        using std::max;
-        posV.w *= sqrt(posV.w*posV.w + minHpix*minHpix)/posV.w;
-        posV.w  = min(posV.w, maxHpix);
+
+        fprintf(stderr, "i:= %d  np= %d: x= %g  y= %g  h= %g\n",
+            i, np, posV.x, posV.y, posV.w);
 
         const float s = vtx.attr.rho;
         const float t = vtx.attr.vel;
@@ -65,6 +69,8 @@ void Splotch::transform(const bool perspective)
         const auto &tex = colorMapTex(s,t);
         col = make_float3(tex[0],tex[1],tex[2]);
       }
+      else
+        posV.w = -1.0;
     }
 
     depthArray  [i] = depth;
@@ -176,10 +182,25 @@ void Splotch::render()
     range.y0 = 0;
     range.y1 = height;
 
+    if (tid == 0)
+      fprintf(stderr, "rasterize begin .. \n");
 
 #pragma omp for schedule(runtime)
     for (int i = 0; i < np; i++)
+    {
+#if 0
+      fprintf(stderr, "i:= %d  np= %d: x= %g  y= %g  h= %g\n",
+          i, np, 
+          vtxArrayView[i].pos.x, vtxArrayView[i].pos.y, 
+          vtxArrayView[i].pos.h);
+#endif
       rasterize(vtxArrayView[i], range, fb);
+    }
+
+    if (tid == 0)
+      fprintf(stderr, "rasterize end .. \n");
+
+#pragma omp barrier
 
 #pragma omp for schedule(runtime) collapse(2)
     for (int j = 0; j < height; j++)
@@ -217,8 +238,12 @@ void Splotch::finalize()
 
 void Splotch::genImage(const bool perspective)
 {
+  fprintf(stderr , " --- transform \n");
   transform(perspective);
+  fprintf(stderr , " --- depthSort \n");
   depthSort();
+  fprintf(stderr , " --- render \n");
   render();
+  fprintf(stderr , " --- finalize \n");
   finalize();
 }
