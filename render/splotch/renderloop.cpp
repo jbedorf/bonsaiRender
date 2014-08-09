@@ -137,7 +137,7 @@ class Demo
 
     m_renderer.setWidth (m_windowDims.x);
     m_renderer.setHeight(m_windowDims.y);
-    m_spriteSize = 0.02f;
+    m_spriteSize = 0.1f;
   }
     ~Demo() 
     {
@@ -257,6 +257,7 @@ class Demo
       const float4 *img = &m_renderer.getImage()[0];
       m_texture = createTexture(GL_TEXTURE_2D, width, height, GL_RGBA, GL_RGBA, (void*)img);
 #else
+#if 0
       const int width = 256;
       const int height = 256;
       float *data = new float[4*width*height];
@@ -268,7 +269,37 @@ class Demo
           data[2 + 4*(i + width*j)] = colorMap[j][i][2]/255.0f;
           data[3 + 4*(i + width*j)] = 1.0f;
         }
+#else
+      const int width = 256;
+      const int height = 256;
+      float *data = new float[4*width*height];
+
+      {
+        using ShortVec3       = MathArray<float,3>;
+        std::vector<ShortVec3> tex(256*256);
+        int idx = 0;
+        for (int i = 0; i < 256; i++)
+          for (int j = 0; j < 256; j++)
+          {
+            tex[idx][0] = colorMap[i][j][0]/255.0f;
+            tex[idx][1] = colorMap[i][j][1]/255.0f;
+            tex[idx][2] = colorMap[i][j][2]/255.0f;
+            idx++;
+          }
+        Texture2D<ShortVec3> texMap(&tex[0],256,256);
+        for (int j = 0; j < height; j++)
+          for (int i = 0; i < width; i++)
+          {
+            const auto f = texMap(1.0f*i/width, j*1.0f/height);
+            data[0 + 4*(i + width*j)] = f[0];
+            data[1 + 4*(i + width*j)] = f[1];
+            data[2 + 4*(i + width*j)] = f[2];
+            data[3 + 4*(i + width*j)] = 1.0f;
+          }
+      }
+#endif
       m_texture = createTexture(GL_TEXTURE_2D, width, height, GL_RGBA, GL_RGBA, data);
+      delete [] data;
 #endif
       
       displayTexture(m_texture);

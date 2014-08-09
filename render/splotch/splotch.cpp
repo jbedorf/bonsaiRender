@@ -52,11 +52,12 @@ void Splotch::transform(const bool perspective)
       posV.x = (posV.x + 1.0f)*0.5f*width;
       posV.y = (posV.y + 1.0f)*0.5f*height;
 #endif
-      posV.w = vtx.pos.h * 0.5f * width * wclip;
-      assert(vtx.pos.h > 0.0f);
+      using std::abs;
+      posV.w = vtx.pos.h * 0.5f * width *abs(wclip);
+      assert(posV.w > 0.0f);
 
       using std::sqrt;
-      using std::max;
+      using std::min;
       posV.w = sqrt(posV.w*posV.w + minHpix*minHpix);
       posV.w = min(posV.w, maxHpix);
       assert(posV.w > 0.0f);

@@ -27,9 +27,9 @@ class Texture1D
       using std::max;
       using std::min;
       s = max(0.0f,min(1.0f,s));
-      const float x = s*size;
+      const float x = s*(size-1);
       const float x1 = floor(x);
-      const float x2 = min(x1+1.0f,size);
+      const float x2 = min(x1+1.0f,size-1);
 
       const T c1 = data[static_cast<int>(x1)];
       const T c2 = data[static_cast<int>(x2)];
@@ -73,12 +73,12 @@ class Texture2D
       using std::min;
       s = max(0.0f,min(1.0f,s));
       t = max(0.0f,min(1.0f,t));
-      const float x = s*width;
-      const float y = t*height;
+      const float x = s*(width-1);
+      const float y = t*(height-1);
       const float x1 = floor(x);
       const float y1 = floor(y);
-      const float x2 = min(x1+1.0f,width);
-      const float y2 = min(y1+1.0f,height);
+      const float x2 = min(x1+1.0f,width-1);
+      const float y2 = min(y1+1.0f,height-1);
 
       const T c11 = data[static_cast<int>(y1*width + x1)];
       const T c12 = data[static_cast<int>(y2*width + x1)];
