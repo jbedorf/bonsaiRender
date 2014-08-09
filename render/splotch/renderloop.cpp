@@ -137,6 +137,7 @@ class Demo
 
     m_renderer.setWidth (m_windowDims.x);
     m_renderer.setHeight(m_windowDims.y);
+    m_spriteSize = 0.02f;
   }
     ~Demo() 
     {

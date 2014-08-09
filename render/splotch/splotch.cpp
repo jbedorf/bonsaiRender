@@ -40,28 +40,27 @@ void Splotch::transform(const bool perspective)
     float3 col = make_float3(-1.0f);
     posV.w = -1.0;
 
-    if (depth >= depthMax && depth <= depthMax)
+
+    if (depth >= depthMin && depth <= depthMax)
     {
       posV = projection(posV);
 
       posV.x = (posV.x + 1.0f) * 0.5f * width;
       posV.y = (1.0f - posV.y) * 0.5f * height;
         
-      posV.w = vtx.pos.h * 0.5 * width / dist;
+      posV.w = vtx.pos.h * 0.5f * width / dist;
+      assert(vtx.pos.h > 0.0f);
       using std::sqrt;
       using std::max;
-      posV.w *= sqrt(posV.w*posV.w + minHpix*minHpix)/posV.w;
-      posV.w  = min(posV.w, maxHpix);
+      posV.w = sqrt(posV.w*posV.w + minHpix*minHpix);
+      posV.w = min(posV.w, maxHpix);
+      assert(posV.w > 0.0f);
 
       if (   posV.x - posV.w <= width
           && posV.x + posV.w >= 0
           && posV.y - posV.w <= height
           && posV.y + posV.w >= 0)
       {
-
-        fprintf(stderr, "i:= %d  np= %d: x= %g  y= %g  h= %g\n",
-            i, np, posV.x, posV.y, posV.w);
-
         const float s = vtx.attr.rho;
         const float t = vtx.attr.vel;
         assert(s>=0.0f && s<=1.0f);
@@ -126,17 +125,20 @@ Splotch::Quad Splotch::rasterize(const VertexView &vtx, const Splotch::Quad &ran
   using std::max;
   using std::min;
   using std::exp;
+  using std::floor;
+  using std::ceil;
 
   Quad q;
-  q.x0  = max(range.x0, vtx.pos.x - vtx.pos.h);
-  q.x1  = min(range.x1, vtx.pos.x + vtx.pos.h);
-  q.y0  = max(range.y0, vtx.pos.y - vtx.pos.h);
-  q.y1  = min(range.y1, vtx.pos.y + vtx.pos.h);
+  q.x0  = max(range.x0, floor(vtx.pos.x - vtx.pos.h));
+  q.x1  = min(range.x1, ceil (vtx.pos.x + vtx.pos.h));
+  q.y0  = max(range.y0, floor(vtx.pos.y - vtx.pos.h));
+  q.y1  = min(range.y1, ceil (vtx.pos.y + vtx.pos.h));
 
-  int lineIdx = (q.y0-range.y0)*width;
   const float invh  = 1.0f/vtx.pos.h;
   const float invh2 = invh*invh;
-  for (float iy = q.y0; iy < q.y1; iy++, lineIdx += width)
+  const float width  = range.x1 - range.x0;
+  const float height = range.y1 - range.y0;
+  for (float iy = q.y0; iy < q.y1; iy++)
   {
     const float dy   = iy - vtx.pos.y;
     const float qy   = dy*dy * invh2;
@@ -150,7 +152,9 @@ Splotch::Quad Splotch::rasterize(const VertexView &vtx, const Splotch::Quad &ran
       float4 color = vtx.color;
       color.w = facx*facy; /* alpha */
 
-      const int idx = lineIdx + (ix - range.x0);
+      const int idx = (ix - range.x0) + width*(iy - range.y0);
+      assert(idx >= 0);
+      assert(idx < width*height);
       fb[idx] = Blending::getColor<Blending::ONE,Blending::SRC_ALPHA>(fb[idx],color);
     }
   }
