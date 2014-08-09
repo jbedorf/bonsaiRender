@@ -10,6 +10,14 @@
 #include "Blending.h"
 #include "MathArray.h"
 
+#include <GL/glew.h>
+#if defined(__APPLE__) || defined(MACOSX)
+#include <GLUT/glut.h>
+#else
+#include <GL/freeglut.h>
+#endif
+#include "GLSLProgram.h"
+
 
 class Splotch
 {
@@ -28,7 +36,6 @@ class Splotch
     using VertexView      = VertexArrayView::Vertex;
     using ShortVec3       = MathArray<float,3>;
     
-    bool useGL;
 
     VertexArray     vtxArray;
     VertexArrayView vtxArrayView;
@@ -57,20 +64,11 @@ class Splotch
 
     Texture2D<ShortVec3> *colorMapTexPtr;
 
+    GLSLProgram *m_splotchProg;
+
   public:
-    Splotch(const bool _useGL = true ) :
-      useGL(_useGL),
-      spriteSizeScale(1.0f),
-      depthMin(0.2f),
-      depthMax(1.0f),
-      minHpix(0.1f),
-      maxHpix(100.0f),
-      colorMapTexPtr(NULL)
-  {}
-    ~Splotch() 
-    {
-      if (colorMapTexPtr) delete colorMapTexPtr;
-    }
+    Splotch();
+    ~Splotch();
    
     /* getters/setters */ 
     void  setColorMap(const float3 *img, const int w, const int h, const float scale = 1.0f)

@@ -1,11 +1,4 @@
 #include "Splotch.h"
-#include "GLSLProgram.h"
-#include <GL/glew.h>
-#if defined(__APPLE__) || defined(MACOSX)
-#include <GLUT/glut.h>
-#else
-#include <GL/freeglut.h>
-#endif
 
 const char splotchVS[] =
 {
@@ -14,7 +7,7 @@ const char splotchVS[] =
   " void main()                                                      \n "
   " {                                                                \n "
   "   vec4 wpos = vec4(gl_Vertex.xyz, 1.0);                          \n "
-  "   gl_Position = gl_ModelViewPorjectionMatrix * wpos;             \n "
+  "   gl_Position = gl_ModelViewProjectionMatrix * wpos;             \n "
   "   vec4 eyeSpacePos = gl_ModelViewMatrix * wpos;                  \n "
   "   float dist = length(eyeSpacePos.xyz);                          \n "
   "   float pointSize = spriteSize*pointScale;                       \n "
@@ -33,8 +26,24 @@ const char splotchPS[] =
   " }                                                                \n "
 };
 
+Splotch::Splotch() :
+      spriteSizeScale(1.0f),
+      depthMin(0.2f),
+      depthMax(1.0f),
+      minHpix(0.1f),
+      maxHpix(100.0f),
+      colorMapTexPtr(NULL)
+{
+  m_splotchProg = new GLSLProgram(splotchVS, splotchPS);
+}
 
-static inline float Wkernel(const float q2)
+Splotch::~Splotch()
+{
+  if (colorMapTexPtr) delete colorMapTexPtr;
+  delete m_splotchProg;
+}
+
+static inline float lWkernel(const float q2)
 {
   const float q = std::sqrt(q2);
   const float sigma = 8.0f/M_PI;
@@ -197,7 +206,7 @@ Splotch::Quad Splotch::rasterize(const VertexView &vtx, const Splotch::Quad &ran
       const float dx = ix - vtx.pos.x;
       const float dy = iy - vtx.pos.y;
       const float q2 = (dx*dx + dy*dy) * invh2;
-      const float fac = Wkernel(q2);
+      const float fac = lWkernel(q2);
 
       float4 color = vtx.color;
       color.w = fac; /* alpha */
