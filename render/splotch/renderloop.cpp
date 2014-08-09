@@ -250,6 +250,7 @@ class Demo
       m_renderer. setModelViewMatrix(m_modelView);
       m_renderer.setProjectionMatrix(m_projection);
       m_renderer.genImage();
+      fprintf(stderr, " --- frame done --- \n");
       const int width  = m_renderer.getWidth();
       const int height = m_renderer.getHeight();
       const float4 *img = &m_renderer.getImage()[0];

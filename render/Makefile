@@ -4,7 +4,7 @@ LD  = mpic++
 F90  = mpif90
 
 CUDA_TK  = /usr/local/cuda
-#CUDA_TK = $(HOME)/usr/local/cuda-5.5
+CUDA_TK = $(HOME)/usr/local/cuda-5.5
 CXXFLAGS = -O3 -g -Wall -fopenmp -std=c++11
 CXXFLAGS += -Wno-reorder
 CXXFLAGS += -Wno-write-strings
@@ -49,7 +49,8 @@ ifeq ($(ENGINE),density)
 	OBJ += density/depthSort.o
 endif
 ifeq ($(ENGINE),splotch)
-	OBJ += density/GLSLProgram.o
+	OBJ += splotch/GLSLProgram.o
+	OBJ += splotch/splotch.o
 endif
 
 PROG= renderer
@@ -76,6 +77,7 @@ clean_bak:
 
 
 
-$(OBJ): anyoption.h  paramgl.h  param.h  read_tipsy.h  RendererData.h  $(ENGINE)/renderloop.h  $(ENGINE)/renderer.h  tipsydefs.h  vector_math.h
+$(OBJ): anyoption.h  paramgl.h  param.h  read_tipsy.h  RendererData.h  $(ENGINE)/renderloop.h  $(ENGINE)/renderer.h  tipsydefs.h  vector_math.h \
+	splotch/Blending.h  splotch/GLSLProgram.h  splotch/MathArray.h  splotch/renderer.h  splotch/renderloop.h  splotch/Splotch.h  splotch/Texture.h  splotch/Vertex.h
 
 

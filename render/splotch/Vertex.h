@@ -102,7 +102,7 @@ class VertexArrayT
         _attr  = (Tattr *)::malloc(sizeof(Tattr )*_size);
       }
     }
-    VertexArrayT(const int size = 0) : _pos(NULL), _color(NULL), _attr(NULL), _size(size) { malloc(size); }
+    VertexArrayT(const int size = 0) : _pos(NULL), _color(NULL), _attr(NULL), _size(size) { realloc(size); }
     VertexArrayT(const Tpos *pos, const Tcolor *color, const Tattr *attr, const int size) 
     {
       realloc(size);
@@ -115,13 +115,6 @@ class VertexArrayT
       }
     }
     ~VertexArrayT()  { free(); }
-
-    VertexArrayT& operator=(const VertexArrayT &data)
-    {
-      free();
-      *this = VertexArrayT(data._pos, data._color, data._attr, data._size);
-      return *this;
-    }
 
     friend void swap(VertexArrayT &a, VertexArrayT &b)
     {
