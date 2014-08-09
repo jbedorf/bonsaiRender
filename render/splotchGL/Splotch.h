@@ -11,6 +11,12 @@
 #include "MathArray.h"
 
 #include <GL/glew.h>
+#ifdef WIN32
+#include <GL/wglew.h>
+#else
+#include <GL/glxew.h>
+#endif
+
 #if defined(__APPLE__) || defined(MACOSX)
 #include <GLUT/glut.h>
 #else
@@ -65,6 +71,7 @@ class Splotch
     Texture2D<ShortVec3> *colorMapTexPtr;
 
     GLSLProgram *m_splotchProg;
+    GLuint  m_spriteTex;
 
   public:
     Splotch();

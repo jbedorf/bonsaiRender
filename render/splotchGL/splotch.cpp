@@ -1,4 +1,59 @@
-#include "Splotch.h"
+#include "splotch.h"
+
+static inline float lWkernel(const float q)
+{
+  const float sigma = 8.0f/M_PI;
+
+  const float qm = 1.0f - q;
+  if      (q < 0.5f) return sigma * (1.0f + (-6.0f)*q*q*qm);
+  else if (q < 1.0f) return sigma * 2.0f*qm*qm*qm;
+
+  return 0.0f;
+}
+static inline float lWkernel2(const float q2)
+{
+  const float q = std::sqrt(q2);
+  return lWkernel(q);
+}
+    
+static GLuint lGenAlphaTexture(const int size)
+{
+  float4 *img = new float4[size*size];
+  for (int j = 0; j < size;  j++)
+    for (int i = 0; i < size; i++)
+    {
+      const int idx = j*size + i;
+      const float x = ((0.5f + i)/size - 0.5f)*2.01f;
+      const float y = ((0.5f + j)/size - 0.5f)*2.01f;
+      const float w = lWkernel2(x*x+y*y);
+      img[idx].x = w;
+      img[idx].y = w;
+      img[idx].z = w;
+      img[idx].w = w;
+    }
+
+  GLuint tex;
+  glGenTextures(1, &tex);
+  glBindTexture(GL_TEXTURE_2D, tex);
+  glTexParameteri(GL_TEXTURE_2D, GL_GENERATE_MIPMAP_SGIS, GL_TRUE);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+  glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, size, size, 0, 
+      GL_RGBA, GL_FLOAT, img);
+
+  return tex;
+}
+
+
+template<typename T>
+static inline float4 lMatVec(const T m[4][4], const float4 pos)
+{
+  return make_float4(
+      m[0][0]*pos.x + m[1][0]*pos.y + m[2][0]*pos.z + m[3][0]*pos.w,
+      m[0][1]*pos.x + m[1][1]*pos.y + m[2][1]*pos.z + m[3][1]*pos.w,
+      m[0][2]*pos.x + m[1][2]*pos.y + m[2][2]*pos.z + m[3][2]*pos.w,
+      m[0][3]*pos.x + m[1][3]*pos.y + m[2][3]*pos.z + m[3][3]*pos.w);
+}
 
 const char splotchVS[] =
 {
@@ -35,6 +90,7 @@ Splotch::Splotch() :
       colorMapTexPtr(NULL)
 {
   m_splotchProg = new GLSLProgram(splotchVS, splotchPS);
+  m_spriteTex = lGenAlphaTexture(32);
 }
 
 Splotch::~Splotch()
@@ -43,27 +99,6 @@ Splotch::~Splotch()
   delete m_splotchProg;
 }
 
-static inline float lWkernel(const float q2)
-{
-  const float q = std::sqrt(q2);
-  const float sigma = 8.0f/M_PI;
-
-  const float qm = 1.0f - q;
-  if      (q < 0.5f) return sigma * (1.0f + (-6.0f)*q*q*qm);
-  else if (q < 1.0f) return sigma * 2.0f*qm*qm*qm;
-
-  return 0.0f;
-}
-
-template<typename T>
-static inline float4 lMatVec(const T m[4][4], const float4 pos)
-{
-  return make_float4(
-      m[0][0]*pos.x + m[1][0]*pos.y + m[2][0]*pos.z + m[3][0]*pos.w,
-      m[0][1]*pos.x + m[1][1]*pos.y + m[2][1]*pos.z + m[3][1]*pos.w,
-      m[0][2]*pos.x + m[1][2]*pos.y + m[2][2]*pos.z + m[3][2]*pos.w,
-      m[0][3]*pos.x + m[1][3]*pos.y + m[2][3]*pos.z + m[3][3]*pos.w);
-}
 
 float4 Splotch::modelView(const float4 pos) const
 {
@@ -206,7 +241,7 @@ Splotch::Quad Splotch::rasterize(const VertexView &vtx, const Splotch::Quad &ran
       const float dx = ix - vtx.pos.x;
       const float dy = iy - vtx.pos.y;
       const float q2 = (dx*dx + dy*dy) * invh2;
-      const float fac = lWkernel(q2);
+      const float fac = lWkernel2(q2);
 
       float4 color = vtx.color;
       color.w = fac; /* alpha */
