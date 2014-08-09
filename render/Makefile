@@ -23,6 +23,7 @@ ENGINE=particles
 ENGINE=smoke
 ENGINE=density
 ENGINE=splotch
+ENGINE=splotchGL
 
 
 INCLUDE_FLAGS= -I./ -I./$(ENGINE)/
@@ -56,6 +57,10 @@ endif
 ifeq ($(ENGINE),splotch)
 	OBJ += splotch/GLSLProgram.o
 	OBJ += splotch/splotch.o
+endif
+ifeq ($(ENGINE),splotchGL)
+	OBJ += splotch/GLSLProgram.o
+	OBJ += splotchGL/splotch.o
 endif
 
 PROG= renderer
