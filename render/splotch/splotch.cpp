@@ -67,8 +67,8 @@ void Splotch::transform(const bool perspective)
           && posV.y - posV.w <= height
           && posV.y + posV.w >= 0)
       {
-        const float s = vtx.attr.rho;
-        const float t = vtx.attr.vel;
+        const float s = vtx.attr.vel;
+        const float t = vtx.attr.rho;
         assert(s>=0.0f && s<=1.0f);
         assert(t>=0.0f && t<=1.0f);
         const auto &tex = colorMapTex(s,t);
