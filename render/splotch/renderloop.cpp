@@ -405,7 +405,6 @@ class Demo
       const bool hasRHO = rhoMax > 0.0f;
       const float scaleVEL =          1.0/(velMax - velMin);
       const float scaleRHO = hasRHO ? 1.0/(rhoMax - rhoMin) : 0.0;
-      assert(hasRHO);
 
       m_renderer.resize(n);
 #pragma omp parallel for

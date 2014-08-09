@@ -209,16 +209,10 @@ void Splotch::render()
 
 #pragma omp barrier
 
-#pragma omp for schedule(runtime) collapse(2)
-    for (int j = 0; j < height; j++)
-      for (int i = 0; i < width; i++)
-      {
-        const int idx = j*width + i;
-        for (int k = 0; k < nt; k++)
-        {
-          image[idx] = Blending::getColor<Blending::ONE,Blending::SRC_ALPHA>(image[idx], fbVec[k][idx]);
-        }
-      }
+#pragma omp for schedule(runtime) 
+    for (int idx = 0; idx < width*height; idx++)
+      for (int k = 0; k < nt; k++)
+        image[idx] = Blending::getColor<Blending::ONE,Blending::ONE>(image[idx], fbVec[k][idx]);
   }
 }
 
