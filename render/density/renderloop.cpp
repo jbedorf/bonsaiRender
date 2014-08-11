@@ -1278,15 +1278,6 @@ class Demo
           {
             const float  Mstar = sSampler.sampleMass();
             float4 Cstar = sSampler.getColour(Mstar);
-#if 1
-            Cstar.z = 255.0;
-#endif
-            const float vel = m_idata.attribute(RendererData::VEL,i);
-
-            const float vmax = 255.0f;
-            Cstar.y = vmax*(vel - velMin) * scaleVEL;
-            Cstar.y = std::max(0.0f,std::min(vmax,Cstar.y));
-            Cstar.x = 0.5*(Cstar.y+Cstar.z);
             colors[i] = Cstar;
           }
         }
