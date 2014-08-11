@@ -1,6 +1,6 @@
-CXX = mpic++
+CXX = mpicxx
 CC  = mpicc
-LD  = mpic++
+LD  = mpicxx
 F90  = mpif90
 
 CUDA_TK  = /usr/local/cuda

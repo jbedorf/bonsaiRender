@@ -24,6 +24,7 @@
 
 class SmokeRenderer
 {
+  using uint = unsigned int;
   public:
     SmokeRenderer(int numParticles, int maxParticles);
     ~SmokeRenderer();
