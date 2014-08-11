@@ -40,7 +40,7 @@ void densityEstimator(const Tpos &posArray, const Tvel &velArray, Trhoh &rhohArr
     int nbMean = 0;
     int nbMax  = 0;
     int nbMin  = 1<<30;
-    for (int i = 0; i < np; i++)
+    for (int i = 0; i < (int)np; i++)
     {
       const auto &p = Node::ptcl[i];
       nbMean += p.nnb;

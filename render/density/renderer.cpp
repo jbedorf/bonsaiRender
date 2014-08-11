@@ -1508,6 +1508,7 @@ static inline float lWkernel(const float q2)
 }
 GLuint SmokeRenderer::createSphTexture(int size)
 {
+  const float scale = 1.0f/lWkernel(0.0f);
   float *img = new float[size*size];
   for (int j = 0; j < size; j++)
     for (int i = 0; i < size; i++)
@@ -1515,7 +1516,7 @@ GLuint SmokeRenderer::createSphTexture(int size)
       const float dx = ((i+0.5f)/size - 0.5f) * 2.01f;
       const float dy = ((j+0.5f)/size - 0.5f) * 2.01f;
       const float q2 = dx*dx + dy*dy;
-      img[j*size+i] = lWkernel(q2);
+      img[j*size+i] = lWkernel(q2)*scale;
     }
 
   GLuint tex = createTexture(GL_TEXTURE_2D, size, size, GL_LUMINANCE8, GL_LUMINANCE, img);
