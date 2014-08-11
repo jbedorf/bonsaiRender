@@ -427,10 +427,11 @@ const char *texture2DPS = STRINGIFY(
     {                                                                  \n
     vec4 c = texture2D(tex, gl_TexCoord[0].xy);                    \n
     c.rgb *= scale;
-    c.rgb = pow(c.rgb, gamma);
+    c.rgb = pow(c.rgb, gamma);                                     \n
     gl_FragColor = c;                                              \n
     }                                                                  \n
     );
+
 
 // 4 tap 3x3 gaussian blur
 const char *blurPS = STRINGIFY(
@@ -765,3 +766,53 @@ const char *skyboxPS = STRINGIFY(
     //gl_FragColor = textureCube(tex, gl_TexCoord[0].xyz) * gl_Color; \n
     }                                                           \n
     );
+
+const char *splotch2texPS = 
+STRINGIFY(
+    uniform sampler2D tex;                                             \n
+    uniform float scale_pre;                         \n
+    uniform float gamma_pre;                         \n
+    uniform float scale_post;                         \n
+    uniform float gamma_post;
+    void main()                                                        \n
+    {                                                                  \n
+      vec4 c = texture2D(tex, gl_TexCoord[0].xy);                    \n
+      c.rgb *= scale_pre;
+      c.rgb = pow(c.rgb, gamma_pre);          \n
+      c.rgb = 1.0 - exp(-c.rgb);          \n
+      c.rgb *= scale_post;
+      c.rgb = pow(c.rgb, gamma_post);          \n
+      c.a = 1.0;          \n
+      gl_FragColor = c;                                              \n
+    }                                                                  \n
+  );
+
+
+const char *splotchVS = STRINGIFY(
+    attribute float spriteSize;                          \n
+    uniform float  spriteScale;        \n
+    uniform float pointScale;              \n
+    void main()                                           \n
+    {                                                         \n
+      vec4 wpos = vec4(gl_Vertex.xyz, 1.0);                   \n
+      gl_Position = gl_ModelViewProjectionMatrix * wpos;      \n
+                                                                 \n
+      // calculate window-space point size                    \n
+      vec4 eyeSpacePos = gl_ModelViewMatrix * wpos;           \n
+      float dist = length(eyeSpacePos.xyz);                   \n
+                                                                 \n
+      float pointSize = spriteSize * spriteScale; \n
+      gl_PointSize = max(5.0, pointSize * (pointScale / dist));     \n
+      gl_FrontColor = vec4(gl_Color.rgb/255.0, 1.0);                \n
+    }                                                               \n
+);
+
+const char *splotchPS = STRINGIFY(
+    uniform sampler2D spriteTex;                                       \n
+    void main()                                                        \n
+    {                                                                  \n
+      float alpha = texture2D(spriteTex, gl_TexCoord[0].xy).x;         \n
+      vec4 c = vec4(gl_Color.xyz * alpha, 1.0);                        \n
+      gl_FragColor = c;                                                \n
+    }                                                                  \n
+  );

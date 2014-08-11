@@ -18,14 +18,14 @@ SRCPATH = ./
 
 SRC1 = cvt2grid.cpp
 SRC2 = cvt2gridTree.cpp
-#SRC3 = benchmark.cpp
+SRC3 = densCalc.cpp
 OBJ1 = $(SRC1:%.cpp=%.o)
 OBJ2 = $(SRC2:%.cpp=%.o)
 OBJ3 = $(SRC3:%.cpp=%.o)
 
 PROG1 = cvt2grid
 PROG2 = cvt2gridTree
-#PROG3 = benchmark
+PROG3 = densCalc
 
 RM = /bin/rm
 
@@ -51,3 +51,4 @@ clean:
 
 $(OBJ1): BonsaiIO.h  IDType.h  Node.h  Particle.h  Tree.h  boundary.h  density.h  morton_key.h  vector3.h  wtime.h
 $(OBJ2): BonsaiIO.h  IDType.h  Node.h  Particle.h  Tree.h  boundary.h  density.h  morton_key.h  vector3.h  wtime.h
+$(OBJ3): BonsaiIO.h  IDType.h  Node.h  Particle.h  Tree.h  boundary.h  density.h  morton_key.h  vector3.h  wtime.h

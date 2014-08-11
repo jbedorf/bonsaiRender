@@ -328,7 +328,7 @@ class Demo
       //       m_renderer(tree->localTree.n + tree->localTree.n_dust),
       m_renderer(idata.n(), MAX_PARTICLES),
       //m_displayMode(ParticleRenderer::PARTICLE_SPRITES_COLOR),
-      m_displayMode(SmokeRenderer::VOLUMETRIC),
+      m_displayMode(SmokeRenderer::SPLOTCH),
       //	    m_displayMode(SmokeRenderer::POINTS),
       m_ox(0), m_oy(0), m_buttonState(0), m_inertia(0.2f),
       m_paused(false),
@@ -346,7 +346,7 @@ class Demo
       m_fov(60.0f),
       m_nearZ(0.2),
       m_screenZ(450.0),
-      m_farZ(2000),
+      m_farZ(20000),
       m_IOD(4.0),
       m_stereoEnabled(false), //SV TODO Must be false, never make it true
       m_supernova(false),
@@ -408,9 +408,9 @@ class Demo
       delete [] m_particleSizes;
     }
 
-    void cycleDisplayMode() {
+    void cycleDisplayMode(const int inc = +1) {
       //m_displayMode = (ParticleRenderer::DisplayMode) ((m_displayMode + 1) % ParticleRenderer::PARTICLE_NUM_MODES);
-      m_displayMode = (SmokeRenderer::DisplayMode) ((m_displayMode + 1) % SmokeRenderer::NUM_MODES);
+      m_displayMode = (SmokeRenderer::DisplayMode) ((m_displayMode + inc + SmokeRenderer::NUM_MODES) % SmokeRenderer::NUM_MODES);
       m_renderer.setDisplayMode(m_displayMode);
       if (m_displayMode == SmokeRenderer::SPRITES) {
         //m_renderer.setAlpha(0.1f);
@@ -608,6 +608,13 @@ class Demo
         }
 
         static bool sortOnly = false;
+        static float oldSize = -1;
+        
+        if (m_renderer.getParticleRadius() != oldSize)
+        {
+          sortOnly = false;
+          oldSize = m_renderer.getParticleRadius();
+        }
         getBodyData(sortOnly);
         sortOnly = true;
         //getBodyDataTime = GetTimer();
@@ -904,8 +911,10 @@ class Demo
           exit(0);
           break;
         case 'p':
-        case 'P':
           cycleDisplayMode();
+          break;
+        case 'P':
+          cycleDisplayMode(-1);
           break;
         case 'b':
         case 'B':
@@ -1241,8 +1250,9 @@ class Demo
         for (int i = 0; i < n; i++)
         {
           pos[i] = make_float4(m_idata.posx(i), m_idata.posy(i), m_idata.posz(i),0);
-          sizes[i] = m_renderer.getParticleRadius(); //m_idata.attribute(RendererData::H,i);
-//          sizes[i] = m_idata.attribute(RendererData::H,i);
+          sizes[i] = m_idata.attribute(RendererData::H,i);
+          if (sizes[i] <= 0.0)
+            sizes[i] = m_renderer.getParticleRadius();
           int type =  m_idata.type(i);
           if (type == 0)
           {
@@ -1269,15 +1279,6 @@ class Demo
           {
             const float  Mstar = sSampler.sampleMass();
             float4 Cstar = sSampler.getColour(Mstar);
-#if 1
-            Cstar.z = 255.0;
-#endif
-            const float vel = m_idata.attribute(RendererData::VEL,i);
-
-            const float vmax = 255.0f;
-            Cstar.y = vmax*(vel - velMin) * scaleVEL;
-            Cstar.y = std::max(0.0f,std::min(vmax,Cstar.y));
-            Cstar.x = 0.5*(Cstar.y+Cstar.z);
             colors[i] = Cstar;
           }
         }

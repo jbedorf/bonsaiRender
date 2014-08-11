@@ -34,6 +34,7 @@ class SmokeRenderer
       SPRITES,
       SPRITES_SORTED,
       VOLUMETRIC,
+      SPLOTCH,
       NUM_MODES
     };
 
@@ -150,10 +151,13 @@ class SmokeRenderer
     void blurLightBuffer();
     void processImage(GLSLProgram *prog, GLuint src, GLuint dest);
 
+    void splotchDraw();
+
     GLuint createTexture(GLenum target, int w, int h, GLint internalformat, GLenum format, void *data = 0);
     GLuint createNoiseTexture(int w, int h, int d);
     float *createSplatImage(int n);
     GLuint createSpriteTexture(int size);
+    GLuint createSphTexture(int size);
 
     void createBuffers(int w, int h);
     void createLightBuffer();
@@ -183,6 +187,7 @@ class SmokeRenderer
 
     unsigned int m_pbo;
     float               mParticleRadius;
+    float               mParticleScaleLog;
     DisplayMode	        mDisplayMode;
 
     // window
@@ -273,6 +278,8 @@ class SmokeRenderer
     GLSLProgram         *m_gaussianBlurProg;
     GLSLProgram         *m_skyboxProg;
     GLSLProgram         *m_thresholdProg;
+    GLSLProgram         *m_splotchProg;
+    GLSLProgram         *m_splotch2texProg;
 
     // image buffers
     FramebufferObject   *m_fbo;
@@ -282,13 +289,14 @@ class SmokeRenderer
     int                 m_srcLightTexture;
     GLuint              m_lightDepthTexture;
 
-    GLuint              m_imageTex[4], m_depthTex;
+    GLuint              m_imageTex[5], m_depthTex;
     GLuint              m_downSampledTex[3];
 
     GLuint              m_rampTex;
     GLuint              m_rainbowTex;
     GLuint              m_textureArrayID;
     GLuint              m_spriteTex;
+    GLuint              m_sphTex;
     GLuint              m_noiseTex;
     //    GLuint              m_cubemapTex;
 

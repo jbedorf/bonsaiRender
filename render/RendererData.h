@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cassert>
+#include <cmath>
 #if 0
 struct float2 { float x, y; };
 struct float3 { float x, y, z; };
@@ -167,15 +168,57 @@ class RendererData
       _attributeMin[p] = min;
       _attributeMax[p] = max;
     }
-    void scaleLog(const Attribute_t p)
+
+    void scaleLog(const Attribute_t p, const float zeroPoint = 1.0f)
     {
       float min = +HUGE, max = -HUGE;
       for (int i = 0; i < _n; i++)
       {
-        attribute(p,i) = std::log(attribute(p,i) + 1.0f);
+        attribute(p,i) = std::log(attribute(p,i) + zeroPoint);
         min = std::min(min, attribute(p,i));
         max = std::max(max, attribute(p,i));
       }
+      _attributeMin[p] = min;
+      _attributeMax[p] = max;
+    }
+    void scaleExp(const Attribute_t p, const float zeroPoint = 1.0f)
+    {
+      float min = +HUGE, max = -HUGE;
+      for (int i = 0; i < _n; i++)
+      {
+        attribute(p,i) = std::exp(attribute(p,i)) - zeroPoint;
+        min = std::min(min, attribute(p,i));
+        max = std::max(max, attribute(p,i));
+      }
+      _attributeMin[p] = min;
+      _attributeMax[p] = max;
+    }
+
+    void clamp(const Attribute_t p, const float left, const float right)
+    {
+      assert(left  >= 0.0f && left  < 0.5f);
+      assert(right >= 0.0f && right < 0.5f);
+
+      const float oldMin = attributeMin(p);
+      const float oldMax = attributeMax(p);
+      const float oldRange = oldMax - oldMin ;
+      assert(oldRange > 0.0f);
+
+      const float valMin = oldMin + left *oldRange;
+      const float valMax = oldMax - right*oldRange;
+      assert(valMin < valMax);
+
+      float min = +HUGE, max = -HUGE;
+      for (int i = 0; i < _n; i++)
+      {
+        float val = attribute(p,i);
+        val = std::max(valMin, std::min(valMax, val));
+        attribute(p,i) = val;
+
+        min = std::min(min, val);
+        max = std::max(max, val);
+      }
+
       _attributeMin[p] = min;
       _attributeMax[p] = max;
     }
