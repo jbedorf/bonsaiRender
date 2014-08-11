@@ -824,7 +824,7 @@ const char *splotchVS = STRINGIFY(
       }                                                       \n
                                                               \n
       gl_PointSize  = max(spriteSizeMax, pointSize / dist);   \n
-      gl_FrontColor = vec4(col, alpha);                       \n
+      gl_FrontColor = vec4(col/255.0, alpha);                       \n
     }                                                         \n
 );
 
@@ -836,8 +836,8 @@ const char *splotchPS = STRINGIFY(
     {                                                                  \n
       float type = gl_TexCoord[1].w;                                   \n
       float alpha = texture2D(spriteTex, gl_TexCoord[0].xy).x;         \n
-      alpha *= gl_Color.w*alphaScale;                                  \n
-      alpha = clamp(alpha, 0.0, 1.0);                                  \n
+//      alpha *= gl_Color.w*alphaScale;                                  \n
+ //     alpha = clamp(alpha, 0.0, 1.0);                                  \n
       vec4 c = vec4(gl_Color.xyz * alpha, max(0, alpha-transmission)); \n
       gl_FragColor = c;                                                \n
     }                                                                  \n
