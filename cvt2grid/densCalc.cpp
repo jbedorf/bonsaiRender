@@ -9,6 +9,50 @@ typedef float float2[2];
 std::vector<Particle> Node::ptcl;
 std::vector<Node>     Node::Node_heap;
 std::vector<std::pair<Node*, Node*> > Node::pair_list;
+
+template<typename Tpos, typename Tvel, typename Trhoh>
+void densityEstimator(const Tpos &posArray, const Tvel &velArray, Trhoh &rhohArray)
+{
+    const size_t np = posArray.getNumElements();
+    if (np == 0)
+      return;
+    Particle::Vector ptcl(np);
+
+    fprintf(stderr, " -- create tree particles -- \n");
+
+    for (size_t i = 0; i < np; i++)
+    {
+      const auto &pos = posArray[i];
+      const auto &vel = velArray[i];
+      ptcl[i].ID   = i;
+      ptcl[i].pos  = vec3(pos[0], pos[1], pos[2]);
+      ptcl[i].mass = pos[3];
+      ptcl[i].vel  = vec3(vel[0], vel[1], vel[2]);
+    }
+    Node::allocate(np,np);
+    fprintf(stderr, " -- build tree -- \n");
+    Tree tree(ptcl,32);
+
+    rhohArray.resize(np);
+    
+    fprintf(stderr, " -- generate output data  -- \n");
+
+    int nbMean = 0;
+    int nbMax  = 0;
+    int nbMin  = 1<<30;
+    for (int i = 0; i < np; i++)
+    {
+      const auto &p = Node::ptcl[i];
+      nbMean += p.nnb;
+      nbMax   = std::max(nbMax, p.nnb);
+      nbMin   = std::min(nbMin, p.nnb);
+      rhohArray[p.ID][0] = p.density;
+      rhohArray[p.ID][1] = p.get_h();
+    }
+    fprintf(stderr, "nbMin= %g  nbMean= %g  nbMax= %g\n", 
+        (float)nbMin, (float)nbMean/np, (float)nbMax);
+
+  }
   
 
 static double read(
@@ -137,7 +181,6 @@ int main(int argc, char * argv[])
     double dtRead;
     if (reduceDM > 0)
     {
-      assert(0);
       dataDM.push_back(new BonsaiIO::DataType<IDType>("DM:IDType"));
       dataDM.push_back(new BonsaiIO::DataType<float4>("DM:POS:real4"));
       dataDM.push_back(new BonsaiIO::DataType<float3>("DM:VEL:float[3]"));
@@ -183,71 +226,27 @@ int main(int argc, char * argv[])
 
   /************* estimate density **********/
 
+  fprintf(stderr, " ---------------------- \n");
+  fprintf(stderr, " ------ Stars --------- \n");
+  fprintf(stderr, " ---------------------- \n");
 
-  {
-    const auto &posArray = *dynamic_cast<BonsaiIO::DataType<float4>*>(dataStars[1]);
-    const auto &velArray = *dynamic_cast<BonsaiIO::DataType<float3>*>(dataStars[2]);
-    auto &rhohArray = *dynamic_cast<BonsaiIO::DataType<float2>*>(dataStars[3]);
-    const size_t np = posArray.getNumElements();
-    Particle::Vector ptcl(np);
+  if (!dataStars.empty())
+    densityEstimator(
+        *dynamic_cast<BonsaiIO::DataType<float4>*>(dataStars[1]),
+        *dynamic_cast<BonsaiIO::DataType<float3>*>(dataStars[2]),
+        *dynamic_cast<BonsaiIO::DataType<float2>*>(dataStars[3])
+        );
 
-    fprintf(stderr, " -- create tree particles -- \n");
+  fprintf(stderr, " ---------------------- \n");
+  fprintf(stderr, " ------ DM --------- \n");
+  fprintf(stderr, " ---------------------- \n");
 
-    for (size_t i = 0; i < np; i++)
-    {
-      const auto &pos = posArray[i];
-      const auto &vel = velArray[i];
-      ptcl[i].ID   = i;
-      ptcl[i].pos  = vec3(pos[0], pos[1], pos[2]);
-      ptcl[i].mass = pos[3];
-      ptcl[i].vel  = vec3(vel[0], vel[1], vel[2]);
-    }
-    Node::allocate(np,np);
-    fprintf(stderr, " -- build tree -- \n");
-    Tree tree(ptcl);
-
-    const auto &leafArray = tree.leafArray;
-    const int nLeaf = leafArray.size();
-
-    fprintf(stderr, " np= %d  nleaf= %d  NLEAF= %d\n",
-        (int)np, nLeaf, Node::NLEAF);
-
-    rhohArray.resize(np);
-    
-    fprintf(stderr, " -- generate output data  -- \n");
-
-    size_t npMean = 0;
-    for (int i = 0; i < nLeaf; i++)
-    {
-      const auto &leaf = *leafArray[i];
-      vec3 pos(0.0);
-      vec3 vel(0.0);
-      float mass = 0.0;
-      npMean += leaf.np;
-      for (int j = 0; j < leaf.np; j++)
-      {
-        const auto &p = Node::ptcl[leaf.pfirst+j];
-        mass += p.mass;
-        pos += p.pos*p.mass;
-        vel += p.vel*p.mass;
-      }
-      pos *= 1.0/mass;
-      vel *= 1.0/mass;
-      const float volume = leaf.size*leaf.size*leaf.size;
-      const float rho = mass/volume;
-      const float h   = leaf.size;
-      for (int j = 0; j < leaf.np; j++)
-      {
-        const auto &p = Node::ptcl[leaf.pfirst+j];
-        rhohArray[p.ID][0] = rho;
-        rhohArray[p.ID][1] = h;
-      }
-    }
-    fprintf(stderr, "npMean= %g\n", 1.0*npMean/nLeaf);
-
-  }
-
-
+  if (!dataDM.empty())
+    densityEstimator(
+        *dynamic_cast<BonsaiIO::DataType<float4>*>(dataDM[1]),
+        *dynamic_cast<BonsaiIO::DataType<float3>*>(dataDM[2]),
+        *dynamic_cast<BonsaiIO::DataType<float2>*>(dataDM[3])
+        );
 
 
   /************* write ***********/
