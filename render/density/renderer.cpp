@@ -1296,7 +1296,7 @@ void SmokeRenderer::render()
 void SmokeRenderer::splotchDraw(bool sorted)
 {
   m_fbo->Bind();
-  m_fbo->AttachTexture(GL_TEXTURE_2D, m_imageTex[0], GL_COLOR_ATTACHMENT0_EXT);
+  m_fbo->AttachTexture(GL_TEXTURE_2D, m_imageTex[4], GL_COLOR_ATTACHMENT0_EXT);
   m_fbo->AttachTexture(GL_TEXTURE_2D, 0, GL_DEPTH_ATTACHMENT_EXT);
   glViewport(0, 0, m_imageW, m_imageH);
   glClearColor(0.0, 0.0, 0.0, 0.0); 
@@ -1330,7 +1330,7 @@ void SmokeRenderer::splotchDraw(bool sorted)
     glGenVertexArrays(1, &mSizeVao);
     glBindVertexArray(mSizeVao);
     glBindBufferARB(GL_ARRAY_BUFFER_ARB, mSizeVbo);
-    vertexLoc = prog->getAttribLoc("spriteSize");
+    vertexLoc = prog->getAttribLoc("particleSize");
     glEnableVertexAttribArray(vertexLoc);
     glVertexAttribPointer(vertexLoc , 1, GL_FLOAT, 0, 0, 0);
   }
@@ -1340,10 +1340,14 @@ void SmokeRenderer::splotchDraw(bool sorted)
 
   GLint viewport[4];
   glGetIntegerv(GL_VIEWPORT, viewport);
-  prog->setUniform1f("particleScale", powf(10.0f, mParticleScaleLog));
-  prog->setUniform1f("pointScale", viewport[3] / mInvFocalLen);
-  prog->setUniform1f("dustAlpha",  m_dustAlpha);
-  prog->setUniform1f("dustScale",  m_ageScale);
+  // VS
+  prog->setUniform1f("spriteScale", viewport[3] / mInvFocalLen);
+  prog->setUniform1f("starScale", powf(10.0f, mParticleScaleLog));
+  prog->setUniform1f("starAlpha", 1.0f);
+  prog->setUniform1f("dmScale",  m_ageScale);
+  prog->setUniform1f("dmAlpha",  m_dustAlpha);
+  prog->setUniform1f("spriteSizeMax", 1.0);
+  // PS
   prog->bindTexture("spriteTex",  m_sphTex, GL_TEXTURE_2D, 1);
   prog->setUniform1f("alphaScale", m_spriteAlpha);
   prog->setUniform1f("transmission", m_transmission);
@@ -1357,18 +1361,33 @@ void SmokeRenderer::splotchDraw(bool sorted)
   drawPoints(start,count,sorted);
 
   prog->disable();
-
   m_fbo->Disable();
+ 
+#if 0 
+  m_fbo->Bind();
+  m_fbo->AttachTexture(GL_TEXTURE_2D, m_imageTex[0], GL_COLOR_ATTACHMENT0_EXT);
+  m_fbo->AttachTexture(GL_TEXTURE_2D, 0, GL_DEPTH_ATTACHMENT_EXT);
+  glViewport(0, 0, m_imageW, m_imageH);
+  glClearColor(0.0, 0.0, 0.0, 0.0); 
+  glClear(GL_COLOR_BUFFER_BIT);
+#endif
+  glDisable(GL_BLEND);
 
   glDisable(GL_BLEND);
   m_splotch2texProg->enable();
-  m_splotch2texProg->bindTexture("tex", m_imageTex[0], GL_TEXTURE_2D, 0);
-  m_splotch2texProg->setUniform1f("scale_pre", m_imageBrightness);
-  m_splotch2texProg->setUniform1f("gamma_pre", m_gamma);
+  m_splotch2texProg->bindTexture("tex", m_imageTex[4], GL_TEXTURE_2D, 0);
+  m_splotch2texProg->setUniform1f("scale_pre", 0.05);
+  m_splotch2texProg->setUniform1f("gamma_pre", 0.4);
   m_splotch2texProg->setUniform1f("scale_post", 1.0);
   m_splotch2texProg->setUniform1f("gamma_post", 1.0);
   drawQuad();
   m_splotch2texProg->disable();
+#if 0
+  m_fbo->Disable();
+  compositeResult();
+#endif
+
+//  compositeResult();
 }
 
 // render scene depth to texture
@@ -1699,6 +1718,18 @@ void SmokeRenderer::drawSkybox(GLuint tex)
 
 void SmokeRenderer::initParams()
 {
+  // spriteScale
+  // starScale
+  // starAlpha
+  // dmScale
+  // dmAlpha
+  // spriteSizeMax
+  // alphaScale
+  // transmission
+  // gamma pre/post
+  // brightness pre/post
+  //////////
+  // composite filters ///
   m_params = new ParamListGL("render_params");
 
   m_params->AddParam(new Param<int>("slices", m_numSlices, 1, 256, 1, &m_numSlices));

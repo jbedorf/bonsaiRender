@@ -789,11 +789,13 @@ STRINGIFY(
 
 
 const char *splotchVS = STRINGIFY(
-    attribute float spriteSize;                               \n
-    uniform float pointScale;                                 \n
-    uniform float particleScale;                              \n
-    uniform float dustScale;                                  \n
-    uniform float dustAlpha;                                  \n
+    attribute float particleSize;                             \n
+    uniform float spriteScale;                                \n
+    uniform float starScale;                                  \n
+    uniform float starAlpha;                                  \n
+    uniform float dmScale;                                    \n
+    uniform float dmAlpha;                                    \n
+    uniform float spriteSizeMax;                              \n
     void main()                                               \n
     {                                                         \n
       vec4 wpos = vec4(gl_Vertex.xyz, 1.0);                   \n
@@ -804,24 +806,24 @@ const char *splotchVS = STRINGIFY(
       vec4 eyeSpacePos = gl_ModelViewMatrix * wpos;           \n
       float dist = length(eyeSpacePos.xyz);                   \n
                                                               \n
+      // store particle type for PS                           \n
       gl_TexCoord[1] = vec4(eyeSpacePos.xyz, type);           \n
                                                               \n
-      float pointSize = spriteSize;                           \n
+      float pointSize = particleSize*spriteScale;             \n
       float alpha = 1.0;                                      \n
       vec3 col = gl_Color.rgb;                                \n
       if (type == 0.0)                                        \n
       {                                                       \n
-         alpha = dustAlpha;                                   \n
-         pointSize *= dustScale;                              \n
+         alpha     *= dmAlpha;                                \n
+         pointSize *= dmScale;                                \n
       }                                                       \n
       else                                                    \n
       {                                                       \n
-         pointSize *= particleScale;                          \n
+         alpha     *= starAlpha;                              \n
+         pointSize *= starScale;                              \n
       }                                                       \n
                                                               \n
-      gl_PointSize = max(1.0, pointSize * (pointScale / dist)); \n
-                                                              \n
-                                                              \n
+      gl_PointSize  = max(spriteSizeMax, pointSize / dist);   \n
       gl_FrontColor = vec4(col, alpha);                       \n
     }                                                         \n
 );
