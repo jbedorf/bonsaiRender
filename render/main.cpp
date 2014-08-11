@@ -1,8 +1,8 @@
+#include <mpi.h>
 #include <cstdio>
 #include <cstdlib>
 #include <cassert>
 #include <unistd.h>
-#include <mpi.h>
 #include <sstream>
 #include <cmath>
 #if 0
