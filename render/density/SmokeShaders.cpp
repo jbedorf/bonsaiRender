@@ -774,14 +774,18 @@ STRINGIFY(
     uniform float gamma_pre;                         \n
     uniform float scale_post;                         \n
     uniform float gamma_post;
+    uniform float sorted; \n
     void main()                                                        \n
     {                                                                  \n
       vec4 c = texture2D(tex, gl_TexCoord[0].xy);                    \n
       c.rgb *= scale_pre;
       c.rgb = pow(c.rgb, gamma_pre);          \n
-      c.rgb = 1.0 - exp(-c.rgb);          \n
-      c.rgb *= scale_post;
-      c.rgb = pow(c.rgb, gamma_post);          \n
+      if (sorted == 0.0)  \n
+      {
+        c.rgb = 1.0 - exp(-c.rgb);          \n
+        c.rgb *= scale_post;
+        c.rgb = pow(c.rgb, gamma_post);          \n
+      }  \n
       c.a = 1.0;          \n
       gl_FragColor = c;                                              \n
     }                                                                  \n

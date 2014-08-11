@@ -1365,7 +1365,7 @@ void SmokeRenderer::splotchDraw(bool sorted)
   prog->disable();
   m_fbo->Disable();
  
-#if 0 
+#if 0
   m_fbo->Bind();
   m_fbo->AttachTexture(GL_TEXTURE_2D, m_imageTex[0], GL_COLOR_ATTACHMENT0_EXT);
   m_fbo->AttachTexture(GL_TEXTURE_2D, 0, GL_DEPTH_ATTACHMENT_EXT);
@@ -1375,13 +1375,23 @@ void SmokeRenderer::splotchDraw(bool sorted)
 #endif
   glDisable(GL_BLEND);
 
+#if 0
+  m_gaussianBlurProg->enable();
+  m_gaussianBlurProg->setUniform1f("radius", m_blurRadius);
+  m_gaussianBlurProg->setUniform2f("texelSize", 2.0f / (float) m_downSampledW, 2.0f / (float) m_downSampledH);
+  processImage(m_gaussianBlurProg, m_imageTex[4], m_imageTex[0]);
+#else
+  auto tex0 = m_imageTex[4];
+#endif
+
   glDisable(GL_BLEND);
   m_splotch2texProg->enable();
-  m_splotch2texProg->bindTexture("tex", m_imageTex[4], GL_TEXTURE_2D, 0);
+  m_splotch2texProg->bindTexture("tex", tex0, GL_TEXTURE_2D, 0);
   m_splotch2texProg->setUniform1f("scale_pre", m_imageBrightness);
   m_splotch2texProg->setUniform1f("gamma_pre", m_gamma);
   m_splotch2texProg->setUniform1f("scale_post", 1.0);
   m_splotch2texProg->setUniform1f("gamma_post", 1.0);
+  m_splotch2texProg->setUniform1f("sorted", (float)sorted);
   drawQuad();
   m_splotch2texProg->disable();
 #if 0
@@ -1720,6 +1730,8 @@ void SmokeRenderer::drawSkybox(GLuint tex)
 
 void SmokeRenderer::initParams()
 {
+  // m_splotchProg
+  // ---------------
   // spriteScale
   // starScale
   // starAlpha
@@ -1730,8 +1742,34 @@ void SmokeRenderer::initParams()
   // transmission
   // gamma pre/post
   // brightness pre/post
-  //////////
-  // composite filters ///
+  //
+  //  m_compositeProg
+  //  ---------------------
+  //  imageTex
+  //  blurTexH
+  //  blurTexV
+  //  glowTex
+  //  flareTex
+  //  scale 
+  //  sourceIntensity
+  //  glowIntensity
+  //  starInensity
+  //  flareIntensity
+  //  gamma
+  //
+  //  m_thresholdProg
+  //  ----------
+  //  scale (starPower)
+  //  threshold (m_starThreshold)
+  //
+  //  m_starFilterProg
+  //  ----------
+  //  radius
+  //  texeslSize
+  //
+  //  m_gaussiaBlurProg
+  //  -----------
+  //  radius
   m_params = new ParamListGL("render_params");
 
   m_params->AddParam(new Param<int>("slices", m_numSlices, 1, 256, 1, &m_numSlices));
