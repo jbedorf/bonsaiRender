@@ -803,16 +803,20 @@ const char *splotchVS = STRINGIFY(
                                                                  \n
       float pointSize = spriteSize * spriteScale; \n
       gl_PointSize = max(5.0, pointSize * (pointScale / dist));     \n
-      gl_FrontColor = vec4(gl_Color.rgb/255.0, 1.0);                \n
+      gl_FrontColor = vec4(gl_Color.rgb, 1.0);                \n
     }                                                               \n
 );
 
 const char *splotchPS = STRINGIFY(
     uniform sampler2D spriteTex;                                       \n
+    uniform float alphaScale;                                          \n
+    uniform float transmission;                                        \n
     void main()                                                        \n
     {                                                                  \n
       float alpha = texture2D(spriteTex, gl_TexCoord[0].xy).x;         \n
-      vec4 c = vec4(gl_Color.xyz * alpha, 1.0);                        \n
+      alpha *= gl_Color.w*alphaScale;                                  \n
+      alpha = clamp(alpha, 0.0, 1.0);                                  \n
+      vec4 c = vec4(gl_Color.xyz * alpha, max(0, alpha-transmission)); \n
       gl_FragColor = c;                                                \n
     }                                                                  \n
   );

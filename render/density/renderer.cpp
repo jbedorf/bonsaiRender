@@ -1269,7 +1269,10 @@ void SmokeRenderer::render()
       break;
     
     case SPLOTCH:
-      splotchDraw();
+      splotchDraw(false);
+      break;
+    case SPLOTCH_SORTED:
+      splotchDraw(true);
       break;
 
     case NUM_MODES:
@@ -1290,7 +1293,7 @@ void SmokeRenderer::render()
   glutReportErrors();
 }
 
-void SmokeRenderer::splotchDraw()
+void SmokeRenderer::splotchDraw(bool sorted)
 {
   m_fbo->Bind();
   m_fbo->AttachTexture(GL_TEXTURE_2D, m_imageTex[0], GL_COLOR_ATTACHMENT0_EXT);
@@ -1303,17 +1306,21 @@ void SmokeRenderer::splotchDraw()
 
   const int start = 0;
   const int count = mNumParticles;
-  bool sorted = false;
-//  sorted = true;
 
   calcVectors();
   if (sorted)
+  {
     depthSortCopy();
+    glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);   
+  }
+  else
+  {
+    glBlendFunc(GL_ONE, GL_ONE);
+  }
 
-  glEnable(GL_DEPTH_TEST);
+  glDisable(GL_DEPTH_TEST);
   glDepthMask(GL_FALSE);  // don't write depth
   glEnable(GL_BLEND);
-  glBlendFunc(GL_ONE, GL_ONE);
 
   auto &prog = m_splotchProg;
 
@@ -1336,6 +1343,8 @@ void SmokeRenderer::splotchDraw()
   prog->setUniform1f("spriteScale", powf(10.0f, mParticleScaleLog));
   prog->setUniform1f("pointScale", viewport[3] / mInvFocalLen);
   prog->bindTexture("spriteTex",  m_sphTex, GL_TEXTURE_2D, 1);
+  prog->setUniform1f("alphaScale", m_spriteAlpha);
+  prog->setUniform1f("transmission", m_transmission);
 
   //glClientActiveTexture(GL_TEXTURE0);
   glActiveTexture(GL_TEXTURE0);
@@ -1348,7 +1357,8 @@ void SmokeRenderer::splotchDraw()
   prog->disable();
 
   m_fbo->Disable();
-    
+
+  glDisable(GL_BLEND);
   m_splotch2texProg->enable();
   m_splotch2texProg->bindTexture("tex", m_imageTex[0], GL_TEXTURE_2D, 0);
   m_splotch2texProg->setUniform1f("scale_pre", m_imageBrightness);
