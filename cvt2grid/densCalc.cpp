@@ -37,20 +37,20 @@ void densityEstimator(const Tpos &posArray, const Tvel &velArray, Trhoh &rhohArr
     
     fprintf(stderr, " -- generate output data  -- \n");
 
-    int nbMean = 0;
-    int nbMax  = 0;
-    int nbMin  = 1<<30;
+    size_t nbMean = 0;
+    size_t nbMax  = 0;
+    size_t nbMin  = 1<<30;
     for (int i = 0; i < (int)np; i++)
     {
       const auto &p = Node::ptcl[i];
-      nbMean += p.nnb;
-      nbMax   = std::max(nbMax, p.nnb);
-      nbMin   = std::min(nbMin, p.nnb);
+      nbMean += (size_t)p.nnb;
+      nbMax   = std::max(nbMax, (size_t)p.nnb);
+      nbMin   = std::min(nbMin, (size_t)p.nnb);
       rhohArray[p.ID][0] = p.density;
       rhohArray[p.ID][1] = p.get_h();
     }
     fprintf(stderr, "nbMin= %g  nbMean= %g  nbMax= %g\n", 
-        (float)nbMin, (float)nbMean/np, (float)nbMax);
+        (float)nbMin, (double)nbMean/np, (float)nbMax);
 
   }
   
