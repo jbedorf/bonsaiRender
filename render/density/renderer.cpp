@@ -1300,13 +1300,15 @@ void SmokeRenderer::splotchDraw()
   glClear(GL_COLOR_BUFFER_BIT);
   glDisable(GL_BLEND);
 
-  calcVectors();
-  depthSortCopy();
 
   const int start = 0;
   const int count = mNumParticles;
-  const bool sorted = true;
+  bool sorted = false;
+//  sorted = true;
 
+  calcVectors();
+  if (sorted)
+    depthSortCopy();
 
   glEnable(GL_DEPTH_TEST);
   glDepthMask(GL_FALSE);  // don't write depth
@@ -1349,8 +1351,8 @@ void SmokeRenderer::splotchDraw()
     
   m_splotch2texProg->enable();
   m_splotch2texProg->bindTexture("tex", m_imageTex[0], GL_TEXTURE_2D, 0);
-  m_splotch2texProg->setUniform1f("scale_pre", 0.05);
-  m_splotch2texProg->setUniform1f("gamma_pre", 0.4);
+  m_splotch2texProg->setUniform1f("scale_pre", m_imageBrightness);
+  m_splotch2texProg->setUniform1f("gamma_pre", m_gamma);
   m_splotch2texProg->setUniform1f("scale_post", 1.0);
   m_splotch2texProg->setUniform1f("gamma_post", 1.0);
   drawQuad();
@@ -1729,7 +1731,7 @@ void SmokeRenderer::initParams()
   m_params->AddParam(new Param<float>("over bright multiplier", m_overBright, 0.0f, 100.0f, 1.0f, &m_overBright));
   //m_params->AddParam(new Param<float>("over bright threshold", m_overBrightThreshold, 0.0f, 1.0f, 0.001f, &m_overBrightThreshold));
   m_params->AddParam(new Param<float>("star brightness", m_overBrightThreshold, 0.0f, 10.0f, 0.001f, &m_overBrightThreshold));
-  m_params->AddParam(new Param<float>("image brightness", m_imageBrightness, 0.0f, 10.0f, 0.1f, &m_imageBrightness));
+  m_params->AddParam(new Param<float>("image brightness", m_imageBrightness, 0.0f, 2.0f, 0.1f, &m_imageBrightness));
   m_params->AddParam(new Param<float>("image gamma", m_gamma, 0.0f, 2.0f, 0.0f, &m_gamma));
 
   m_params->AddParam(new Param<float>("blur radius", m_blurRadius, 0.0f, 10.0f, 0.1f, &m_blurRadius));

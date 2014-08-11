@@ -346,7 +346,7 @@ class Demo
       m_fov(60.0f),
       m_nearZ(0.2),
       m_screenZ(450.0),
-      m_farZ(2000),
+      m_farZ(20000),
       m_IOD(4.0),
       m_stereoEnabled(false), //SV TODO Must be false, never make it true
       m_supernova(false),
@@ -1250,8 +1250,9 @@ class Demo
         for (int i = 0; i < n; i++)
         {
           pos[i] = make_float4(m_idata.posx(i), m_idata.posy(i), m_idata.posz(i),0);
-          sizes[i] = m_renderer.getParticleRadius(); //m_idata.attribute(RendererData::H,i);
-//          sizes[i] = m_idata.attribute(RendererData::H,i);
+          sizes[i] = m_idata.attribute(RendererData::H,i);
+          if (sizes[i] <= 0.0)
+            sizes[i] = m_renderer.getParticleRadius();
           int type =  m_idata.type(i);
           if (type == 0)
           {

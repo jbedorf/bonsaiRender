@@ -429,7 +429,10 @@ int main(int argc, char * argv[])
     rDataPtr->scaleLog(RendererData::RHO);
   }
   rDataPtr->rescaleLinear(RendererData::VEL, 0, 3000.0);
-  rDataPtr->scaleLog(RendererData::VEL);
+//  rDataPtr->scaleLog(RendererData::VEL);
+
+//  rDataPtr->clamp(RendererData::VEL, 0.25, 0.25);
+//  rDataPtr->scaleExp(RendererData::VEL);
   
 
   initAppRenderer(argc, argv, *rDataPtr

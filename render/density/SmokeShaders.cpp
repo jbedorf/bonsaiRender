@@ -802,7 +802,7 @@ const char *splotchVS = STRINGIFY(
       float dist = length(eyeSpacePos.xyz);                   \n
                                                                  \n
       float pointSize = spriteSize * spriteScale; \n
-      gl_PointSize = max(1.0, pointSize * (pointScale / dist));     \n
+      gl_PointSize = max(5.0, pointSize * (pointScale / dist));     \n
       gl_FrontColor = vec4(gl_Color.rgb/255.0, 1.0);                \n
     }                                                               \n
 );
