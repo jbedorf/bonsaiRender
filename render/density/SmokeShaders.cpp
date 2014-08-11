@@ -789,22 +789,41 @@ STRINGIFY(
 
 
 const char *splotchVS = STRINGIFY(
-    attribute float spriteSize;                          \n
-    uniform float  spriteScale;        \n
-    uniform float pointScale;              \n
-    void main()                                           \n
+    attribute float spriteSize;                               \n
+    uniform float pointScale;                                 \n
+    uniform float particleScale;                              \n
+    uniform float dustScale;                                  \n
+    uniform float dustAlpha;                                  \n
+    void main()                                               \n
     {                                                         \n
       vec4 wpos = vec4(gl_Vertex.xyz, 1.0);                   \n
+      float type = gl_Color.w;                                \n
       gl_Position = gl_ModelViewProjectionMatrix * wpos;      \n
-                                                                 \n
+                                                              \n
       // calculate window-space point size                    \n
       vec4 eyeSpacePos = gl_ModelViewMatrix * wpos;           \n
       float dist = length(eyeSpacePos.xyz);                   \n
-                                                                 \n
-      float pointSize = spriteSize * spriteScale; \n
-      gl_PointSize = max(5.0, pointSize * (pointScale / dist));     \n
-      gl_FrontColor = vec4(gl_Color.rgb, 1.0);                \n
-    }                                                               \n
+                                                              \n
+      gl_TexCoord[1] = vec4(eyeSpacePos.xyz, type);           \n
+                                                              \n
+      float pointSize = spriteSize;                           \n
+      float alpha = 1.0;                                      \n
+      vec3 col = gl_Color.rgb;                                \n
+      if (type == 0.0)                                        \n
+      {                                                       \n
+         alpha = dustAlpha;                                   \n
+         pointSize *= dustScale;                              \n
+      }                                                       \n
+      else                                                    \n
+      {                                                       \n
+         pointSize *= particleScale;                          \n
+      }                                                       \n
+                                                              \n
+      gl_PointSize = max(1.0, pointSize * (pointScale / dist)); \n
+                                                              \n
+                                                              \n
+      gl_FrontColor = vec4(col, alpha);                       \n
+    }                                                         \n
 );
 
 const char *splotchPS = STRINGIFY(
@@ -813,6 +832,7 @@ const char *splotchPS = STRINGIFY(
     uniform float transmission;                                        \n
     void main()                                                        \n
     {                                                                  \n
+      float type = gl_TexCoord[1].w;                                   \n
       float alpha = texture2D(spriteTex, gl_TexCoord[0].xy).x;         \n
       alpha *= gl_Color.w*alphaScale;                                  \n
       alpha = clamp(alpha, 0.0, 1.0);                                  \n

@@ -1340,8 +1340,10 @@ void SmokeRenderer::splotchDraw(bool sorted)
 
   GLint viewport[4];
   glGetIntegerv(GL_VIEWPORT, viewport);
-  prog->setUniform1f("spriteScale", powf(10.0f, mParticleScaleLog));
+  prog->setUniform1f("particleScale", powf(10.0f, mParticleScaleLog));
   prog->setUniform1f("pointScale", viewport[3] / mInvFocalLen);
+  prog->setUniform1f("dustAlpha",  m_dustAlpha);
+  prog->setUniform1f("dustScale",  m_ageScale);
   prog->bindTexture("spriteTex",  m_sphTex, GL_TEXTURE_2D, 1);
   prog->setUniform1f("alphaScale", m_spriteAlpha);
   prog->setUniform1f("transmission", m_transmission);
@@ -1705,7 +1707,7 @@ void SmokeRenderer::initParams()
   m_params->AddParam(new Param<float>("scale [log]", mParticleScaleLog, -1.0f, 1.0f, 0.01f, &mParticleScaleLog));
    
   m_params->AddParam(new Param<float>("dust scale", m_ageScale, 0.0f, 50.0f, 0.1f, &m_ageScale));
-  m_params->AddParam(new Param<float>("dust alpha", m_dustAlpha, 0.0f, 1.0f, 0.1f, &m_dustAlpha));
+  m_params->AddParam(new Param<float>("dust alpha", m_dustAlpha, 0.0f, 0.1f, 0.01f, &m_dustAlpha));
 
   m_params->AddParam(new Param<float>("light color r", m_lightColor[0], 0.0f, 1.0f, 0.01f, &m_lightColor[0]));
   m_params->AddParam(new Param<float>("light color g", m_lightColor[1], 0.0f, 1.0f, 0.01f, &m_lightColor[1]));
@@ -1719,7 +1721,7 @@ void SmokeRenderer::initParams()
 
   m_params->AddParam(new Param<float>("alpha", m_spriteAlpha, 0.0f, 1.0f, 0.001f, &m_spriteAlpha));
   m_params->AddParam(new Param<float>("shadow alpha", m_shadowAlpha, 0.0f, 1.0f, 0.001f, &m_shadowAlpha));
-  m_params->AddParam(new Param<float>("transmission", m_transmission, 0.0f, 1.0f, 0.001f, &m_transmission));
+  m_params->AddParam(new Param<float>("transmission", m_transmission, 0.0f, 0.1f, 0.001f, &m_transmission));
   m_params->AddParam(new Param<float>("indirect lighting", m_indirectAmount, 0.0f, 1.0f, 0.001f, &m_indirectAmount));
 
 #if 0

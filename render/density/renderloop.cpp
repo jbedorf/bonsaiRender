@@ -1254,11 +1254,7 @@ class Demo
           if (sizes[i] <= 0.0)
             sizes[i] = m_renderer.getParticleRadius();
           int type =  m_idata.type(i);
-          if (type == 0)
-          {
-            colors[i] = darkMatterColor;
-          }
-          else if (hasRHO)
+          if (hasRHO)
           {
             float vel = m_idata.attribute(RendererData::VEL,i);
             float rho = m_idata.attribute(RendererData::RHO,i);
@@ -1272,14 +1268,23 @@ class Demo
             Cstar.x = colorMap[iy][ix][0];
             Cstar.y = colorMap[iy][ix][1];
             Cstar.z = colorMap[iy][ix][2];
-            Cstar.w = 1.0;
+            Cstar.w = type;
             colors[i] = Cstar;
           }
           else
           {
-            const float  Mstar = sSampler.sampleMass();
-            float4 Cstar = sSampler.getColour(Mstar);
-            colors[i] = Cstar;
+            if (type == 0)
+            {
+              colors[i] = darkMatterColor;
+              colors[i].w = 0;
+            }
+            else
+            {
+              const float  Mstar = sSampler.sampleMass();
+              float4 Cstar = sSampler.getColour(Mstar);
+              colors[i] = Cstar;
+              colors[i].w = 1.0;
+            }
           }
         }
       }
