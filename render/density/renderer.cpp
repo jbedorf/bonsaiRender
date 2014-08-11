@@ -1352,6 +1352,8 @@ void SmokeRenderer::splotchDraw(bool sorted)
   prog->setUniform1f("alphaScale", m_spriteAlpha);
   prog->setUniform1f("transmission", m_transmission);
 
+  prog->setUniform1f("sorted", (float)sorted);
+
   //glClientActiveTexture(GL_TEXTURE0);
   glActiveTexture(GL_TEXTURE0);
   glTexEnvi(GL_POINT_SPRITE_ARB, GL_COORD_REPLACE_ARB, GL_TRUE);
@@ -1527,7 +1529,7 @@ static inline float lWkernel(const float q2)
 }
 GLuint SmokeRenderer::createSphTexture(int size)
 {
-  const float scale = 1.0f/lWkernel(0.0f);
+  const float scale = 1.0f; ///lWkernel(0.0f);
   float *img = new float[size*size];
   for (int j = 0; j < size; j++)
     for (int i = 0; i < size; i++)
