@@ -22,7 +22,7 @@ NVCCFLAGS=-arch=sm_35
 ENGINE=particles
 ENGINE=smoke
 ENGINE=density
-ENGINE=splotch
+#ENGINE=splotch
 
 
 INCLUDE_FLAGS= -I./ -I./$(ENGINE)/

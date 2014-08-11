@@ -52,6 +52,7 @@ SmokeRenderer::SmokeRenderer(int numParticles, int maxParticles) :
   mSizeVao(0),
   mIndexBuffer(0),
   mParticleRadius(0.1f),
+  mParticleScaleLog(0.0f),
   mDisplayMode(SPRITES),
   mWindowW(800),
   mWindowH(600),
@@ -141,6 +142,9 @@ SmokeRenderer::SmokeRenderer(int numParticles, int maxParticles) :
 
   m_skyboxProg = new GLSLProgram(skyboxVS, skyboxPS);
 
+  m_splotchProg = new GLSLProgram(splotchVS, splotchPS);
+  m_splotch2texProg = new GLSLProgram(passThruVS, splotch2texPS);
+
   glClampColorARB(GL_CLAMP_VERTEX_COLOR_ARB, GL_FALSE);
   glClampColorARB(GL_CLAMP_FRAGMENT_COLOR_ARB, GL_FALSE);
 
@@ -166,6 +170,7 @@ SmokeRenderer::SmokeRenderer(int numParticles, int maxParticles) :
 #endif
 
   m_spriteTex = createSpriteTexture(256);
+  m_sphTex    = createSphTexture(256);
 
   initParams();
 
@@ -219,6 +224,9 @@ SmokeRenderer::~SmokeRenderer()
   delete m_compositeProg;
   delete m_volumeProg;
   delete m_skyboxProg;
+
+  delete m_splotchProg;
+  delete m_splotch2texProg;
 
   delete m_fbo;
   glDeleteTextures(2, m_lightTexture);
@@ -962,6 +970,7 @@ void SmokeRenderer::drawSlices()
   glLoadIdentity();
 }
 
+
 // blur light buffer to simulate scattering effects
 void SmokeRenderer::blurLightBuffer()
 {
@@ -1258,6 +1267,10 @@ void SmokeRenderer::render()
       compositeResult();
       //drawBounds();
       break;
+    
+    case SPLOTCH:
+      splotchDraw();
+      break;
 
     case NUM_MODES:
       break;
@@ -1275,6 +1288,73 @@ void SmokeRenderer::render()
 #endif
 
   glutReportErrors();
+}
+
+void SmokeRenderer::splotchDraw()
+{
+  m_fbo->Bind();
+  m_fbo->AttachTexture(GL_TEXTURE_2D, m_imageTex[0], GL_COLOR_ATTACHMENT0_EXT);
+  m_fbo->AttachTexture(GL_TEXTURE_2D, 0, GL_DEPTH_ATTACHMENT_EXT);
+  glViewport(0, 0, m_imageW, m_imageH);
+  glClearColor(0.0, 0.0, 0.0, 0.0); 
+  glClear(GL_COLOR_BUFFER_BIT);
+  glDisable(GL_BLEND);
+
+  calcVectors();
+  depthSortCopy();
+
+  const int start = 0;
+  const int count = mNumParticles;
+  const bool sorted = true;
+
+
+  glEnable(GL_DEPTH_TEST);
+  glDepthMask(GL_FALSE);  // don't write depth
+  glEnable(GL_BLEND);
+  glBlendFunc(GL_ONE, GL_ONE);
+
+  auto &prog = m_splotchProg;
+
+  GLuint vertexLoc = -1;
+  if (!mSizeVao && mSizeVbo)
+  {
+    glGenVertexArrays(1, &mSizeVao);
+    glBindVertexArray(mSizeVao);
+    glBindBufferARB(GL_ARRAY_BUFFER_ARB, mSizeVbo);
+    vertexLoc = prog->getAttribLoc("spriteSize");
+    glEnableVertexAttribArray(vertexLoc);
+    glVertexAttribPointer(vertexLoc , 1, GL_FLOAT, 0, 0, 0);
+  }
+
+  prog->enable();
+  glBindVertexArray(mSizeVao);
+
+  GLint viewport[4];
+  glGetIntegerv(GL_VIEWPORT, viewport);
+  prog->setUniform1f("spriteScale", powf(10.0f, mParticleScaleLog));
+  prog->setUniform1f("pointScale", viewport[3] / mInvFocalLen);
+  prog->bindTexture("spriteTex",  m_sphTex, GL_TEXTURE_2D, 1);
+
+  //glClientActiveTexture(GL_TEXTURE0);
+  glActiveTexture(GL_TEXTURE0);
+  glTexEnvi(GL_POINT_SPRITE_ARB, GL_COORD_REPLACE_ARB, GL_TRUE);
+  glEnable(GL_VERTEX_PROGRAM_POINT_SIZE_ARB);
+  glEnable(GL_POINT_SPRITE_ARB);
+
+  drawPoints(start,count,sorted);
+
+  prog->disable();
+
+  m_fbo->Disable();
+    
+  m_splotch2texProg->enable();
+  m_splotch2texProg->bindTexture("tex", m_imageTex[0], GL_TEXTURE_2D, 0);
+  m_splotch2texProg->setUniform1f("scale_pre", 0.05);
+  m_splotch2texProg->setUniform1f("gamma_pre", 0.5);
+  m_splotch2texProg->setUniform1f("scale_post", 1.0);
+  m_splotch2texProg->setUniform1f("gamma_post", 0.8);
+  drawQuad();
+  m_splotch2texProg->disable();
 }
 
 // render scene depth to texture
@@ -1401,6 +1481,35 @@ GLuint SmokeRenderer::createSpriteTexture(int size)
   glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
   return tex;
 }
+static inline float lWkernel(const float q2)
+{
+  const float q = sqrtf(q2);
+  const float sigma = 8.0f/M_PI;
+
+  const float qm = 1.0f - q;
+  if      (q < 0.5f) return sigma * (1.0f + (-6.0f)*q*q*qm);
+  else if (q < 1.0f) return sigma * 2.0f*qm*qm*qm;
+
+  return 0.0f;
+}
+GLuint SmokeRenderer::createSphTexture(int size)
+{
+  float *img = new float[size*size];
+  for (int j = 0; j < size; j++)
+    for (int i = 0; i < size; i++)
+    {
+      const float dx = ((i+0.5f)/size - 0.5f) * 2.01f;
+      const float dy = ((j+0.5f)/size - 0.5f) * 2.01f;
+      const float q2 = dx*dx + dy*dy;
+      img[j*size+i] = lWkernel(q2);
+    }
+
+  GLuint tex = createTexture(GL_TEXTURE_2D, size, size, GL_LUMINANCE8, GL_LUMINANCE, img);
+  delete [] img;
+  glGenerateMipmapEXT(GL_TEXTURE_2D);
+  glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+  return tex;
+}
 
 // create textures for off-screen rendering
 void SmokeRenderer::createBuffers(int w, int h)
@@ -1427,6 +1536,7 @@ void SmokeRenderer::createBuffers(int w, int h)
   m_imageTex[1] = createTexture(GL_TEXTURE_2D, m_imageW, m_imageH, format, GL_RGBA);
   m_imageTex[2] = createTexture(GL_TEXTURE_2D, m_imageW, m_imageH, format, GL_RGBA);
   m_imageTex[3] = createTexture(GL_TEXTURE_2D, m_imageW, m_imageH, format, GL_RGBA);
+  m_imageTex[4] = createTexture(GL_TEXTURE_2D, m_imageW, m_imageH, format, GL_RGBA);
 
   m_depthTex = createTexture(GL_TEXTURE_2D, m_imageW, m_imageH, GL_DEPTH_COMPONENT24_ARB, GL_DEPTH_COMPONENT);
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
@@ -1579,7 +1689,9 @@ void SmokeRenderer::initParams()
   m_params->AddParam(new Param<int>("slices", m_numSlices, 1, 256, 1, &m_numSlices));
   m_params->AddParam(new Param<int>("displayed slices", m_numDisplayedSlices, 1, 256, 1, &m_numDisplayedSlices));
 
-  m_params->AddParam(new Param<float>("sprite size", mParticleRadius, 0.0f, 0.1f, 0.001f, &mParticleRadius));
+  m_params->AddParam(new Param<float>("sprite size", mParticleRadius, 0.0f, 0.2f, 0.001f, &mParticleRadius));
+  m_params->AddParam(new Param<float>("scale [log]", mParticleScaleLog, -1.0f, 1.0f, 0.01f, &mParticleScaleLog));
+   
   m_params->AddParam(new Param<float>("dust scale", m_ageScale, 0.0f, 50.0f, 0.1f, &m_ageScale));
   m_params->AddParam(new Param<float>("dust alpha", m_dustAlpha, 0.0f, 1.0f, 0.1f, &m_dustAlpha));
 

@@ -328,7 +328,7 @@ class Demo
       //       m_renderer(tree->localTree.n + tree->localTree.n_dust),
       m_renderer(idata.n(), MAX_PARTICLES),
       //m_displayMode(ParticleRenderer::PARTICLE_SPRITES_COLOR),
-      m_displayMode(SmokeRenderer::VOLUMETRIC),
+      m_displayMode(SmokeRenderer::SPLOTCH),
       //	    m_displayMode(SmokeRenderer::POINTS),
       m_ox(0), m_oy(0), m_buttonState(0), m_inertia(0.2f),
       m_paused(false),
@@ -408,9 +408,9 @@ class Demo
       delete [] m_particleSizes;
     }
 
-    void cycleDisplayMode() {
+    void cycleDisplayMode(const int inc = +1) {
       //m_displayMode = (ParticleRenderer::DisplayMode) ((m_displayMode + 1) % ParticleRenderer::PARTICLE_NUM_MODES);
-      m_displayMode = (SmokeRenderer::DisplayMode) ((m_displayMode + 1) % SmokeRenderer::NUM_MODES);
+      m_displayMode = (SmokeRenderer::DisplayMode) ((m_displayMode + inc + SmokeRenderer::NUM_MODES) % SmokeRenderer::NUM_MODES);
       m_renderer.setDisplayMode(m_displayMode);
       if (m_displayMode == SmokeRenderer::SPRITES) {
         //m_renderer.setAlpha(0.1f);
@@ -608,6 +608,13 @@ class Demo
         }
 
         static bool sortOnly = false;
+        static float oldSize = -1;
+        
+        if (m_renderer.getParticleRadius() != oldSize)
+        {
+          sortOnly = false;
+          oldSize = m_renderer.getParticleRadius();
+        }
         getBodyData(sortOnly);
         sortOnly = true;
         //getBodyDataTime = GetTimer();
@@ -904,8 +911,10 @@ class Demo
           exit(0);
           break;
         case 'p':
-        case 'P':
           cycleDisplayMode();
+          break;
+        case 'P':
+          cycleDisplayMode(-1);
           break;
         case 'b':
         case 'B':
