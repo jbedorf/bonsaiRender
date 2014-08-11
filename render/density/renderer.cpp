@@ -1346,7 +1346,7 @@ void SmokeRenderer::splotchDraw(bool sorted)
   prog->setUniform1f("starAlpha", 1.0f);
   prog->setUniform1f("dmScale",  m_ageScale);
   prog->setUniform1f("dmAlpha",  m_dustAlpha);
-  prog->setUniform1f("spriteSizeMax", 1.0);
+  prog->setUniform1f("spriteSizeMax", 5.0);
   // PS
   prog->bindTexture("spriteTex",  m_sphTex, GL_TEXTURE_2D, 1);
   prog->setUniform1f("alphaScale", m_spriteAlpha);
