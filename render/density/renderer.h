@@ -35,6 +35,7 @@ class SmokeRenderer
       SPRITES_SORTED,
       VOLUMETRIC,
       SPLOTCH,
+      SPLOTCH_SORTED,
       NUM_MODES
     };
 
@@ -151,7 +152,7 @@ class SmokeRenderer
     void blurLightBuffer();
     void processImage(GLSLProgram *prog, GLuint src, GLuint dest);
 
-    void splotchDraw();
+    void splotchDraw(bool sorted = true);
 
     GLuint createTexture(GLenum target, int w, int h, GLint internalformat, GLenum format, void *data = 0);
     GLuint createNoiseTexture(int w, int h, int d);

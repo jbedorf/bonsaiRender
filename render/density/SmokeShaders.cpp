@@ -789,30 +789,62 @@ STRINGIFY(
 
 
 const char *splotchVS = STRINGIFY(
-    attribute float spriteSize;                          \n
-    uniform float  spriteScale;        \n
-    uniform float pointScale;              \n
-    void main()                                           \n
+    attribute float particleSize;                             \n
+    uniform float spriteScale;                                \n
+    uniform float starScale;                                  \n
+    uniform float starAlpha;                                  \n
+    uniform float dmScale;                                    \n
+    uniform float dmAlpha;                                    \n
+    uniform float spriteSizeMax;                              \n
+    uniform float sorted;                                     \n
+    void main()                                               \n
     {                                                         \n
       vec4 wpos = vec4(gl_Vertex.xyz, 1.0);                   \n
+      float type = gl_Color.w;                                \n
       gl_Position = gl_ModelViewProjectionMatrix * wpos;      \n
-                                                                 \n
+                                                              \n
       // calculate window-space point size                    \n
       vec4 eyeSpacePos = gl_ModelViewMatrix * wpos;           \n
       float dist = length(eyeSpacePos.xyz);                   \n
-                                                                 \n
-      float pointSize = spriteSize * spriteScale; \n
-      gl_PointSize = max(5.0, pointSize * (pointScale / dist));     \n
-      gl_FrontColor = vec4(gl_Color.rgb/255.0, 1.0);                \n
-    }                                                               \n
+                                                              \n
+      // store particle type for PS                           \n
+      gl_TexCoord[1] = vec4(0,0,1, type);                     \n
+                                                              \n
+      float pointSize = particleSize*spriteScale;             \n
+      float alpha = 1.0;                                      \n
+      vec3 col = gl_Color.rgb;                                \n
+      if (type == 0.0)                                        \n
+      {                                                       \n
+         alpha     *= dmAlpha;                                \n
+         pointSize *= dmScale;                                \n
+      }                                                       \n
+      else                                                    \n
+      {                                                       \n
+         alpha     *= starAlpha;                              \n
+         pointSize *= starScale;                              \n
+      }                                                       \n
+                                                              \n
+      if (sorted == 0.0) col *= 1.0/255;                      \n
+      gl_PointSize  = max(spriteSizeMax, pointSize / dist);   \n
+      gl_FrontColor = vec4(col, alpha);                       \n
+    }                                                         \n
 );
 
 const char *splotchPS = STRINGIFY(
     uniform sampler2D spriteTex;                                       \n
+    uniform float alphaScale;                                          \n
+    uniform float transmission;                                        \n
+    uniform float sorted;                                              \n
     void main()                                                        \n
     {                                                                  \n
+      float type = gl_TexCoord[1].w;                                   \n
       float alpha = texture2D(spriteTex, gl_TexCoord[0].xy).x;         \n
-      vec4 c = vec4(gl_Color.xyz * alpha, 1.0);                        \n
+      if (sorted == 1.0)                                               \n
+      {                                                                \n
+        alpha *= gl_Color.w*alphaScale;                                \n
+        alpha = clamp(alpha, 0.0, 1.0);                                \n
+      }                                                                \n
+      vec4 c = vec4(gl_Color.xyz * alpha, max(0, alpha-transmission)); \n
       gl_FragColor = c;                                                \n
     }                                                                  \n
   );

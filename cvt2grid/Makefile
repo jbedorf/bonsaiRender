@@ -49,6 +49,6 @@ $(PROG3): $(OBJ3)
 clean:
 	/bin/rm -rf *.o $(PROG1) $(PROG2) $(OBJ1) $(OBJ2)
 
-$(OBJ1): BonsaiIO.h  IDType.h  Node.h  Particle.h  Tree.h  boundary.h  density.h  morton_key.h  vector3.h  wtime.h
-$(OBJ2): BonsaiIO.h  IDType.h  Node.h  Particle.h  Tree.h  boundary.h  density.h  morton_key.h  vector3.h  wtime.h
-$(OBJ3): BonsaiIO.h  IDType.h  Node.h  Particle.h  Tree.h  boundary.h  density.h  morton_key.h  vector3.h  wtime.h
+$(OBJ1): BonsaiIO.h  IDType.h  Node.h  Particle.h  Tree.h  boundary.h   morton_key.h  vector3.h  wtime.h
+$(OBJ2): BonsaiIO.h  IDType.h  Node.h  Particle.h  Tree.h  boundary.h   morton_key.h  vector3.h  wtime.h
+$(OBJ3): BonsaiIO.h  IDType.h  Node.h  Particle.h  Tree.h  boundary.h   morton_key.h  vector3.h  wtime.h

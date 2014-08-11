@@ -1269,7 +1269,10 @@ void SmokeRenderer::render()
       break;
     
     case SPLOTCH:
-      splotchDraw();
+      splotchDraw(false);
+      break;
+    case SPLOTCH_SORTED:
+      splotchDraw(true);
       break;
 
     case NUM_MODES:
@@ -1290,10 +1293,10 @@ void SmokeRenderer::render()
   glutReportErrors();
 }
 
-void SmokeRenderer::splotchDraw()
+void SmokeRenderer::splotchDraw(bool sorted)
 {
   m_fbo->Bind();
-  m_fbo->AttachTexture(GL_TEXTURE_2D, m_imageTex[0], GL_COLOR_ATTACHMENT0_EXT);
+  m_fbo->AttachTexture(GL_TEXTURE_2D, m_imageTex[4], GL_COLOR_ATTACHMENT0_EXT);
   m_fbo->AttachTexture(GL_TEXTURE_2D, 0, GL_DEPTH_ATTACHMENT_EXT);
   glViewport(0, 0, m_imageW, m_imageH);
   glClearColor(0.0, 0.0, 0.0, 0.0); 
@@ -1303,17 +1306,21 @@ void SmokeRenderer::splotchDraw()
 
   const int start = 0;
   const int count = mNumParticles;
-  bool sorted = false;
-//  sorted = true;
 
   calcVectors();
   if (sorted)
+  {
     depthSortCopy();
+    glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);   
+  }
+  else
+  {
+    glBlendFunc(GL_ONE, GL_ONE);
+  }
 
-  glEnable(GL_DEPTH_TEST);
+  glDisable(GL_DEPTH_TEST);
   glDepthMask(GL_FALSE);  // don't write depth
   glEnable(GL_BLEND);
-  glBlendFunc(GL_ONE, GL_ONE);
 
   auto &prog = m_splotchProg;
 
@@ -1323,7 +1330,7 @@ void SmokeRenderer::splotchDraw()
     glGenVertexArrays(1, &mSizeVao);
     glBindVertexArray(mSizeVao);
     glBindBufferARB(GL_ARRAY_BUFFER_ARB, mSizeVbo);
-    vertexLoc = prog->getAttribLoc("spriteSize");
+    vertexLoc = prog->getAttribLoc("particleSize");
     glEnableVertexAttribArray(vertexLoc);
     glVertexAttribPointer(vertexLoc , 1, GL_FLOAT, 0, 0, 0);
   }
@@ -1333,9 +1340,19 @@ void SmokeRenderer::splotchDraw()
 
   GLint viewport[4];
   glGetIntegerv(GL_VIEWPORT, viewport);
-  prog->setUniform1f("spriteScale", powf(10.0f, mParticleScaleLog));
-  prog->setUniform1f("pointScale", viewport[3] / mInvFocalLen);
+  // VS
+  prog->setUniform1f("spriteScale", viewport[3] / mInvFocalLen);
+  prog->setUniform1f("starScale", powf(10.0f, mParticleScaleLog));
+  prog->setUniform1f("starAlpha", 1.0f);
+  prog->setUniform1f("dmScale",  m_ageScale);
+  prog->setUniform1f("dmAlpha",  m_dustAlpha);
+  prog->setUniform1f("spriteSizeMax", sorted ? 1.0 : 5.0);
+  // PS
   prog->bindTexture("spriteTex",  m_sphTex, GL_TEXTURE_2D, 1);
+  prog->setUniform1f("alphaScale", m_spriteAlpha);
+  prog->setUniform1f("transmission", m_transmission);
+
+  prog->setUniform1f("sorted", (float)sorted);
 
   //glClientActiveTexture(GL_TEXTURE0);
   glActiveTexture(GL_TEXTURE0);
@@ -1346,17 +1363,33 @@ void SmokeRenderer::splotchDraw()
   drawPoints(start,count,sorted);
 
   prog->disable();
-
   m_fbo->Disable();
-    
+ 
+#if 0 
+  m_fbo->Bind();
+  m_fbo->AttachTexture(GL_TEXTURE_2D, m_imageTex[0], GL_COLOR_ATTACHMENT0_EXT);
+  m_fbo->AttachTexture(GL_TEXTURE_2D, 0, GL_DEPTH_ATTACHMENT_EXT);
+  glViewport(0, 0, m_imageW, m_imageH);
+  glClearColor(0.0, 0.0, 0.0, 0.0); 
+  glClear(GL_COLOR_BUFFER_BIT);
+#endif
+  glDisable(GL_BLEND);
+
+  glDisable(GL_BLEND);
   m_splotch2texProg->enable();
-  m_splotch2texProg->bindTexture("tex", m_imageTex[0], GL_TEXTURE_2D, 0);
+  m_splotch2texProg->bindTexture("tex", m_imageTex[4], GL_TEXTURE_2D, 0);
   m_splotch2texProg->setUniform1f("scale_pre", m_imageBrightness);
   m_splotch2texProg->setUniform1f("gamma_pre", m_gamma);
   m_splotch2texProg->setUniform1f("scale_post", 1.0);
   m_splotch2texProg->setUniform1f("gamma_post", 1.0);
   drawQuad();
   m_splotch2texProg->disable();
+#if 0
+  m_fbo->Disable();
+  compositeResult();
+#endif
+
+//  compositeResult();
 }
 
 // render scene depth to texture
@@ -1496,6 +1529,7 @@ static inline float lWkernel(const float q2)
 }
 GLuint SmokeRenderer::createSphTexture(int size)
 {
+  const float scale = 1.0f/lWkernel(0.0f);
   float *img = new float[size*size];
   for (int j = 0; j < size; j++)
     for (int i = 0; i < size; i++)
@@ -1503,7 +1537,7 @@ GLuint SmokeRenderer::createSphTexture(int size)
       const float dx = ((i+0.5f)/size - 0.5f) * 2.01f;
       const float dy = ((j+0.5f)/size - 0.5f) * 2.01f;
       const float q2 = dx*dx + dy*dy;
-      img[j*size+i] = lWkernel(q2);
+      img[j*size+i] = lWkernel(q2)*scale;
     }
 
   GLuint tex = createTexture(GL_TEXTURE_2D, size, size, GL_LUMINANCE8, GL_LUMINANCE, img);
@@ -1686,6 +1720,18 @@ void SmokeRenderer::drawSkybox(GLuint tex)
 
 void SmokeRenderer::initParams()
 {
+  // spriteScale
+  // starScale
+  // starAlpha
+  // dmScale
+  // dmAlpha
+  // spriteSizeMax
+  // alphaScale
+  // transmission
+  // gamma pre/post
+  // brightness pre/post
+  //////////
+  // composite filters ///
   m_params = new ParamListGL("render_params");
 
   m_params->AddParam(new Param<int>("slices", m_numSlices, 1, 256, 1, &m_numSlices));
@@ -1695,7 +1741,7 @@ void SmokeRenderer::initParams()
   m_params->AddParam(new Param<float>("scale [log]", mParticleScaleLog, -1.0f, 1.0f, 0.01f, &mParticleScaleLog));
    
   m_params->AddParam(new Param<float>("dust scale", m_ageScale, 0.0f, 50.0f, 0.1f, &m_ageScale));
-  m_params->AddParam(new Param<float>("dust alpha", m_dustAlpha, 0.0f, 1.0f, 0.1f, &m_dustAlpha));
+  m_params->AddParam(new Param<float>("dust alpha", m_dustAlpha, 0.0f, 0.1f, 0.01f, &m_dustAlpha));
 
   m_params->AddParam(new Param<float>("light color r", m_lightColor[0], 0.0f, 1.0f, 0.01f, &m_lightColor[0]));
   m_params->AddParam(new Param<float>("light color g", m_lightColor[1], 0.0f, 1.0f, 0.01f, &m_lightColor[1]));
@@ -1709,7 +1755,7 @@ void SmokeRenderer::initParams()
 
   m_params->AddParam(new Param<float>("alpha", m_spriteAlpha, 0.0f, 1.0f, 0.001f, &m_spriteAlpha));
   m_params->AddParam(new Param<float>("shadow alpha", m_shadowAlpha, 0.0f, 1.0f, 0.001f, &m_shadowAlpha));
-  m_params->AddParam(new Param<float>("transmission", m_transmission, 0.0f, 1.0f, 0.001f, &m_transmission));
+  m_params->AddParam(new Param<float>("transmission", m_transmission, 0.0f, 0.1f, 0.001f, &m_transmission));
   m_params->AddParam(new Param<float>("indirect lighting", m_indirectAmount, 0.0f, 1.0f, 0.001f, &m_indirectAmount));
 
 #if 0
