@@ -97,6 +97,7 @@ SmokeRenderer::SmokeRenderer(int numParticles, int maxParticles) :
   m_glowIntensity(0.5f),
   m_ageScale(10.0f),
   m_enableVolume(false),
+//  m_enableFilters(true),
   m_enableFilters(true),
   m_noiseFreq(0.05f),
   m_noiseAmp(1.0f),
@@ -1153,7 +1154,7 @@ void SmokeRenderer::compositeResult()
   glDisable(GL_DEPTH_TEST);
   glDepthMask(GL_FALSE);
   glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
-  //glEnable(GL_BLEND);
+  glDisable(GL_BLEND);
 
   if (m_enableFilters) {
     m_compositeProg->enable();
@@ -1296,7 +1297,7 @@ void SmokeRenderer::render()
 void SmokeRenderer::splotchDraw(bool sorted)
 {
   m_fbo->Bind();
-  m_fbo->AttachTexture(GL_TEXTURE_2D, m_imageTex[4], GL_COLOR_ATTACHMENT0_EXT);
+  m_fbo->AttachTexture(GL_TEXTURE_2D, m_imageTex[0], GL_COLOR_ATTACHMENT0_EXT);
   m_fbo->AttachTexture(GL_TEXTURE_2D, 0, GL_DEPTH_ATTACHMENT_EXT);
   glViewport(0, 0, m_imageW, m_imageH);
   glClearColor(0.0, 0.0, 0.0, 0.0); 
@@ -1364,29 +1365,11 @@ void SmokeRenderer::splotchDraw(bool sorted)
 
   prog->disable();
   m_fbo->Disable();
- 
-#if 0
-  m_fbo->Bind();
-  m_fbo->AttachTexture(GL_TEXTURE_2D, m_imageTex[0], GL_COLOR_ATTACHMENT0_EXT);
-  m_fbo->AttachTexture(GL_TEXTURE_2D, 0, GL_DEPTH_ATTACHMENT_EXT);
-  glViewport(0, 0, m_imageW, m_imageH);
-  glClearColor(0.0, 0.0, 0.0, 0.0); 
-  glClear(GL_COLOR_BUFFER_BIT);
-#endif
-  glDisable(GL_BLEND);
 
-#if 0
-  m_gaussianBlurProg->enable();
-  m_gaussianBlurProg->setUniform1f("radius", m_blurRadius);
-  m_gaussianBlurProg->setUniform2f("texelSize", 2.0f / (float) m_downSampledW, 2.0f / (float) m_downSampledH);
-  processImage(m_gaussianBlurProg, m_imageTex[4], m_imageTex[0]);
-#else
-  auto tex0 = m_imageTex[4];
-#endif
-
+#if 1 
   glDisable(GL_BLEND);
   m_splotch2texProg->enable();
-  m_splotch2texProg->bindTexture("tex", tex0, GL_TEXTURE_2D, 0);
+  m_splotch2texProg->bindTexture("tex", m_imageTex[0], GL_TEXTURE_2D, 0);
   m_splotch2texProg->setUniform1f("scale_pre", m_imageBrightness);
   m_splotch2texProg->setUniform1f("gamma_pre", m_gamma);
   m_splotch2texProg->setUniform1f("scale_post", 1.0);
@@ -1394,12 +1377,66 @@ void SmokeRenderer::splotchDraw(bool sorted)
   m_splotch2texProg->setUniform1f("sorted", (float)sorted);
   drawQuad();
   m_splotch2texProg->disable();
+#else
+  {
 #if 0
-  m_fbo->Disable();
-  compositeResult();
+    m_fbo->Bind();
+    m_fbo->AttachTexture(GL_TEXTURE_2D, m_imageTex[0], GL_COLOR_ATTACHMENT0_EXT);
+    m_fbo->AttachTexture(GL_TEXTURE_2D, 0, GL_DEPTH_ATTACHMENT_EXT);
+    glViewport(0, 0, m_imageW, m_imageH);
+    glClearColor(0.0, 0.0, 0.0, 0.0); 
+    glClear(GL_COLOR_BUFFER_BIT);
+    /* run prog */
+    m_fbo->Disable();
 #endif
 
-//  compositeResult();
+    if (m_enableFilters) {
+      if (m_starBlurRadius > 0.0f && m_starIntensity > 0.0f) 
+      {
+        doStarFilter();
+      }
+
+      if (m_glowIntensity > 0.0f || m_flareIntensity > 0.0f) {
+        downSample();
+      }
+      if (m_flareIntensity > 0.0f) {
+        doFlare();
+      }
+      if (m_glowRadius > 0.0f && m_glowIntensity > 0.0f) {
+        doGlowFilter();
+      }
+    }
+
+    glViewport(0, 0, mWindowW, mWindowH);
+    glDisable(GL_DEPTH_TEST);
+    glDepthMask(GL_FALSE);
+    glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
+    glDisable(GL_BLEND);
+
+    if (m_enableFilters) {
+      m_compositeProg->enable();
+      m_compositeProg->bindTexture("tex", m_imageTex[0], GL_TEXTURE_2D, 0);
+      m_compositeProg->bindTexture("blurTexH", m_imageTex[1], GL_TEXTURE_2D, 1);
+      m_compositeProg->bindTexture("blurTexV", m_imageTex[2], GL_TEXTURE_2D, 2);
+      m_compositeProg->bindTexture("glowTex", m_downSampledTex[0], GL_TEXTURE_2D, 3);
+      m_compositeProg->bindTexture("flareTex", m_downSampledTex[2], GL_TEXTURE_2D, 4);
+      m_compositeProg->setUniform1f("scale", m_imageBrightness);
+      m_compositeProg->setUniform1f("sourceIntensity", m_sourceIntensity);
+      m_compositeProg->setUniform1f("glowIntensity", m_glowIntensity);
+      m_compositeProg->setUniform1f("starIntensity", m_starIntensity);
+      m_compositeProg->setUniform1f("flareIntensity", m_flareIntensity);
+      m_compositeProg->setUniform1f("gamma", m_gamma);
+      drawQuad();
+      m_compositeProg->disable();
+    } else {
+      displayTexture(m_imageTex[0], m_imageBrightness);
+      //displayTexture(m_downSampledTex[0], m_imageBrightness);
+    }
+
+    glDisable(GL_BLEND);
+    glDepthMask(GL_TRUE);
+  }
+#endif
 }
 
 // render scene depth to texture

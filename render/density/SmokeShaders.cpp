@@ -613,8 +613,8 @@ const char *compositePS = STRINGIFY(
     vec4 c;
     c = texture2D(tex, gl_TexCoord[0].xy) * sourceIntensity;           \n
     if (starIntensity > 0) {
-    c += texture2D(blurTexH, gl_TexCoord[0].xy) * starIntensity;
-    c += texture2D(blurTexV, gl_TexCoord[0].xy) * starIntensity;
+      c += texture2D(blurTexH, gl_TexCoord[0].xy) * starIntensity;
+      c += texture2D(blurTexV, gl_TexCoord[0].xy) * starIntensity;
     }
     if (flareIntensity > 0) {
       c += texture2D(flareTex, gl_TexCoord[0].xy) * flareIntensity;
