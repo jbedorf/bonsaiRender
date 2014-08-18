@@ -265,8 +265,6 @@ int main(int argc, char * argv[])
   MPI_Comm_size(comm, &nranks);
   MPI_Comm_rank(comm, &rank);
 
-  assert(nranks == 1);
-  assert(rank   == 0);
 
   std::string fileName;
 #ifdef OLDIO
@@ -280,7 +278,7 @@ int main(int argc, char * argv[])
 #endif
 
 
-  if (rank == 0)  
+//  if (rank == 0)  
   {
 		AnyOption opt;
 
