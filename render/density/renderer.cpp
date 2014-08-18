@@ -1437,8 +1437,10 @@ void SmokeRenderer::splotchDraw(bool sorted)
   drawPoints(start,count,sorted);
 
   prog->disable();
+#if 1
   glFlush();
   glFinish();
+#endif
 
 #if 1
   {
@@ -1831,7 +1833,7 @@ void SmokeRenderer::createBuffers(int w, int h)
 
   // create texture for image buffer
   GLint format = GL_RGBA32F;
-//  format = GL_FLOAT_RGBA_NV;
+// format = GL_RGBA16F;
   //GLint format = GL_LUMINANCE16F_ARB;
   //GLint format = GL_RGBA8;
   m_imageTex[0] = createTexture(GL_TEXTURE_2D, m_imageW, m_imageH, format, GL_RGBA);
