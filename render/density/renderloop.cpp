@@ -412,11 +412,13 @@ class Demo
       //m_displayMode = (ParticleRenderer::DisplayMode) ((m_displayMode + 1) % ParticleRenderer::PARTICLE_NUM_MODES);
       m_displayMode = (SmokeRenderer::DisplayMode) ((m_displayMode + inc + SmokeRenderer::NUM_MODES) % SmokeRenderer::NUM_MODES);
       m_renderer.setDisplayMode(m_displayMode);
+#if 0
       if (m_displayMode == SmokeRenderer::SPRITES) {
         //m_renderer.setAlpha(0.1f);
       } else {
         //m_renderer.setAlpha(1.0f);
       }
+#endif
       // MJH todo: add body color support and remove this
       //if (ParticleRenderer::PARTICLE_SPRITES_COLOR == m_displayMode)
       //  cycleDisplayMode();

@@ -53,7 +53,7 @@ SmokeRenderer::SmokeRenderer(int numParticles, int maxParticles) :
   mIndexBuffer(0),
   mParticleRadius(0.1f),
   mParticleScaleLog(0.0f),
-  mDisplayMode(SPRITES),
+  mDisplayMode(SPLOTCH),
   mWindowW(800),
   mWindowH(600),
   mFov(40.0f),
@@ -63,7 +63,6 @@ SmokeRenderer::SmokeRenderer(int numParticles, int maxParticles) :
   m_numDisplayedSlices(m_numSlices),
   m_sliceNo(0),
   m_shadowAlpha(0.1f),
-  m_spriteAlpha(0.1f),
   m_volumeAlpha(0.2f),
   m_dustAlpha(1.0f),
   m_volumeColor(0.5f, 0.0f, 0.0f),
@@ -82,6 +81,22 @@ SmokeRenderer::SmokeRenderer(int numParticles, int maxParticles) :
   m_fbo(0),
   m_depthTex(0),
   m_rampTex(0),
+
+  /***************/
+
+  m_starScaleLog(0.0f),
+  m_starAlpha(1.0f),
+  m_dmScaleLog(-0.4f),
+  m_dmAlpha(0.1f),
+  m_spriteAlpha(0.02f),
+  m_transmission(0.001f),
+  m_imageBrightnessPre(0.08f),
+  m_gammaPre(0.4f),
+  m_imageBrightnessPost(1.0f),
+  m_gammaPost(1.0f),
+
+  /***************/
+
   m_overBright(1.0f),
   m_overBrightThreshold(0.005f),
   m_imageBrightness(1.0f),
@@ -113,7 +128,6 @@ SmokeRenderer::SmokeRenderer(int numParticles, int maxParticles) :
   m_sourceIntensity(0.5f),
   m_flareRadius(50.0f),
   m_skyboxBrightness(0.5f),
-  m_transmission(0.0f),
   m_cullDarkMatter(true)
 {
   // load shader programs
@@ -1253,6 +1267,7 @@ void SmokeRenderer::render()
       glPointSize(1.0f);
       break;
 
+#if 0
     case SPRITES:
       renderSprites(false);
       break;
@@ -1268,6 +1283,7 @@ void SmokeRenderer::render()
       compositeResult();
       //drawBounds();
       break;
+#endif
     
     case SPLOTCH:
       splotchDraw(false);
@@ -1343,11 +1359,11 @@ void SmokeRenderer::splotchDraw(bool sorted)
   glGetIntegerv(GL_VIEWPORT, viewport);
   // VS
   prog->setUniform1f("spriteScale", viewport[3] / mInvFocalLen);
-  prog->setUniform1f("starScale", powf(10.0f, mParticleScaleLog));
-  prog->setUniform1f("starAlpha", 1.0f);
-  prog->setUniform1f("dmScale",  m_ageScale);
-  prog->setUniform1f("dmAlpha",  m_dustAlpha);
-  prog->setUniform1f("spriteSizeMax", sorted ? 1.0 : 5.0);
+  prog->setUniform1f("starScale", powf(10.0f, m_starScaleLog));
+  prog->setUniform1f("starAlpha", m_starAlpha);
+  prog->setUniform1f("dmScale",  powf(10.0f, m_dmScaleLog));
+  prog->setUniform1f("dmAlpha",  m_dmAlpha);
+  prog->setUniform1f("spriteSizeMax", (sorted ? 1.0 : 5.0)*powf(10.0f, m_spriteSizeMaxLog));
   // PS
   prog->bindTexture("spriteTex",  m_sphTex, GL_TEXTURE_2D, 1);
   prog->setUniform1f("alphaScale", m_spriteAlpha);
@@ -1370,10 +1386,10 @@ void SmokeRenderer::splotchDraw(bool sorted)
   glDisable(GL_BLEND);
   m_splotch2texProg->enable();
   m_splotch2texProg->bindTexture("tex", m_imageTex[0], GL_TEXTURE_2D, 0);
-  m_splotch2texProg->setUniform1f("scale_pre", m_imageBrightness);
-  m_splotch2texProg->setUniform1f("gamma_pre", m_gamma);
-  m_splotch2texProg->setUniform1f("scale_post", 1.0);
-  m_splotch2texProg->setUniform1f("gamma_post", 1.0);
+  m_splotch2texProg->setUniform1f("scale_pre", 0.1*m_imageBrightnessPre);
+  m_splotch2texProg->setUniform1f("gamma_pre", m_gammaPre);
+  m_splotch2texProg->setUniform1f("scale_post", m_imageBrightnessPost);
+  m_splotch2texProg->setUniform1f("gamma_post", m_gammaPost);
   m_splotch2texProg->setUniform1f("sorted", (float)sorted);
   drawQuad();
   m_splotch2texProg->disable();
@@ -1809,8 +1825,25 @@ void SmokeRenderer::initParams()
   //  radius
   m_params = new ParamListGL("render_params");
 
+  m_params->AddParam(new Param<float>("star scale [log]", m_starScaleLog,     -1.0f, 1.0f, 0.001f, &m_starScaleLog));
+  m_params->AddParam(new Param<float>("star alpha      ", m_starAlpha,         0.0f, 1.0f, 0.001f, &m_starAlpha));
+
+  m_params->AddParam(new Param<float>("dm scale   [log]", m_dmScaleLog,       -1.0f, 1.0f, 0.001f, &m_dmScaleLog));
+  m_params->AddParam(new Param<float>("dm alpha        ", m_dmAlpha,           0.0f, 1.0f, 0.001f, &m_dmAlpha));
+
+  m_params->AddParam(new Param<float>("max size [log]  ", m_spriteSizeMaxLog, -1.0f, 1.0f, 0.001f, &m_spriteSizeMaxLog));
+  m_params->AddParam(new Param<float>("alpha           ", m_spriteAlpha,       0.0f, 1.0f, 0.001f, &m_spriteAlpha));
+  m_params->AddParam(new Param<float>("transmission    ", m_transmission,      0.0f, 0.1f, 0.001f, &m_transmission));
+
+  m_params->AddParam(new Param<float>("brightness [pre]",  m_imageBrightnessPre, 0.0f, 1.0f, 0.001f, &m_imageBrightnessPre));
+  m_params->AddParam(new Param<float>("gamma [pre]",       m_gammaPre,           0.0f, 2.0f, 0.001f, &m_gammaPre));
+  m_params->AddParam(new Param<float>("brightness [post]", m_imageBrightnessPost, 0.0f, 1.0f, 0.001f, &m_imageBrightnessPost));
+  m_params->AddParam(new Param<float>("gamma [post]",      m_gammaPost,           0.0f, 2.0f, 0.001f, &m_gammaPost));
+ 
+#if 0 
   m_params->AddParam(new Param<int>("slices", m_numSlices, 1, 256, 1, &m_numSlices));
   m_params->AddParam(new Param<int>("displayed slices", m_numDisplayedSlices, 1, 256, 1, &m_numDisplayedSlices));
+  
 
   m_params->AddParam(new Param<float>("sprite size", mParticleRadius, 0.0f, 0.2f, 0.001f, &mParticleRadius));
   m_params->AddParam(new Param<float>("scale [log]", mParticleScaleLog, -1.0f, 1.0f, 0.01f, &mParticleScaleLog));
@@ -1870,5 +1903,5 @@ void SmokeRenderer::initParams()
   m_params->AddParam(new Param<float>("flare radius", m_flareRadius, 0.0f, 100.0f, 0.01f, &m_flareRadius));
 
   m_params->AddParam(new Param<float>("skybox brightness", m_skyboxBrightness, 0.0f, 1.0f, 0.01f, &m_skyboxBrightness));
-
+#endif
 }

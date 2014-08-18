@@ -32,9 +32,11 @@ class SmokeRenderer
     enum DisplayMode
     {
       POINTS,
+#if 0
       SPRITES,
       SPRITES_SORTED,
       VOLUMETRIC,
+#endif
       SPLOTCH,
       SPLOTCH_SORTED,
       NUM_MODES
@@ -209,9 +211,7 @@ class SmokeRenderer
 
     // parameters
     float               m_shadowAlpha;
-    float               m_spriteAlpha;
     float               m_dustAlpha;
-    float               m_transmission;
     bool                m_doBlur;
     float               m_blurRadius;
     bool                m_displayLightBuffer;
@@ -232,6 +232,24 @@ class SmokeRenderer
     bool                m_enableAA;
     bool				m_enableVolume;
     bool				m_enableFilters;
+
+    /****************/
+    float m_starScaleLog;
+    float m_starAlpha;
+    
+    float m_dmScaleLog;
+    float m_dmAlpha;
+
+    float m_spriteSizeMaxLog;
+    float m_spriteAlpha;
+    float m_transmission;
+
+    float m_imageBrightnessPre;
+    float m_gammaPre;
+    float m_imageBrightnessPost;
+    float m_gammaPost;
+
+    /****************/
 
     float m_overBright;
     float m_overBrightThreshold;
