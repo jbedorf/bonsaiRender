@@ -1451,71 +1451,127 @@ void SmokeRenderer::splotchDraw(bool sorted)
     static std::vector<float> imgLoc, imgGlb;
     imgLoc.resize(4*w*h);
     imgGlb.resize(4*w*h);
+    const int imgSize = w*h*4*sizeof(float);
 
     const double t1 = MPI_Wtime();
 
-#if 1 /* eg: buggy, when 'h' is pressed, half screen is gone... why? */
-    static GLuint pbo_id[2];
-    if (!pbo_id[0])
+#if 0 /* eg: buggy, when 'h' is pressed, half screen is gone... why? */
     {
-      const int pbo_size = 1920*1080*4*sizeof(float);
-      glGenBuffers(2, pbo_id);
+      static GLuint pbo_id[2];
+      if (!pbo_id[0])
+      {
+        const int pbo_size = 1920*1080*4*sizeof(float);
+        glGenBuffers(2, pbo_id);
+        glBindBuffer(GL_PIXEL_PACK_BUFFER, pbo_id[0]);
+        glBufferData(GL_PIXEL_PACK_BUFFER, pbo_size, 0, GL_STATIC_READ);
+        glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
+        glBindBuffer(GL_PIXEL_UNPACK_BUFFER, pbo_id[1]);
+        glBufferData(GL_PIXEL_UNPACK_BUFFER, pbo_size, 0, GL_STATIC_DRAW);
+        glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
+      }
+
+      assert(pbo_id[0] && pbo_id[1]);
+      glReadBuffer((GLenum)GL_COLOR_ATTACHMENT0_EXT);
       glBindBuffer(GL_PIXEL_PACK_BUFFER, pbo_id[0]);
-      glBufferData(GL_PIXEL_PACK_BUFFER, pbo_size, 0, GL_STATIC_READ);
+      glReadPixels(0, 0, w, h, GL_RGBA, GL_FLOAT, 0);
+      const double t2 = MPI_Wtime();
+
+      GLvoid *rptr = glMapBufferRange(GL_PIXEL_PACK_BUFFER, 0, imgSize, GL_MAP_READ_BIT);
+      memcpy(&imgLoc[0], rptr, imgSize);
+      glUnmapBuffer(GL_PIXEL_PACK_BUFFER);
       glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
+      const double t3 = MPI_Wtime();
+
+      MPI_Reduce(&imgLoc[0], &imgGlb[0], 4*w*h, MPI_FLOAT, MPI_SUM, getMaster(), comm);
+      const double t4 = MPI_Wtime();
+
+      glDrawBuffer((GLenum)GL_COLOR_ATTACHMENT0_EXT);
       glBindBuffer(GL_PIXEL_UNPACK_BUFFER, pbo_id[1]);
-      glBufferData(GL_PIXEL_UNPACK_BUFFER, pbo_size, 0, GL_STATIC_DRAW);
+      GLvoid *wptr = glMapBufferRange(GL_PIXEL_UNPACK_BUFFER, 0, imgSize, GL_MAP_READ_BIT);
+      memcpy(wptr, &imgGlb[0], imgSize);
+      glUnmapBuffer(GL_PIXEL_UNPACK_BUFFER);
+      const double t5 = MPI_Wtime();
+
+      glDisable(GL_BLEND);
+      glDrawPixels(w,h,GL_RGBA,GL_FLOAT,0);
+      const double t6 = MPI_Wtime();
       glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
+      if (1 && isMaster())
+      {
+        fprintf(stderr, 
+            "total= %g: getParam= %g  getImg= %g memcpy= %g red= %g mem2= %g drawImg= %g \n", t6-t0,
+            t1-t0,         t2-t1,    t3 -t2,    t4-t3,  t5-t4,  t6-t5 );
+      }
     }
-
-    assert(pbo_id[0] && pbo_id[1]);
-    glReadBuffer((GLenum)GL_COLOR_ATTACHMENT0_EXT);
-    glBindBuffer(GL_PIXEL_PACK_BUFFER, pbo_id[0]);
-    glReadPixels(0, 0, w, h, GL_RGBA, GL_FLOAT, 0);
-    const double t2 = MPI_Wtime();
-
-    const int size = w*h*4*sizeof(float);
-    GLvoid *rptr = glMapBufferRange(GL_PIXEL_PACK_BUFFER, 0, size, GL_MAP_READ_BIT);
-    memcpy(&imgLoc[0], rptr, size);
-    glUnmapBuffer(GL_PIXEL_PACK_BUFFER);
-    glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
-    const double t3 = MPI_Wtime();
-
-    MPI_Reduce(&imgLoc[0], &imgGlb[0], 4*w*h, MPI_FLOAT, MPI_SUM, getMaster(), comm);
-    const double t4 = MPI_Wtime();
-
-    glDrawBuffer((GLenum)GL_COLOR_ATTACHMENT0_EXT);
-    glBindBuffer(GL_PIXEL_UNPACK_BUFFER, pbo_id[1]);
-    GLvoid *wptr = glMapBufferRange(GL_PIXEL_UNPACK_BUFFER, 0, size, GL_MAP_READ_BIT);
-    memcpy(wptr, &imgGlb[0], size);
-    glUnmapBuffer(GL_PIXEL_UNPACK_BUFFER);
-    const double t5 = MPI_Wtime();
-
-    glDisable(GL_BLEND);
-    glDrawPixels(w,h,GL_RGBA,GL_FLOAT,0);
-    const double t6 = MPI_Wtime();
-    glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
-    if (1 && isMaster())
+#elif 0
     {
-      fprintf(stderr, 
-          "total= %g: getParam= %g  getImg= %g memcpy= %g red= %g mem2= %g drawImg= %g \n", t6-t0,
-          t1-t0,         t2-t1,    t3 -t2,    t4-t3,  t5-t4,  t6-t5 );
+      glGetTexImage(GL_TEXTURE_2D, 0, GL_RGBA, GL_FLOAT, &imgLoc[0]);
+      const double t2 = MPI_Wtime();
+
+      MPI_Reduce(&imgLoc[0], &imgGlb[0], 4*w*h, MPI_FLOAT, MPI_SUM, getMaster(), comm);
+      const double t3 = MPI_Wtime();
+
+      glTexImage2D(GL_TEXTURE_2D, 0, internalformat, w,h,0,GL_RGBA,GL_FLOAT, &imgGlb[0]);
+      const double t4 = MPI_Wtime();
+
+      if (1 && isMaster())
+      {
+        fprintf(stderr, 
+            "total= %g: getParam= %g  getImg= %g  red= %g  drawImg= %g \n", t4-t0,
+            t1-t0,         t2-t1,       t3 -t2,    t4-t3);
+      }
     }
 #else
-    glGetTexImage(GL_TEXTURE_2D, 0, GL_RGBA, GL_FLOAT, &imgLoc[0]);
-    const double t2 = MPI_Wtime();
-    
-    MPI_Reduce(&imgLoc[0], &imgGlb[0], 4*w*h, MPI_FLOAT, MPI_SUM, getMaster(), comm);
-    const double t3 = MPI_Wtime();
-
-    glTexImage2D(GL_TEXTURE_2D, 0, internalformat, w,h,0,GL_RGBA,GL_FLOAT, &imgGlb[0]);
-    const double t4 = MPI_Wtime();
-
-    if (1 && isMaster())
     {
-      fprintf(stderr, 
-          "total= %g: getParam= %g  getImg= %g  red= %g  drawImg= %g \n", t4-t0,
-          t1-t0,         t2-t1,       t3 -t2,    t4-t3);
+      static GLuint pbo_id[2];
+      if (!pbo_id[0])
+      {
+        const int pbo_size = 1920*1080*4*sizeof(float);
+        glGenBuffers(2, pbo_id);
+        glBindBuffer(GL_PIXEL_PACK_BUFFER, pbo_id[0]);
+        glBufferData(GL_PIXEL_PACK_BUFFER, pbo_size, 0, GL_STATIC_READ);
+        glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
+        glBindBuffer(GL_PIXEL_UNPACK_BUFFER, pbo_id[1]);
+        glBufferData(GL_PIXEL_UNPACK_BUFFER, pbo_size, 0, GL_STATIC_DRAW);
+        glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
+      }
+      assert(pbo_id[0] && pbo_id[1]);
+      glBindBuffer(GL_PIXEL_PACK_BUFFER, pbo_id[0]);
+      glGetTexImage(GL_TEXTURE_2D, 0, GL_RGBA, GL_FLOAT, 0);
+//      glReadPixels(0, 0, w, h, GL_RGBA, GL_FLOAT, 0);
+      glFinish();
+      const double t2 = MPI_Wtime();
+
+      GLvoid *rptr = glMapBufferRange(GL_PIXEL_PACK_BUFFER, 0, imgSize, GL_MAP_READ_BIT);
+      memcpy(&imgLoc[0], rptr, imgSize);
+      glUnmapBuffer(GL_PIXEL_PACK_BUFFER);
+      glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
+      glFinish();
+      const double t3 = MPI_Wtime();
+
+      MPI_Reduce(&imgLoc[0], &imgGlb[0], 4*w*h, MPI_FLOAT, MPI_SUM, getMaster(), comm);
+      glFinish();
+      const double t4 = MPI_Wtime();
+
+      glBindBuffer(GL_PIXEL_UNPACK_BUFFER, pbo_id[1]);
+      GLvoid *wptr = glMapBufferRange(GL_PIXEL_UNPACK_BUFFER, 0, imgSize, GL_MAP_WRITE_BIT);
+      memcpy(wptr, &imgGlb[0], imgSize);
+      glFinish();
+      const double t5 = MPI_Wtime();
+
+      glUnmapBuffer(GL_PIXEL_UNPACK_BUFFER);
+      glTexImage2D(GL_TEXTURE_2D, 0, internalformat, w,h,0,GL_RGBA,GL_FLOAT, 0);
+      glFinish();
+      glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
+      const double t6 = MPI_Wtime();
+
+      if (1 && isMaster())
+      {
+        fprintf(stderr, 
+            "total= %g: getParm= %g  getImg= %g memcpy= %g  red= %g  memcpy= %g drawImg= %g\n", t6-t0,
+                        t1-t0,         t2-t1,   t3-t2,       t4-t3,   t5-t4,     t6-t5);
+      }
+      
     }
 #endif
   }
