@@ -1495,7 +1495,7 @@ void SmokeRenderer::splotchDraw(bool sorted)
     glDrawPixels(w,h,GL_RGBA,GL_FLOAT,0);
     const double t6 = MPI_Wtime();
     glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
-    if (0 && isMaster())
+    if (1 && isMaster())
     {
       fprintf(stderr, 
           "total= %g: getParam= %g  getImg= %g memcpy= %g red= %g mem2= %g drawImg= %g \n", t6-t0,
@@ -1511,7 +1511,7 @@ void SmokeRenderer::splotchDraw(bool sorted)
     glTexImage2D(GL_TEXTURE_2D, 0, internalformat, w,h,0,GL_RGBA,GL_FLOAT, &imgGlb[0]);
     const double t4 = MPI_Wtime();
 
-    if (0 && isMaster())
+    if (1 && isMaster())
     {
       fprintf(stderr, 
           "total= %g: getParam= %g  getImg= %g  red= %g  drawImg= %g \n", t4-t0,

@@ -1586,19 +1586,23 @@ void onexit() {
 
 unsigned long long fpsCount;
 double timeBegin;
+static int thisRank;
+static MPI_Comm thisComm;
 void display()
 {
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
   theDemo->step();
+  MPI_Barrier(thisComm);
   const double t0 = MPI_Wtime();
   theDemo->display();
 
   //glutReportErrors();
   glutSwapBuffers();
   const double t1 = MPI_Wtime();
-  MPI_Barrier(MPI_COMM_WORLD);
-//  fprintf(stderr, " render= %g sec \n", t1-t0);
+  MPI_Barrier(thisComm);
+  if (thisRank == 0)
+    fprintf(stderr, " render= %g sec \n", t1-t0);
 
   fpsCount++;
 
@@ -1958,6 +1962,8 @@ void initAppRenderer(int argc, char** argv,
     const char *fullScreenMode,
     const bool stereo)
 {
+  thisRank = rank;
+  thisComm = comm;
   assert(rank < nrank);
   assert(idata.n() <= MAX_PARTICLES);
   initGL(argc, argv, rank, nrank, comm, fullScreenMode, stereo);
