@@ -1545,34 +1545,44 @@ void SmokeRenderer::splotchDraw(bool sorted)
       const double t2 = MPI_Wtime();
 
       GLvoid *rptr = glMapBufferRange(GL_PIXEL_PACK_BUFFER, 0, imgSize, GL_MAP_READ_BIT);
-      memcpy(&imgLoc[0], rptr, imgSize);
+
+#pragma omp parallel for
+      for (int i = 0; i < 4*w*h; i++)
+        imgLoc[i] = reinterpret_cast<float*>(rptr)[i];
+
+//      memcpy(&imgLoc[0], rptr, imgSize);
       glUnmapBuffer(GL_PIXEL_PACK_BUFFER);
       glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
       glFinish();
       const double t3 = MPI_Wtime();
 
       MPI_Reduce(&imgLoc[0], &imgGlb[0], 4*w*h, MPI_FLOAT, MPI_SUM, getMaster(), comm);
+//      MPI_Allreduce(&imgLoc[0], &imgGlb[0], 4*w*h, MPI_FLOAT, MPI_SUM, comm);
       glFinish();
       const double t4 = MPI_Wtime();
 
-      glBindBuffer(GL_PIXEL_UNPACK_BUFFER, pbo_id[1]);
-      GLvoid *wptr = glMapBufferRange(GL_PIXEL_UNPACK_BUFFER, 0, imgSize, GL_MAP_WRITE_BIT);
-      memcpy(wptr, &imgGlb[0], imgSize);
-      glFinish();
-      const double t5 = MPI_Wtime();
-
-      glUnmapBuffer(GL_PIXEL_UNPACK_BUFFER);
-      glTexImage2D(GL_TEXTURE_2D, 0, internalformat, w,h,0,GL_RGBA,GL_FLOAT, 0);
-      glFinish();
-      glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
-      const double t6 = MPI_Wtime();
-
-      if (1 && isMaster())
+      if (isMaster())
       {
-        fprintf(stderr, 
-            "total= %g: d2h= %g cpy= %g  mpi= %g  cpy= %g h2d= %g :: bwMPI= %g bwD2H= %g  bwH2D= %g\n", t6-t0,
-                        t2-t1,   t3-t2,       t4-t3,   t5-t4,     t6-t5,
-                        1.0*nrank*imgSize/(t4-t3)/1e6, imgSize/(t2-t1)/1e6, imgSize/(t6-t5)/1e6);
+        glBindBuffer(GL_PIXEL_UNPACK_BUFFER, pbo_id[1]);
+        GLvoid *wptr = glMapBufferRange(GL_PIXEL_UNPACK_BUFFER, 0, imgSize, GL_MAP_WRITE_BIT);
+
+#pragma omp parallel for
+        for (int i = 0; i < 4*w*h; i++)
+          reinterpret_cast<float*>(wptr)[i] = imgGlb[i];
+        glFinish();
+        const double t5 = MPI_Wtime();
+
+        glUnmapBuffer(GL_PIXEL_UNPACK_BUFFER);
+        glTexImage2D(GL_TEXTURE_2D, 0, internalformat, w,h,0,GL_RGBA,GL_FLOAT, 0);
+        glFinish();
+        glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
+        const double t6 = MPI_Wtime();
+
+        if (1)
+          fprintf(stderr, 
+              "total= %g: d2h= %g cpy= %g  mpi= %g  cpy= %g h2d= %g :: bwMPI= %g bwD2H= %g  bwH2D= %g\n", t6-t0,
+              t2-t1,   t3-t2,       t4-t3,   t5-t4,     t6-t5,
+              1.0*nrank*imgSize/(t4-t3)/1e6, imgSize/(t2-t1)/1e6, imgSize/(t6-t5)/1e6);
       }
       
     }
