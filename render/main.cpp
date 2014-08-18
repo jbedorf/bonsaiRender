@@ -5,13 +5,8 @@
 #include <unistd.h>
 #include <sstream>
 #include <cmath>
-#if 0
-#include "read_tipsy.h"
-#define OLDIO
-#else
 #include "IDType.h"
 #include "BonsaiIO.h"
-#endif
 
 #include "renderloop.h"
 #include "anyoption.h"
@@ -71,7 +66,7 @@ static RendererData* readBonsaiReduced(
   }
 
 
-  RendererData *rDataPtr = new RendererData(nS+nDM);
+  RendererData *rDataPtr = new RendererData(nS+nDM,rank,nranks,comm);
   auto &rData = *rDataPtr;
   for (int i = 0; i < nS; i++)
   {
@@ -196,7 +191,7 @@ static RendererData* readBonsaiFull(
   }
 
 
-  RendererData *rDataPtr = new RendererData(nS+nDM);
+  RendererData *rDataPtr = new RendererData(nS+nDM,rank,nranks,comm);
   auto &rData = *rDataPtr;
   for (int i = 0; i < nS; i++)
   {
@@ -267,9 +262,6 @@ int main(int argc, char * argv[])
 
 
   std::string fileName;
-#ifdef OLDIO
-  int nDomains     = -1;
-#endif
   int reduceDM    =  10;
   int reduceS=  1;
 #ifndef PARTICLESRENDERER
@@ -278,7 +270,6 @@ int main(int argc, char * argv[])
 #endif
 
 
-//  if (rank == 0)  
   {
 		AnyOption opt;
 
@@ -289,9 +280,6 @@ int main(int argc, char * argv[])
 		ADDUSAGE(" ");
 		ADDUSAGE(" -h  --help             Prints this help ");
 		ADDUSAGE(" -i  --infile #         Input snapshot filename ");
-#ifdef OLDIO
-    ADDUSAGE(" -n  --ndomains #       Number of domains ");
-#endif
 		ADDUSAGE("     --reduceDM    #   cut down DM dataset by # factor [10]. 0-disable DM");
 		ADDUSAGE("     --reduceS     #   cut down stars dataset by # factor [1]. 0-disable S");
 #ifndef PARTICLESRENDERER
@@ -303,9 +291,6 @@ int main(int argc, char * argv[])
 
 		opt.setFlag  ( "help" ,        'h');
 		opt.setOption( "infile",       'i');
-#ifdef OLDIO
-		opt.setOption( "ndomains",     'n');
-#endif
 		opt.setOption( "reduceDM");
 		opt.setOption( "reduceS");
     opt.setOption( "fullscreen");
@@ -323,9 +308,6 @@ int main(int argc, char * argv[])
 
     char *optarg = NULL;
     if ((optarg = opt.getValue("infile")))       fileName           = std::string(optarg);
-#ifdef OLDIO
-    if ((optarg = opt.getValue("ndomains")))     nDomains           = atoi(optarg);
-#endif
     if ((optarg = opt.getValue("reduceDM"))) reduceDM       = atoi(optarg);
     if ((optarg = opt.getValue("reduceS"))) reduceS       = atoi(optarg);
 #ifndef PARTICLESRENDERER
@@ -334,9 +316,6 @@ int main(int argc, char * argv[])
 #endif
 
     if (fileName.empty() ||
-#ifdef OLDIO
-        nDomains == -1 || 
-#endif
         reduceDM < 0 || reduceS < 0)
     {
       opt.printUsage();
@@ -346,64 +325,6 @@ int main(int argc, char * argv[])
 #undef ADDUSAGE
   }
 
-
-#ifdef OLDIO
-  assert(reduceDM > 0);
-  assert(reduceS > 0);
-  ReadTipsy data(
-      fileName, 
-      rank, nranks,
-      nDomains, 
-      reduceDM,
-      reduceS);
-
-  long long nFirstLocal = data.firstID.size();
-  long long nSecondLocal = data.secondID.size();
-
-  long long nFirst, nSecond;
-  MPI_Allreduce(&nFirstLocal, &nFirst, 1, MPI_LONG, MPI_SUM, comm);
-  MPI_Allreduce(&nSecondLocal, &nSecond, 1, MPI_LONG, MPI_SUM, comm);
-
-  if (rank == 0)
-  {
-    fprintf(stderr, " nFirst = %lld \n", nFirst);
-    fprintf(stderr, " nSecond= %lld \n", nSecond);
-    fprintf(stderr, " nTotal= %lld \n", nFirst + nSecond);
-  }
-
-  const int nPtcl = nFirstLocal+ nSecondLocal;
-  RendererData rData(nPtcl);
-  for (int i = 0; i < nFirstLocal; i++)
-  {
-    const int ip = i;
-    rData.posx(ip) = data.firstPos[i].x;
-    rData.posy(ip) = data.firstPos[i].y;
-    rData.posz(ip) = data.firstPos[i].z;
-    rData.ID  (ip) = data.firstID[i];
-    rData.type(ip) = 0;
-    rData.attribute(RendererData::MASS, ip) = data.firstPos[i].w;
-    rData.attribute(RendererData::VEL,  ip) =
-      std::sqrt(
-          data.firstVel[i].x*data.firstVel[i].x +
-          data.firstVel[i].y*data.firstVel[i].y +
-          data.firstVel[i].z*data.firstVel[i].z);
-  }
-  for (int i = 0; i < nSecondLocal; i++)
-  {
-    const int ip = i + nFirstLocal;
-    rData.posx(ip) = data.secondPos[i].x;
-    rData.posy(ip) = data.secondPos[i].y;
-    rData.posz(ip) = data.secondPos[i].z;
-    rData.ID  (ip) = data.secondID[i];
-    rData.type(ip) = 1;
-    rData.attribute(RendererData::MASS, ip) = data.secondPos[i].w;
-    rData.attribute(RendererData::VEL,  ip) =
-      std::sqrt(
-          data.secondVel[i].x*data.secondVel[i].x +
-          data.secondVel[i].y*data.secondVel[i].y +
-          data.secondVel[i].z*data.secondVel[i].z);
-  }
-#else  /* end OLDIO */
 
   RendererData *rDataPtr;
   if ((rDataPtr = readBonsaiFull(rank, nranks, comm, fileName, reduceDM, reduceS))) {}
@@ -416,7 +337,6 @@ int main(int argc, char * argv[])
     exit(-1);
   }
 
-#endif
 
   assert(rDataPtr != 0);
   rDataPtr->computeMinMax();

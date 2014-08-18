@@ -1,5 +1,6 @@
 #pragma once
 
+#include <mpi.h>
 #include <cassert>
 #include <cmath>
 #if 0
@@ -39,6 +40,8 @@ class RendererData
       NPROP};
   private:
     const int _n;
+    const int _rank, _nrank;
+    const MPI_Comm &_comm;
     float *_posx, *_posy, *_posz;
     long_t *_ID;
     int   *_type;
@@ -49,10 +52,21 @@ class RendererData
 
     float _attributeMin[NPROP];
     float _attributeMax[NPROP];
+   
+    void minmaxAttributeGlb(const Attribute_t p)   
+    {
+      float _min, _max;
+      MPI_Allreduce(&_attributeMin[p], &_min, 1, MPI_FLOAT, MPI_MIN, _comm);
+      MPI_Allreduce(&_attributeMax[p], &_max, 1, MPI_FLOAT, MPI_MAX, _comm);
+      _attributeMin[p] = std::min(_attributeMin[p], _min);
+      _attributeMax[p] = std::max(_attributeMax[p], _max);
+    }
 
   public:
-    RendererData(const int __n) : _n(__n)
+    RendererData(const int __n, const int rank, const int nrank, const MPI_Comm &comm) : 
+      _n(__n), _rank(rank), _nrank(nrank), _comm(comm)
   {
+    assert(rank < nrank);
     _posx   = new float[_n];
     _posy   = new float[_n];
     _posz   = new float[_n];
@@ -92,9 +106,6 @@ class RendererData
     long_t  ID(const long_t i) const { return _ID[i]; }
     long_t& ID(const long_t i)       { return _ID[i]; }
 
-    void computeMinMax(const Attribute_t p)
-    {
-    }
     void computeMinMax()
     {
       _xmin=_ymin=_zmin=_rmin = +HUGE;
@@ -104,6 +115,7 @@ class RendererData
         _attributeMin[p] = +HUGE;
         _attributeMax[p] = -HUGE;
       }
+
       for (int i = 0; i < _n; i++)
       {
         _xmin = std::min(_xmin, _posx[i]);
@@ -134,6 +146,32 @@ class RendererData
         assert(_posy[i] >= _rmin && _posy[i] <= _rmax);
         assert(_posz[i] >= _rmin && _posz[i] <= _rmax);
       }
+
+
+      float minloc[] = {_xmin, _ymin, _zmin};
+      float minglb[] = {_xmin, _ymin, _zmin};
+
+      float maxloc[] = {_xmax, _ymax, _zmax};
+      float maxglb[] = {_xmax, _ymax, _zmax};
+
+      MPI_Allreduce(minloc, minglb, 3, MPI_FLOAT, MPI_MIN, _comm);
+      MPI_Allreduce(maxloc, maxglb, 3, MPI_FLOAT, MPI_MAX, _comm);
+
+      _xmin = minglb[0];
+      _ymin = minglb[1];
+      _zmin = minglb[2];
+      _xmax = maxglb[0];
+      _ymax = maxglb[1];
+      _zmax = maxglb[2];
+      _rmin = std::min(_rmin, _xmin);
+      _rmin = std::min(_rmin, _ymin);
+      _rmin = std::min(_rmin, _zmin);
+      _rmax = std::max(_rmax, _xmax);
+      _rmax = std::max(_rmax, _ymax);
+      _rmax = std::max(_rmax, _zmax);
+        
+      for (int p = 0; p < NPROP; p++)
+        minmaxAttributeGlb(static_cast<Attribute_t>(p));
     }
 
     float xmin() const { return _xmin;} 
@@ -148,6 +186,7 @@ class RendererData
 
     float attributeMin(const Attribute_t p) const { return _attributeMin[p]; }
     float attributeMax(const Attribute_t p) const { return _attributeMax[p]; }
+
 
     void rescaleLinear(const Attribute_t p, const float newMin, const float newMax)
     {
@@ -167,6 +206,8 @@ class RendererData
       }
       _attributeMin[p] = min;
       _attributeMax[p] = max;
+
+      minmaxAttributeGlb(p);
     }
 
     void scaleLog(const Attribute_t p, const float zeroPoint = 1.0f)
@@ -180,6 +221,8 @@ class RendererData
       }
       _attributeMin[p] = min;
       _attributeMax[p] = max;
+
+      minmaxAttributeGlb(p);
     }
     void scaleExp(const Attribute_t p, const float zeroPoint = 1.0f)
     {
@@ -192,6 +235,8 @@ class RendererData
       }
       _attributeMin[p] = min;
       _attributeMax[p] = max;
+
+      minmaxAttributeGlb(p);
     }
 
     void clamp(const Attribute_t p, const float left, const float right)
@@ -221,5 +266,7 @@ class RendererData
 
       _attributeMin[p] = min;
       _attributeMax[p] = max;
+      
+      minmaxAttributeGlb(p);
     }
 };
