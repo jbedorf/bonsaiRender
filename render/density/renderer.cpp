@@ -1568,9 +1568,9 @@ void SmokeRenderer::splotchDraw(bool sorted)
       if (1 && isMaster())
       {
         fprintf(stderr, 
-            "total= %g: d2h= %g cpy= %g  mpi= %g  cpy= %g h2d= %g bwD2H= %g  bwH2D= %g\n", t6-t0,
+            "total= %g: d2h= %g cpy= %g  mpi= %g  cpy= %g h2d= %g :: bwMPI= %g bwD2H= %g  bwH2D= %g\n", t6-t0,
                         t2-t1,   t3-t2,       t4-t3,   t5-t4,     t6-t5,
-                        imgSize/(t2-t1)/1e6, imgSize/(t6-t5)/1e6);
+                        1.0*nrank*imgSize/(t4-t3)/1e6, imgSize/(t2-t1)/1e6, imgSize/(t6-t5)/1e6);
       }
       
     }
@@ -1830,7 +1830,8 @@ void SmokeRenderer::createBuffers(int w, int h)
   printf("image size: %d %d\n", m_imageW, m_imageH);
 
   // create texture for image buffer
-  GLint format = GL_RGBA16F_ARB;
+  GLint format = GL_RGBA32F;
+//  format = GL_FLOAT_RGBA_NV;
   //GLint format = GL_LUMINANCE16F_ARB;
   //GLint format = GL_RGBA8;
   m_imageTex[0] = createTexture(GL_TEXTURE_2D, m_imageW, m_imageH, format, GL_RGBA);
