@@ -1437,6 +1437,8 @@ void SmokeRenderer::splotchDraw(bool sorted)
   drawPoints(start,count,sorted);
 
   prog->disable();
+  glFlush();
+  glFinish();
 
 #if 1
   {
@@ -1452,7 +1454,7 @@ void SmokeRenderer::splotchDraw(bool sorted)
 
     const double t1 = MPI_Wtime();
 
-#if 0 /* eg: buggy, when 'j' is pressed, half screen is gone... why? */
+#if 0 /* eg: buggy, when 'h' is pressed, half screen is gone... why? */
     static GLuint pbo_id[2];
     if (!pbo_id[0])
     {
