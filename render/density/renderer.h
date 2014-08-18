@@ -139,7 +139,8 @@ class SmokeRenderer : public SmokeRendererParams
   const int rank, nrank;
   const MPI_Comm &comm;
 
-  bool isMaster() const { return rank == 0; };
+  int getMaster() const { return 0;}
+  bool isMaster() const { return rank == getMaster(); };
 
   using uint = unsigned int;
   public:

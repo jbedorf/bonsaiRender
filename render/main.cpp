@@ -353,6 +353,7 @@ int main(int argc, char * argv[])
 //  rDataPtr->scaleExp(RendererData::VEL);
   
 
+  fprintf(stderr, " rank= %d: n= %d\n", rank, rDataPtr->n());
   initAppRenderer(argc, argv, 
       rank, nranks, comm,
       *rDataPtr,

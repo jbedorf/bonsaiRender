@@ -184,6 +184,7 @@ SmokeRenderer::SmokeRenderer(int numParticles, int maxParticles, const int _rank
   m_cullDarkMatter(true)
 #endif
 {
+  assert(rank < nrank);
   // load shader programs
   m_simpleProg = new GLSLProgram(simpleVS, simplePS);
 #if MOTION_BLUR
@@ -444,6 +445,7 @@ void SmokeRenderer::setPositions(float *pos)
     glBindBuffer(GL_ARRAY_BUFFER_ARB, m_pbo);
     glBufferData(GL_ARRAY_BUFFER_ARB, mNumParticles * 4 * sizeof(float), pos, GL_DYNAMIC_DRAW);
   }
+  assert(m_pbo);
   glBindBuffer(GL_ARRAY_BUFFER_ARB, m_pbo);
   glBufferSubData(GL_ARRAY_BUFFER_ARB, 0, mNumParticles * 4 * sizeof(float), pos);
   glBindBuffer( GL_ARRAY_BUFFER_ARB, 0);
@@ -1435,7 +1437,92 @@ void SmokeRenderer::splotchDraw(bool sorted)
   drawPoints(start,count,sorted);
 
   prog->disable();
+
+#if 1
+  {
+    const double t0 = MPI_Wtime();
+    glBindTexture(GL_TEXTURE_2D, m_imageTex[0]);
+    GLint w, h, internalformat;
+    glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_WIDTH,  &w);
+    glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_HEIGHT, &h);
+    glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_INTERNAL_FORMAT, &internalformat);
+    static std::vector<float> imgLoc, imgGlb;
+    imgLoc.resize(4*w*h);
+    imgGlb.resize(4*w*h);
+
+    const double t1 = MPI_Wtime();
+
+#if 0 /* eg: buggy, when 'j' is pressed, half screen is gone... why? */
+    static GLuint pbo_id[2];
+    if (!pbo_id[0])
+    {
+      const int pbo_size = 1920*1080*4*sizeof(float);
+      glGenBuffers(2, pbo_id);
+      glBindBuffer(GL_PIXEL_PACK_BUFFER, pbo_id[0]);
+      glBufferData(GL_PIXEL_PACK_BUFFER, pbo_size, 0, GL_STATIC_READ);
+      glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
+      glBindBuffer(GL_PIXEL_UNPACK_BUFFER, pbo_id[1]);
+      glBufferData(GL_PIXEL_UNPACK_BUFFER, pbo_size, 0, GL_STATIC_DRAW);
+      glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
+    }
+
+    assert(pbo_id[0] && pbo_id[1]);
+    glReadBuffer((GLenum)GL_COLOR_ATTACHMENT0_EXT);
+    glBindBuffer(GL_PIXEL_PACK_BUFFER, pbo_id[0]);
+    glReadPixels(0, 0, w, h, GL_RGBA, GL_FLOAT, 0);
+    const double t2 = MPI_Wtime();
+
+    const int size = w*h*4*sizeof(float);
+    GLvoid *rptr = glMapBufferRange(GL_PIXEL_PACK_BUFFER, 0, size, GL_MAP_READ_BIT);
+    memcpy(&imgLoc[0], rptr, size);
+    glUnmapBuffer(GL_PIXEL_PACK_BUFFER);
+    glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
+    const double t3 = MPI_Wtime();
+
+    MPI_Reduce(&imgLoc[0], &imgGlb[0], 4*w*h, MPI_FLOAT, MPI_SUM, getMaster(), comm);
+    const double t4 = MPI_Wtime();
+
+    glDrawBuffer((GLenum)GL_COLOR_ATTACHMENT0_EXT);
+    glBindBuffer(GL_PIXEL_UNPACK_BUFFER, pbo_id[1]);
+    GLvoid *wptr = glMapBufferRange(GL_PIXEL_UNPACK_BUFFER, 0, size, GL_MAP_READ_BIT);
+    memcpy(wptr, &imgGlb[0], size);
+    glUnmapBuffer(GL_PIXEL_UNPACK_BUFFER);
+    const double t5 = MPI_Wtime();
+
+    glDisable(GL_BLEND);
+    glDrawPixels(w,h,GL_RGBA,GL_FLOAT,0);
+    const double t6 = MPI_Wtime();
+    glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
+    if (isMaster())
+    {
+      fprintf(stderr, 
+          "total= %g: getParam= %g  getImg= %g memcpy= %g red= %g mem2= %g drawImg= %g \n", t6-t0,
+          t1-t0,         t2-t1,    t3 -t2,    t4-t3,  t5-t4,  t6-t5 );
+    }
+#else
+    glGetTexImage(GL_TEXTURE_2D, 0, GL_RGBA, GL_FLOAT, &imgLoc[0]);
+    const double t2 = MPI_Wtime();
+    
+    MPI_Reduce(&imgLoc[0], &imgGlb[0], 4*w*h, MPI_FLOAT, MPI_SUM, getMaster(), comm);
+    const double t3 = MPI_Wtime();
+
+    glTexImage2D(GL_TEXTURE_2D, 0, internalformat, w,h,0,GL_RGBA,GL_FLOAT, &imgGlb[0]);
+    const double t4 = MPI_Wtime();
+
+    if (isMaster())
+    {
+      fprintf(stderr, 
+          "total= %g: getParam= %g  getImg= %g  red= %g  drawImg= %g \n", t4-t0,
+          t1-t0,         t2-t1,       t3 -t2,    t4-t3);
+    }
+#endif
+  }
+#endif
+
+  glBindTexture(GL_TEXTURE_2D,0);
   m_fbo->Disable();
+
+
 
 #if 1 
   glDisable(GL_BLEND);
@@ -1449,6 +1536,7 @@ void SmokeRenderer::splotchDraw(bool sorted)
   drawQuad();
   m_splotch2texProg->disable();
 #else
+#error
   {
 #if 0
     m_fbo->Bind();

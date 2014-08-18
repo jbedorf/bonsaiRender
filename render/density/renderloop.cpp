@@ -329,7 +329,7 @@ class Demo
   public:
     Demo(RendererData &idata, const int _rank, const int _nrank, const MPI_Comm &_comm)
       : 
-        rank(_rank), nrank(_rank), comm(_comm),
+        rank(_rank), nrank(_nrank), comm(_comm),
         m_idata(idata), iterationsRemaining(true),
       //       m_renderer(tree->localTree.n + tree->localTree.n_dust),
       m_renderer(idata.n(), MAX_PARTICLES, rank, nrank, comm),
@@ -364,6 +364,7 @@ class Demo
       m_cameraRoll(0.0f),
       m_enableStats(true)
   {
+    assert(rank < nrank);
     m_windowDims = make_int2(1024, 768);
     m_cameraTrans = make_float3(0, -2, -100);
     m_cameraTransLag = m_cameraTrans;
@@ -418,7 +419,6 @@ class Demo
       //m_displayMode = (ParticleRenderer::DisplayMode) ((m_displayMode + 1) % ParticleRenderer::PARTICLE_NUM_MODES);
       m_displayMode = (SmokeRenderer::DisplayMode) ((m_displayMode + inc + SmokeRenderer::NUM_MODES) % SmokeRenderer::NUM_MODES);
       m_renderer.setDisplayMode(m_displayMode);
-      fprintf(stderr ,"  m_displayMode= %d\n" ,m_displayMode);
 #if 0
       if (m_displayMode == SmokeRenderer::SPRITES) {
         //m_renderer.setAlpha(0.1f);
@@ -595,7 +595,7 @@ class Demo
       }
 #endif
 
-      if (isMaster())
+//      if (isMaster())
       {
         if (m_displaySliders) {
           m_params->Render(0, 0);
@@ -786,10 +786,12 @@ class Demo
           mainRender(LEFT_EYE);
         }
       }
-      else if (isMaster()) //rendering disabled just draw stats
+      else // if (isMaster()) //rendering disabled just draw stats
         drawStats(fps);
 
       glutReportErrors();
+      if (isMaster())
+        fprintf(stderr, " -------- \n");
     }
 
     void mouse(int button, int state, int x, int y)
@@ -1589,10 +1591,14 @@ void display()
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
   theDemo->step();
+  const double t0 = MPI_Wtime();
   theDemo->display();
 
   //glutReportErrors();
   glutSwapBuffers();
+  const double t1 = MPI_Wtime();
+  MPI_Barrier(MPI_COMM_WORLD);
+  fprintf(stderr, " render= %g sec \n", t1-t0);
 
   fpsCount++;
 
@@ -1952,6 +1958,7 @@ void initAppRenderer(int argc, char** argv,
     const char *fullScreenMode,
     const bool stereo)
 {
+  assert(rank < nrank);
   assert(idata.n() <= MAX_PARTICLES);
   initGL(argc, argv, rank, nrank, comm, fullScreenMode, stereo);
   theDemo = new Demo(idata, rank, nrank, comm);
