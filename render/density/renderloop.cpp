@@ -790,7 +790,7 @@ class Demo
         drawStats(fps);
 
       glutReportErrors();
-      if (isMaster())
+      if (0 && isMaster())
         fprintf(stderr, " -------- \n");
     }
 
@@ -1598,7 +1598,7 @@ void display()
   glutSwapBuffers();
   const double t1 = MPI_Wtime();
   MPI_Barrier(MPI_COMM_WORLD);
-  fprintf(stderr, " render= %g sec \n", t1-t0);
+//  fprintf(stderr, " render= %g sec \n", t1-t0);
 
   fpsCount++;
 

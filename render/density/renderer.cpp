@@ -1454,7 +1454,7 @@ void SmokeRenderer::splotchDraw(bool sorted)
 
     const double t1 = MPI_Wtime();
 
-#if 0 /* eg: buggy, when 'h' is pressed, half screen is gone... why? */
+#if 1 /* eg: buggy, when 'h' is pressed, half screen is gone... why? */
     static GLuint pbo_id[2];
     if (!pbo_id[0])
     {
@@ -1495,7 +1495,7 @@ void SmokeRenderer::splotchDraw(bool sorted)
     glDrawPixels(w,h,GL_RGBA,GL_FLOAT,0);
     const double t6 = MPI_Wtime();
     glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
-    if (isMaster())
+    if (0 && isMaster())
     {
       fprintf(stderr, 
           "total= %g: getParam= %g  getImg= %g memcpy= %g red= %g mem2= %g drawImg= %g \n", t6-t0,
@@ -1511,7 +1511,7 @@ void SmokeRenderer::splotchDraw(bool sorted)
     glTexImage2D(GL_TEXTURE_2D, 0, internalformat, w,h,0,GL_RGBA,GL_FLOAT, &imgGlb[0]);
     const double t4 = MPI_Wtime();
 
-    if (isMaster())
+    if (0 && isMaster())
     {
       fprintf(stderr, 
           "total= %g: getParam= %g  getImg= %g  red= %g  drawImg= %g \n", t4-t0,
