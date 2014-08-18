@@ -1617,7 +1617,7 @@ void SmokeRenderer::splotchDraw(bool sorted)
           fprintf(stderr, 
               "total= %g: d2h= %g cpy= %g  mpi= %g  cpy= %g h2d= %g :: bwMPI= %g bwD2H= %g  bwH2D= %g\n", t6-t0,
               t2-t1,   t3-t2,       t4-t3,   t5-t4,     t6-t5,
-              1.0*nrank*imgSize/(t4-t3)/1e6, imgSize/(t2-t1)/1e6, imgSize/(t6-t5)/1e6);
+              imgSize/(t4-t3)/1e6, imgSize/(t2-t1)/1e6, imgSize/(t6-t5)/1e6);
       }
       
     }
