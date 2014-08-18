@@ -322,11 +322,17 @@ void glPrintf(float x, float y, const char* format, ...)
 
 class Demo
 {
+  const int rank, nrank;
+  const MPI_Comm &comm;
+  bool isMaster() const { return rank == 0; };
+
   public:
-    Demo(RendererData &idata) 
-      : m_idata(idata), iterationsRemaining(true),
+    Demo(RendererData &idata, const int _rank, const int _nrank, const MPI_Comm &_comm)
+      : 
+        rank(_rank), nrank(_rank), comm(_comm),
+        m_idata(idata), iterationsRemaining(true),
       //       m_renderer(tree->localTree.n + tree->localTree.n_dust),
-      m_renderer(idata.n(), MAX_PARTICLES),
+      m_renderer(idata.n(), MAX_PARTICLES, rank, nrank, comm),
       //m_displayMode(ParticleRenderer::PARTICLE_SPRITES_COLOR),
       m_displayMode(SmokeRenderer::SPLOTCH),
       //	    m_displayMode(SmokeRenderer::POINTS),
@@ -412,6 +418,7 @@ class Demo
       //m_displayMode = (ParticleRenderer::DisplayMode) ((m_displayMode + 1) % ParticleRenderer::PARTICLE_NUM_MODES);
       m_displayMode = (SmokeRenderer::DisplayMode) ((m_displayMode + inc + SmokeRenderer::NUM_MODES) % SmokeRenderer::NUM_MODES);
       m_renderer.setDisplayMode(m_displayMode);
+      fprintf(stderr ,"  m_displayMode= %d\n" ,m_displayMode);
 #if 0
       if (m_displayMode == SmokeRenderer::SPRITES) {
         //m_renderer.setAlpha(0.1f);
@@ -553,6 +560,7 @@ class Demo
     void mainRender(EYE whichEye)
     {
       //m_renderer.display(m_displayMode);
+//      MPI_Bcast(&m_renderer, sizeof(SmokeRenderer),  MPI_BYTE, 0, MPI_COMM_WORLD);
       m_renderer.render();
 
 #if 0
@@ -587,15 +595,19 @@ class Demo
       }
 #endif
 
-      if (m_displaySliders) {
-        m_params->Render(0, 0);
+      if (isMaster())
+      {
+        if (m_displaySliders) {
+          m_params->Render(0, 0);
+        }
+        drawStats(fps);
       }
-      drawStats(fps);
 
     } //end of mainRender
 
 
-    void display() {
+    void display() 
+    {
       //double startTime = GetTimer();
       //double getBodyDataTime = startTime;
 
@@ -611,7 +623,7 @@ class Demo
 
         static bool sortOnly = false;
         static float oldSize = -1;
-        
+
         if (m_renderer.getParticleRadius() != oldSize)
         {
           sortOnly = false;
@@ -629,6 +641,23 @@ class Demo
         m_cameraTransLag = m_cameraTrans;
         m_cameraRotLag = m_cameraRot;
 #endif
+        float cameraTemp[7] = {m_cameraTransLag.x, m_cameraTransLag.y, m_cameraTransLag.z, 
+          m_cameraRotLag.x,   m_cameraRotLag.y,   m_cameraRotLag.z,
+          m_cameraRoll
+        };
+
+        MPI_Bcast(cameraTemp, 7, MPI_FLOAT, 0, MPI_COMM_WORLD);
+
+        m_cameraTransLag.x = cameraTemp[0]; 
+        m_cameraTransLag.y = cameraTemp[1];
+        m_cameraTransLag.z = cameraTemp[2];
+        m_cameraRotLag.x   = cameraTemp[3];
+        m_cameraRotLag.y   = cameraTemp[4];
+        m_cameraRotLag.z   = cameraTemp[5];
+        m_cameraRoll       = cameraTemp[6];
+
+
+
 
         //Stereo setup +  get the left and right projection matrices and store it sv
         float frustumShift = 0.0;
@@ -757,7 +786,7 @@ class Demo
           mainRender(LEFT_EYE);
         }
       }
-      else //rendering disabled just draw stats
+      else if (isMaster()) //rendering disabled just draw stats
         drawStats(fps);
 
       glutReportErrors();
@@ -1824,7 +1853,9 @@ void idle(void)
   glutPostRedisplay();
 }
 
-void initGL(int argc, char** argv, const char *fullScreenMode, const bool stereo)
+void initGL(int argc, char** argv, 
+    const int rank, const int nrank, const MPI_Comm &comm,
+    const char *fullScreenMode, const bool stereo)
 {  
   // First initialize OpenGL context, so we can properly set the GL for CUDA.
   // This is necessary in order to achieve optimal performance with OpenGL/CUDA interop.
@@ -1916,13 +1947,14 @@ void initGL(int argc, char** argv, const char *fullScreenMode, const bool stereo
 
 
 void initAppRenderer(int argc, char** argv, 
+    const int rank, const int nrank, const MPI_Comm &comm,
     RendererData &idata,
     const char *fullScreenMode,
     const bool stereo)
 {
   assert(idata.n() <= MAX_PARTICLES);
-  initGL(argc, argv, fullScreenMode, stereo);
-  theDemo = new Demo(idata);
+  initGL(argc, argv, rank, nrank, comm, fullScreenMode, stereo);
+  theDemo = new Demo(idata, rank, nrank, comm);
   if (stereo)
     theDemo->toggleStereo(); //SV assuming stereo is set to disable by default.
   glutMainLoop();

@@ -353,11 +353,10 @@ int main(int argc, char * argv[])
 //  rDataPtr->scaleExp(RendererData::VEL);
   
 
-  initAppRenderer(argc, argv, *rDataPtr
-#ifndef PARTICLESRENDERER
-      ,fullScreenMode.c_str(), stereo
-#endif
-      );
+  initAppRenderer(argc, argv, 
+      rank, nranks, comm,
+      *rDataPtr,
+      fullScreenMode.c_str(), stereo);
 
   fprintf(stderr, " -- Done -- \n");
   while(1) {}

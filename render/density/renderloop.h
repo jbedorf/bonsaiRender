@@ -4,6 +4,7 @@
 #include "RendererData.h"
 
 void initAppRenderer(int argc, char** argv, 
+                     const int rank, const int nrank, const MPI_Comm &comm,
                      RendererData &data,
                      const char *fulleScreenMode = "",
                      const bool stereo = false);

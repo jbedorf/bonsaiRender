@@ -41,16 +41,7 @@
 
 using namespace nv;
 
-SmokeRenderer::SmokeRenderer(int numParticles, int maxParticles) :
-  mMaxParticles(maxParticles),
-  mNumParticles(numParticles),
-  mPosVbo(0),
-  m_pbo(0),
-  mVelVbo(0),
-  mColorVbo(0),
-  mSizeVbo(0),
-  mSizeVao(0),
-  mIndexBuffer(0),
+SmokeRendererParams::SmokeRendererParams() :
   mParticleRadius(0.1f),
   mParticleScaleLog(0.0f),
   mDisplayMode(SPLOTCH),
@@ -74,14 +65,6 @@ SmokeRenderer::SmokeRenderer(int numParticles, int maxParticles) :
   m_lightTarget(0.0f, 0.5f, 0.0f),
   m_lightColor(0.0f, 0.0f, 0.0f),
   m_colorOpacity(0.1f, 0.2f, 0.3f),
-  //m_lightBufferSize(256),
-  m_lightBufferSize(512),
-  m_srcLightTexture(0),
-  m_lightDepthTexture(0),
-  m_fbo(0),
-  m_depthTex(0),
-  m_rampTex(0),
-
   /***************/
 
   m_starScaleLog(0.0f),
@@ -129,6 +112,77 @@ SmokeRenderer::SmokeRenderer(int numParticles, int maxParticles) :
   m_flareRadius(50.0f),
   m_skyboxBrightness(0.5f),
   m_cullDarkMatter(true)
+{}
+
+
+SmokeRenderer::SmokeRenderer(int numParticles, int maxParticles, const int _rank, const int _nrank, const MPI_Comm &_comm) :
+  SmokeRendererParams(),
+  rank(_rank), nrank(_nrank), comm(_comm),
+  mMaxParticles(maxParticles),
+  mNumParticles(numParticles),
+  mPosVbo(0),
+  m_pbo(0),
+  mVelVbo(0),
+  mColorVbo(0),
+  mSizeVbo(0),
+  mSizeVao(0),
+  mIndexBuffer(0),
+  m_lightBufferSize(512),
+  m_srcLightTexture(0),
+  m_lightDepthTexture(0),
+  m_fbo(0),
+  m_depthTex(0),
+  m_rampTex(0)
+
+#if 0
+  /***************/
+
+  m_starScaleLog(0.0f),
+  m_starAlpha(1.0f),
+  m_dmScaleLog(-0.4f),
+  m_dmAlpha(0.1f),
+  m_spriteAlpha(0.02f),
+  m_transmission(0.001f),
+  m_imageBrightnessPre(0.08f),
+  m_gammaPre(0.4f),
+  m_imageBrightnessPost(1.0f),
+  m_gammaPost(1.0f),
+
+  /***************/
+
+  m_overBright(1.0f),
+  m_overBrightThreshold(0.005f),
+  m_imageBrightness(1.0f),
+  m_invertedView(false),
+  m_minDepth(0.0f),
+  m_maxDepth(1.0f),
+  m_enableAA(false),
+  m_starBlurRadius(40.0f),
+  m_starThreshold(1.0f),
+  m_starPower(1.0f),
+  m_starIntensity(0.5f),
+  m_glowRadius(10.0f),
+  m_glowIntensity(0.5f),
+  m_ageScale(10.0f),
+  m_enableVolume(false),
+//  m_enableFilters(true),
+  m_enableFilters(true),
+  m_noiseFreq(0.05f),
+  m_noiseAmp(1.0f),
+  m_indirectAmount(0.5f),
+  m_volumeIndirect(0.5f),
+  m_volumeStart(0.5f),
+  m_volumeWidth(0.1f),
+  m_gamma(1.0f / 2.2f),
+  m_fog(0.001f),
+  //    m_cubemapTex(0),
+  m_flareThreshold(0.5f),
+  m_flareIntensity(0.0f),
+  m_sourceIntensity(0.5f),
+  m_flareRadius(50.0f),
+  m_skyboxBrightness(0.5f),
+  m_cullDarkMatter(true)
+#endif
 {
   // load shader programs
   m_simpleProg = new GLSLProgram(simpleVS, simplePS);
@@ -1255,6 +1309,7 @@ void SmokeRenderer::renderSprites(bool sort)
 
 void SmokeRenderer::render()
 {
+  MPI_Bcast(this, sizeof(SmokeRendererParams),  MPI_BYTE, 0, MPI_COMM_WORLD);
 #if 1
   switch(mDisplayMode) {
     case POINTS:
