@@ -12,7 +12,7 @@
 #include "anyoption.h"
 #include "RendererData.h"
   
-static RendererData* readBonsaiReduced(
+static RendererDataDistribute* readBonsaiReduced(
     const int rank, const int nranks, const MPI_Comm &comm,
     const std::string &fileName,
     const int reduceDM,
@@ -66,7 +66,7 @@ static RendererData* readBonsaiReduced(
   }
 
 
-  RendererData *rDataPtr = new RendererData(nS+nDM,rank,nranks,comm);
+  RendererDataDistribute *rDataPtr = new RendererDataDistribute(nS+nDM,rank,nranks,comm);
   auto &rData = *rDataPtr;
   for (int i = 0; i < nS; i++)
   {
@@ -106,7 +106,7 @@ static RendererData* readBonsaiReduced(
   return rDataPtr;
 }
 
-static RendererData* readBonsaiFull(
+static RendererDataDistribute* readBonsaiFull(
     const int rank, const int nranks, const MPI_Comm &comm,
     const std::string &fileName,
     const int reduceDM,
@@ -191,7 +191,7 @@ static RendererData* readBonsaiFull(
   }
 
 
-  RendererData *rDataPtr = new RendererData(nS+nDM,rank,nranks,comm);
+  RendererDataDistribute *rDataPtr = new RendererDataDistribute(nS+nDM,rank,nranks,comm);
   auto &rData = *rDataPtr;
   for (int i = 0; i < nS; i++)
   {
@@ -326,7 +326,7 @@ int main(int argc, char * argv[])
   }
 
 
-  RendererData *rDataPtr;
+  RendererDataDistribute *rDataPtr;
   if ((rDataPtr = readBonsaiFull(rank, nranks, comm, fileName, reduceDM, reduceS))) {}
   else if ((rDataPtr = readBonsaiReduced(rank, nranks, comm, fileName, reduceDM, reduceS))) {}
   else
@@ -341,6 +341,12 @@ int main(int argc, char * argv[])
   assert(rDataPtr != 0);
   rDataPtr->computeMinMax();
 
+  rDataPtr->distribute();
+  fprintf(stderr, "rank= %d: min= %g %g %g  max= %g %g %g \n",
+      rank, 
+      rDataPtr->xminLoc(), rDataPtr->yminLoc(), rDataPtr->zminLoc(),
+      rDataPtr->xmaxLoc(), rDataPtr->ymaxLoc(), rDataPtr->zmaxLoc());
+
   if (rDataPtr->attributeMin(RendererData::RHO) > 0.0)
   {
     rDataPtr->rescaleLinear(RendererData::RHO, 0, 60000.0);
@@ -354,12 +360,18 @@ int main(int argc, char * argv[])
   
 
   fprintf(stderr, " rank= %d: n= %d\n", rank, rDataPtr->n());
+#if 0
   initAppRenderer(argc, argv, 
       rank, nranks, comm,
       *rDataPtr,
       fullScreenMode.c_str(), stereo);
+#endif
 
-  fprintf(stderr, " -- Done -- \n");
+  sleep(1);
+  MPI_Barrier(comm);
+  if (rank == 0)
+    fprintf(stderr, " -- Done -- \n");
+  MPI_Finalize();
   while(1) {}
   return 0;
 }
