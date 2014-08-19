@@ -66,7 +66,8 @@ static RendererDataDistribute* readBonsaiReduced(
   }
 
 
-  RendererDataDistribute *rDataPtr = new RendererDataDistribute(nS+nDM,rank,nranks,comm);
+  RendererDataDistribute *rDataPtr = new RendererDataDistribute(rank,nranks,comm);
+  rDataPtr->resize(nS+nDM);
   auto &rData = *rDataPtr;
   for (int i = 0; i < nS; i++)
   {
@@ -191,7 +192,8 @@ static RendererDataDistribute* readBonsaiFull(
   }
 
 
-  RendererDataDistribute *rDataPtr = new RendererDataDistribute(nS+nDM,rank,nranks,comm);
+  RendererDataDistribute *rDataPtr = new RendererDataDistribute(rank,nranks,comm);
+  rDataPtr->resize(nS+nDM);
   auto &rData = *rDataPtr;
   for (int i = 0; i < nS; i++)
   {
@@ -341,11 +343,23 @@ int main(int argc, char * argv[])
   assert(rDataPtr != 0);
   rDataPtr->computeMinMax();
 
-  rDataPtr->distribute();
+#if 0
   fprintf(stderr, "rank= %d: min= %g %g %g  max= %g %g %g \n",
       rank, 
       rDataPtr->xminLoc(), rDataPtr->yminLoc(), rDataPtr->zminLoc(),
       rDataPtr->xmaxLoc(), rDataPtr->ymaxLoc(), rDataPtr->zmaxLoc());
+#endif
+  const double t0 = MPI_Wtime();
+  rDataPtr->distribute();
+  const double t1 = MPI_Wtime();
+  if (rank == 0)
+    fprintf(stderr, " DD= %g sec \n", t1-t0);
+#if 0
+  fprintf(stderr, "rank= %d: min= %g %g %g  max= %g %g %g \n",
+      rank, 
+      rDataPtr->xminLoc(), rDataPtr->yminLoc(), rDataPtr->zminLoc(),
+      rDataPtr->xmaxLoc(), rDataPtr->ymaxLoc(), rDataPtr->zmaxLoc());
+#endif
 
   if (rDataPtr->attributeMin(RendererData::RHO) > 0.0)
   {

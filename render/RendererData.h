@@ -41,7 +41,6 @@ class RendererData
       H,
       NPROP};
   protected:
-    const int _n;
     const int rank, nrank;
     const MPI_Comm &comm;
     struct particle_t
@@ -75,18 +74,22 @@ class RendererData
     bool isMaster() const { return getMaster() == rank; }
 
   public:
-    RendererData(const int __n, const int rank, const int nrank, const MPI_Comm &comm) : 
-      _n(__n), rank(rank), nrank(nrank), comm(comm)
+    RendererData(const int rank, const int nrank, const MPI_Comm &comm) : 
+      rank(rank), nrank(nrank), comm(comm)
   {
     assert(rank < nrank);
-    data.resize(_n);
   }
+
+    void resize(const int n)
+    {
+      data.resize(n);
+    }
 
     ~RendererData()
     {
     }
 
-    const int n() const { return _n; }
+    int n() const { return data.size(); }
 
     float  posx(const int i) const { return data[i].posx; }
     float& posx(const int i)       { return data[i].posx; }
@@ -114,6 +117,7 @@ class RendererData
         _attributeMaxL[p] = -HUGE;
       }
 
+      const int _n = data.size();
       for (int i = 0; i < _n; i++)
       {
         _xminl = std::min(_xminl, posx(i));
@@ -209,6 +213,7 @@ class RendererData
 
       const float slope = (newMax - newMin)/oldRange;
       float min = +HUGE, max = -HUGE;
+      const int _n = data.size();
       for (int i = 0; i < _n; i++)
       {
         attribute(p,i) = slope * (attribute(p,i) - oldMin) + newMin;  
@@ -224,6 +229,7 @@ class RendererData
     void scaleLog(const Attribute_t p, const float zeroPoint = 1.0f)
     {
       float min = +HUGE, max = -HUGE;
+      const int _n = data.size();
       for (int i = 0; i < _n; i++)
       {
         attribute(p,i) = std::log(attribute(p,i) + zeroPoint);
@@ -238,6 +244,7 @@ class RendererData
     void scaleExp(const Attribute_t p, const float zeroPoint = 1.0f)
     {
       float min = +HUGE, max = -HUGE;
+      const int _n = data.size();
       for (int i = 0; i < _n; i++)
       {
         attribute(p,i) = std::exp(attribute(p,i)) - zeroPoint;
@@ -265,6 +272,7 @@ class RendererData
       assert(valMin < valMax);
 
       float min = +HUGE, max = -HUGE;
+      const int _n = data.size();
       for (int i = 0; i < _n; i++)
       {
         float val = attribute(p,i);
@@ -352,8 +360,8 @@ class RendererDataDistribute : public RendererData
 
   public:
 
-    RendererDataDistribute(const int n, const int rank, const int nrank, const MPI_Comm &comm) : 
-      RendererData(n,rank,nrank,comm)
+    RendererDataDistribute(const int rank, const int nrank, const MPI_Comm &comm) : 
+      RendererData(rank,nrank,comm)
   {
     assert(nrank <= NMAXPROC);
   }
@@ -426,6 +434,7 @@ class RendererDataDistribute : public RendererData
 
     int determine_sample_freq()
     {
+      const int _n = data.size();
       const int nbody = _n;
 #if 0
       int nreal = nbody;
@@ -456,6 +465,7 @@ class RendererDataDistribute : public RendererData
 
     void collect_sample_particles(std::vector<vector3> &sample_array, const int sample_freq)
     {
+      const int _n = data.size();
       const int nbody = _n;
       sample_array.clear();
       for(int i=0,  ii=0; ii<nbody; i++, ii+=sample_freq)
@@ -637,31 +647,32 @@ class RendererDataDistribute : public RendererData
 
       static std::vector<int> nsend(nrank), senddispl(nrank+1,0);
       int nsendtot = 0;
-      for (int i = 0; i < nrank; i++)
+      for (int p = 0; p < nrank; p++)
       {
-        nsend[i] = psend[i].size();
-        senddispl[i+1] = senddispl[i] + nsend[i];
-        nsendtot += nsend[i];
+        nsend[p] = psend[p].size();
+        senddispl[p+1] = senddispl[p] + nsend[p];
+        nsendtot += nsend[p];
       }
 
       static std::vector<int> nrecv(nrank), recvdispl(nrank+1,0);
       MPI_Alltoall(&nsend[0], 1, MPI_INT, &nrecv[0], 1, MPI_INT, comm);
 
       int nrecvtot = 0;
-      for (int i = 0; i < nrank; i++)
+      for (int p = 0; p < nrank; p++)
       {
-        recvdispl[i+1] = recvdispl[i] + nrecv[i];
-        nrecvtot += nrecv[i];
+        recvdispl[p+1] = recvdispl[p] + nrecv[p];
+        nrecvtot += nrecv[p];
       }
 
 
       static std::vector<particle_t> sendbuf, recvbuf;
       sendbuf.resize(nsendtot); 
       recvbuf.resize(nrecvtot);
+
       int iloc = 0;
-      for (int i = 0; i < nrank; i++)
-        for (int j = 0; j < nsend[i]; j++)
-          sendbuf[iloc++] = psend[i][j];
+      for (int p = 0; p < nrank; p++)
+        for (int i = 0; i < nsend[p]; i++)
+          sendbuf[iloc++] = psend[p][i];
 
       assert(senddispl[nrank] == nsendtot);
       assert(recvdispl[nrank] == nrecvtot);
@@ -671,14 +682,12 @@ class RendererDataDistribute : public RendererData
           &recvbuf[0], &nrecv[0], &recvdispl[0], MPI_PARTICLE, 
           comm);
 
-      for (int i = 0; i < nrank; i++)
+      for (int p = 0; p < nrank; p++)
       {
-        precv[i].resize(nrecv[i]);
-        for (int j = 0; j < nrecv[i]; j++)
-          precv[i][j] = recvbuf[recvdispl[i] + j];
+        precv[p].resize(nrecv[p]);
+        for (int i = 0; i < nrecv[p]; i++)
+          precv[p][i] = recvbuf[recvdispl[p] + i];
       }
-
-      computeMinMax();
 
     }
 
@@ -692,10 +701,9 @@ class RendererDataDistribute : public RendererData
 
       static std::vector<particle_t> psend[NMAXPROC];
       static std::vector<particle_t> precv[NMAXPROC];
-      auto &pb = data;
-      const int nbody = pb.size();
+      const int nbody = data.size();
 
-      bool initcall = true;
+      static bool initcall = true;
       if(initcall)
       {
         initcall = false;
@@ -709,8 +717,8 @@ class RendererDataDistribute : public RendererData
       int iloc = 0;
       Boundary boundary(xlow[myid], xhigh[myid]);
       for(int i=0; i<nbody; i++)
-        if(boundary.isinbox(vector3{{pb[i].posx,pb[i].posy,pb[i].posz}}))
-          std::swap(pb[i],pb[iloc++]);
+        if(boundary.isinbox(vector3{{data[i].posx, data[i].posy, data[i].posz}}))
+          std::swap(data[i],data[iloc++]);
 
       for(int p=0; p<nprocs; p++)
       {
@@ -718,9 +726,11 @@ class RendererDataDistribute : public RendererData
         precv[p].clear();
       }
 
-      for(int i=iloc; i<nbody; i++)
+      for(int i=0; i<nbody; i++)
       {
-        int ibox = which_box(vector3{{pb[i].posx,pb[i].posy,pb[i].posz}}, xlow, xhigh);
+        int ibox = which_box(vector3{{data[i].posx,data[i].posy,data[i].posz}}, xlow, xhigh);
+        if (nbody < iloc)
+          assert(ibox == rank);
         if(ibox < 0)
         {
           std::cerr << myid <<" exchange_particle error: particle in no box..." << std::endl;
@@ -738,7 +748,7 @@ class RendererDataDistribute : public RendererData
         }
         else
         {
-          psend[ibox].push_back(pb[i]);
+          psend[ibox].push_back(data[i]);
         }
       }
 
@@ -751,6 +761,16 @@ class RendererDataDistribute : public RendererData
         if (isMaster())
           fprintf(stderr, "alltoallv= %g sec \n", t1-t0);
       }
+      
+      {
+        assert(precv[rank].size() == precv[rank].size());
+        for(int p=0; p<nrank; p++)
+          for (int i = 0; i < (int)precv[p].size(); i++)
+            assert(boundary.isinbox(vector3{{precv[p][i].posx, precv[p][i].posy, precv[p][i].posz}}));
+      }
+
+
+      assert(precv[rank].size() == psend[rank].size());
 
       int nsendtot = 0, nrecvtot = 0;
       for(int p=0; p<nprocs; p++)
@@ -768,16 +788,18 @@ class RendererDataDistribute : public RendererData
         std::cout << "Exchanged particles = " << nsendtot << ", " << dtime << "sec" << std::endl;
         std::cout << "Global Bandwidth " << bw << " GB/s" << std::endl;
       }
-      pb.clear();
-      pb.reserve(nbody);
+      data.clear();
+      data.resize(nrecvloc);
+      int ip = 0;
       for(int p=0; p<nprocs; p++)
       {
         int size = precv[p].size();
         for(int i=0; i<size; i++)
-          pb.push_back(precv[p][i]);
+          data[ip++] = precv[p][i];
       }
-      pb.resize(iloc);
+      assert(ip == nrecvloc);
 
+      computeMinMax();
     }
 
 
@@ -803,12 +825,34 @@ class RendererDataDistribute : public RendererData
         pos[i] = float4(sample_array[i][0], sample_array[i][1], sample_array[i][2],0.0f);
 
       if (rank == 0)
-        determine_division(pos, rmax,xlow, xhigh);
+        determine_division(pos, rmax, xlow, xhigh);
+
 
       const int nwords=nrank*3;
       MPI_Bcast(& xlow[0],nwords,MPI_DOUBLE,getMaster(),comm);
       MPI_Bcast(&xhigh[0],nwords,MPI_DOUBLE,getMaster(),comm);
 
+#if 0
+      if (isMaster())
+      {
+        for (int p = 0; p < nrank; p++)
+        {
+          fprintf(stderr," rank= %d: xlow= %g %g %g  xhigh= %g %g %g \n", p,
+               xlow[p][0],  xlow[p][1],  xlow[p][2],
+              xhigh[p][0], xhigh[p][1], xhigh[p][2]);
+        }
+
+      }
+#endif
       exchange_particles_alltoall_vector(xlow, xhigh);
+
+#if 1
+      {
+        const int nbody = data.size();
+        Boundary boundary(xlow[rank], xhigh[rank]);
+        for(int i=0; i<nbody; i++)
+          assert(boundary.isinbox(vector3{{data[i].posx,data[i].posy,data[i].posz}}));
+      }
+#endif
     }
 };
