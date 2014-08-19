@@ -42,7 +42,7 @@ class RendererData
       H,
       NPROP};
   protected:
-    using vector3 = std::array<double,3>;
+    using vector3 = MP::vector3;
     using float4  = MP::float4;
     const int _n;
     const int _rank, _nrank;
@@ -287,7 +287,9 @@ class RendererDataDistribute : public RendererData
   enum { NMAXPROC = 1024};
   enum { NMAXSAMPLE = 200000 };
   int npx, npy, npz;
+  MP mp;
   int sample_freq;
+
   template <int mask> struct CmpFloat4{
     bool operator()(const float4 &lhs, const float4 &rhs){
       return 
@@ -327,13 +329,13 @@ class RendererDataDistribute : public RendererData
     int n0, n1; 
     n0 = (int)pow(n+0.1,0.33333333333333333333);
     while(n%n0)n0--;
-    if (MP::MP_root())
+    if (mp.MP_root())
       fprintf(stderr, "n= %d  n0= %d \n", n, n0);
     nx = n0;
     n1 = n/nx;
     n0 = (int)sqrt(n1+0.1);
     while(n1%n0)n0++;
-    if(MP::MP_root()){
+    if(mp.MP_root()){
       fprintf(stderr, "n1= %d  n0= %d \n", n1, n0);
     }
     ny = n0; nz = n1/n0;
@@ -353,9 +355,9 @@ class RendererDataDistribute : public RendererData
     if (nx*ny*nz != n){
       std::cerr << "create_division: Intenal Error " << n << " " << nx
         << " " << ny << " " << nz <<std::endl;
-      MP::MP_Abort(1);
+      mp.MP_Abort(1);
     }
-    if(MP::MP_root()){
+    if(mp.MP_root()){
       fprintf(stderr, "[nx, ny, nz] = %d %d %d\n", nx, ny, nz);
     }
   }
@@ -370,12 +372,12 @@ class RendererDataDistribute : public RendererData
     int sample_freq = (nreal+maxsample-1)/maxsample;
 #else
     double nreal = nbody;
-    MP::MP_sum(nreal);
+    mp.MP_sum(nreal);
     // double maxsample = (NMAXSAMPLE*0.8); // 0.8 is safety factor
     double maxsample = (NMAXSAMPLE*0.8); // 0.8 is safety factor
     int sample_freq = int((nreal+maxsample)/maxsample);
 #endif
-    MP::MP_int_bcast(sample_freq);
+    mp.MP_int_bcast(sample_freq);
     return sample_freq;
   }
 
@@ -390,16 +392,14 @@ class RendererDataDistribute : public RendererData
     }
   }
 
-  void collect_sample_particles(std::vector<float4> &sample_array, const int sample_freq)
+  void collect_sample_particles(std::vector<vector3> &sample_array, const int sample_freq)
   {
     const int nbody = _n;
     sample_array.clear();
     for(int i=0,  ii=0; ii<nbody; i++, ii+=sample_freq)
-      sample_array.push_back(float4(posx(i), posy(i), posz(i), 0.0f));
+      sample_array.push_back(vector3{{posx(i), posy(i), posz(i)}});
 
-    int nsample = sample_array.size();
-    MP::MP_gather_sample_coords(nsample, sample_array);
-    nsample = sample_array.size();
+    mp.MP_gather_sample_coords(sample_array);
   }
 
   void determine_division( // nitadori's version
@@ -546,8 +546,8 @@ class RendererDataDistribute : public RendererData
       const vector3  xlow[],
       const vector3 xhigh[])
   {
-    int myid = MP::MP_myprocid();
-    int nprocs = MP::MP_proccount();
+    int myid = mp.MP_myprocid();
+    int nprocs = mp.MP_proccount();
 
     static std::vector<particle_t> psend[NMAXPROC];
     static std::vector<particle_t> precv[NMAXPROC];
@@ -593,7 +593,7 @@ class RendererDataDistribute : public RendererData
           << std::endl;
 #endif
 //        pb[i].dump();
-        MP::MP_Abort(1);
+        mp.MP_Abort(1);
       }
       else
       {
@@ -604,10 +604,10 @@ class RendererDataDistribute : public RendererData
     double dtime = 1.e9;
     {
       const double t0 = MPI_Wtime();
-      MP::MP_alltoallv(psend, precv);
+      mp.MP_alltoallv(psend, precv);
       const double t1 = MPI_Wtime();
       dtime = t1 - t0;
-      if (MP::MP_root())
+      if (mp.MP_root())
         fprintf(stderr, "MP_alltoallv= %g sec \n", t1-t0);
     }
 
@@ -616,10 +616,10 @@ class RendererDataDistribute : public RendererData
       nsendtot += psend[p].size();
       nrecvtot += precv[p].size();
     }
-    MP::MP_int_sum(nsendtot);
-    MP::MP_int_sum(nrecvtot);
+    mp.MP_int_sum(nsendtot);
+    mp.MP_int_sum(nrecvtot);
     double bw = 2.0 * double(sizeof(particle_t) * nsendtot) / dtime * 1.e-9;
-    if(MP::MP_root()){
+    if(mp.MP_root()){
       assert(nsendtot == nrecvtot);
       std::cout << "Exchanged particles = " << nsendtot << ", " << dtime << "sec" << std::endl;
       std::cout << "Global Bandwidth " << bw << " GB/s" << std::endl;
@@ -640,20 +640,29 @@ class RendererDataDistribute : public RendererData
   /////////////////////
   void distribute()
   {
+    mp.mympi.initialize();
+
     initialize_division();
-    std::vector<float4> sample_array;
+    std::vector<vector3> sample_array;
     collect_sample_particles(sample_array, sample_freq);
 
     /* determine division */
     vector3  xlow[NMAXPROC];
     vector3 xhigh[NMAXPROC];
     const float rmax = _rmax * 1.0001;
-    if (MP::MP_myprocid() == 0)
-      determine_division(sample_array, rmax,xlow, xhigh);
+
+    std::vector<float4> pos;
+    const int nsample = sample_array.size();
+#pragma omp parallel for schedule(static)
+    for (int i = 0; i < nsample; i++)
+      pos[i] = float4(sample_array[i][0], sample_array[i][1], sample_array[i][2],0.0f);
+
+    if (mp.MP_myprocid() == 0)
+      determine_division(pos, rmax,xlow, xhigh);
     
-    const int nwords=MP::MP_proccount()*3;
-    MP::MP_double_bcast(reinterpret_cast<double*>(& xlow[0]), nwords);
-    MP::MP_double_bcast(reinterpret_cast<double*>(&xhigh[0]), nwords);
+    const int nwords=mp.MP_proccount()*3;
+    mp.MP_double_bcast(reinterpret_cast<double*>(& xlow[0]), nwords);
+    mp.MP_double_bcast(reinterpret_cast<double*>(&xhigh[0]), nwords);
     
     exchange_particles_alltoall_vector(xlow, xhigh);
   }

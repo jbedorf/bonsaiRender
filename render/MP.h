@@ -1,10 +1,17 @@
 #pragma once
 
 
+#include <mpi.h>
 #include <iostream>
+#include "delegate_alltoall.h"
 
-namespace MP
+struct MP
 {
+
+  int rank, nrank;
+  MPI_Comm comm;
+  MYMPI mympi;
+
 
   struct float4
   {
@@ -57,103 +64,118 @@ namespace MP
   };
 
 
-  using vector3 =  std::array<float,3>;
-
-  // void MP_initialize(int argc, char *argv[]);
-  void MP_initialize(int *argc, char ***argv);
-  void MP_end();
-  void MP_sync();
-  int MP_myprocid();
-  int MP_proccount();
-  void MP_copyparams(float &dt,
-      float &dtsnapout,
-      int &outlogstep,
-      float &tend,
-      float &eps,
-      float &theta,
-      int &ncrit,
-      float &pos_scale,
-      float &vel_scale);
-  void MP_convert_snap_name(int& flag, char * name);
-
-  void MP_gather_sample_coords(int&nsample, vector3 * sample_array);
-  void MP_gather_sample_coords(int &nsample, std::vector<float4> &sample_array);
-  void MP_int_bcast(int&i);
-  void MP_int_sum(int&i);
-  void MP_sum(double& r);
-  void MP_double_sum(double r[], int count, bool allreduce);
-  void MP_double_max(double r[], int count, bool allreduce);
-  void MP_double_bcast(double*i, int nwords);
-#if 0
-  void MP_exchange_particle(int ibox,
-      nbody_particle * pb,
-      int firstloc,
-      int nparticles,
-      int isource,
-      int &iloc);
-  int MP_exchange_particle_with_overflow_check(int ibox,
-      nbody_particle * pb,
-      int firstloc,
-      int nparticles,
-      int isource,
-      int &iloc,
-      int &nsend);
-#endif
-
-  int MP_intmax(int localval);
-  double MP_doublemax(double localval);
-  void MP_exchange_bhlist(int ibox,
-      int nlist,
-      int nbmax,
-      vector3 * plist,
-      float * mlist,
-      int isource,
-      int & nrecvlist,
-      vector3 * precvbuf,
-      float * mrecvbuf);
-  void MP_Abort(int);
-
-  template <typename T>
-    void MP_alltoallv(std::vector<T> sendbuf[], std::vector<T> recvbuf[]);
-
-#if 0
-  void MP_exchange_particle_alltoall(
-      nbody_particle *sendbuf,
-      nbody_particle *recvbuf,
-      int sendoff[],
-      const int nrecv_max,
-      int &nrecv);
-#endif
-
-  void MP_collect_cmterms(vector3& pos,vector3& vel,float& mass);
-
-  void MP_print_times(std::ostream &s);
-  void MP_print_treestats(float total_interactions,
-      int tree_walks,
-      int nisum,
-      std::ostream &s);
-  void MP_print_float(
-      const char *prefix,
-      float val,
-      std::ostream &ofs,
-      bool print_maxmin);
-#if 0
-  void MP_print_string(std::string &str, std::ostream &os, const char *format);
-  static inline void MP_print_string(std::stringstream &ss, std::ostream &os, const char *format){
-    std::string s = ss.str();
-    MP_print_string(s, os, format);
+  using vector3 = std::array<double,3>;
+  int MP_myprocid() const
+  {
+    return rank;
   }
+  int MP_proccount() const
+  {
+    return nrank;
+  }
+  bool MP_root() {return (0 == MP_myprocid()); }
+  void MP_Abort(int err)
+  {
+    MPI_Abort(MPI_COMM_WORLD, err);
+  }
+  void MP_int_sum(int& i)
+  {
+    int tmp;
+    MPI_Reduce(&i,&tmp,1, MPI_INT, MPI_SUM,0,MPI_COMM_WORLD);
+    if(rank == 0) i = tmp;
+  }
+  void MP_sum(double& r)
+  {
+    double tmp;
+    MPI_Reduce(&r,&tmp,1, MPI_DOUBLE, MPI_SUM,0,MPI_COMM_WORLD);
+    if(rank == 0) r = tmp;
+  }
+  void MP_double_sum(double r[], int count, bool allreduce = false)
+  {
+    static double _buf[1024];
+    double *buf = count > 1024 ? new double[count] : _buf;
+    if(allreduce){
+      MPI_Allreduce(r, buf, count, MPI_DOUBLE, MPI_SUM,  MPI_COMM_WORLD);
+    }else{
+      MPI_Reduce(r, buf, count, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
+    }
+    if(allreduce || MP_root()){
+      for(int i=0; i<count; i++){
+        r[i] = buf[i];
+      }
+    }
+    if(buf != _buf) free(buf);
+  }
+
+  void MP_int_bcast(int& i)
+  {
+    MPI_Bcast(&i,1,MPI_INT,0,MPI_COMM_WORLD);
+  }
+  void MP_double_bcast(double* data, int nwords)
+  {
+    MPI_Bcast(data,nwords,MPI_DOUBLE,0,MPI_COMM_WORLD);
+  }
+
+  void MP_gather_sample_coords(std::vector<vector3> &sample_array)
+  {
+    int nsample = sample_array.size();
+    using real = double;
+    const int local_proc_id = rank;
+    const int total_proc_count = nrank;
+    MPI_Status status;
+#if 1 // original version
+    if(local_proc_id != 0){
+#ifndef TCPLIB	
+      // send samples and return
+      MPI_Send( &nsample, 1, MPI_INT, 0,local_proc_id*2 , MPI_COMM_WORLD);
+      MPI_Send( (real*)&sample_array[0], nsample*3, MPI_DOUBLE, 0,local_proc_id*2+1,
+          MPI_COMM_WORLD);
+#else
+      tcp_transfer_data_by_MPIname(0,TCPLIB_SEND,sizeof(int),&nsample);
+      tcp_transfer_data_by_MPIname(0,TCPLIB_SEND,sizeof(real)*nsample*3,
+          (void*)sample_array);
 #endif
+    }else{
+      for(int i=1;i<total_proc_count; i++){
+        int nreceive;
+#ifndef TCPLIB	    
+        MPI_Recv( &nreceive, 1, MPI_INT, i,i*2, MPI_COMM_WORLD,&status);
+        MPI_Recv((real*)(&sample_array[nsample]), 3*nreceive, MPI_DOUBLE,
+            i,i*2+1, MPI_COMM_WORLD,&status);
+#else
+        tcp_transfer_data_by_MPIname(i,TCPLIB_RECV,sizeof(int),&nreceive);
+        tcp_transfer_data_by_MPIname(i,TCPLIB_RECV,sizeof(real)*nreceive*3,
+            (void*)(sample_array+nsample));
+#endif	    
+        nsample+=nreceive;
+      }
+    }
+#else  // using MPI_Gathrev
+    int np = MP_proccount();
+    static int count[NMAXPROC], displs[NMAXPROC+1];
+    MPI_Gather(&nsample, 1, MPI_INT, count, 1, MPI_INT, 0, MPI_COMM_WORLD);
+    displs[0] = 0;
+    for(int i=0; i<np; i++){
+      displs[i+1] = displs[i] + count[i];
+    }
+    assert(displs[np] <= NMAXSAMPLE);
+    for(int i=0; i<np; i++){
+      count[i] *= 3;
+      displs[i+1] *= 3;
+    }
+    MPI_Gatherv(sample_array, nsample, MPI_DOUBLE, sample_array, count, displs, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+#endif
+  }
 
-  void MP_bool_bcast(bool& i);
-  void MP_char_bcast(char * name, int nword);
-  void MP_string_bcast(std::string &str);
-  void MP_print_md5(unsigned char md5[16]);
-  bool MP_root();
-  const char *MP_get_hostname(int);
-  const char *MP_get_hostname();
   template <typename T>
-    void MP_copy_vector(std::vector<T> &vec, const int dst, const int src);
+    void MP_alltoallv(std::vector<T> sendbuf[], std::vector<T> recvbuf[])
+    {
+#if 0
+      mympi::detuned_alltoallv(sendbuf, recvbuf, 4);
+#else
+      mympi.delegate_alltoallv(sendbuf, recvbuf);
+#endif
+    }
 
-}
+};
 
