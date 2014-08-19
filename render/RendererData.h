@@ -5,6 +5,7 @@
 #include <cmath>
 #include <array>
 #include <parallel/algorithm>
+#include <iostream>
 
 #if 0
 struct float2 { float x, y; };

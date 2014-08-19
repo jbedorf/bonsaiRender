@@ -374,18 +374,19 @@ int main(int argc, char * argv[])
   
 
   fprintf(stderr, " rank= %d: n= %d\n", rank, rDataPtr->n());
-#if 0
+#if 1
   initAppRenderer(argc, argv, 
       rank, nranks, comm,
       *rDataPtr,
       fullScreenMode.c_str(), stereo);
-#endif
+#else
 
   sleep(1);
   MPI_Barrier(comm);
   if (rank == 0)
     fprintf(stderr, " -- Done -- \n");
   MPI_Finalize();
+#endif
   while(1) {}
   return 0;
 }
