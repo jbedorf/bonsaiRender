@@ -47,10 +47,14 @@ class RendererData
     const int _n;
     const int _rank, _nrank;
     const MPI_Comm &_comm;
-    float *_posx, *_posy, *_posz;
-    long_t *_ID;
-    int   *_type;
-    float *_attribute[NPROP];
+    struct particle_t
+    {
+      float posx, posy, posz;
+      long_t ID;
+      int type;
+      float attribute[NPROP];
+    };
+    std::vector<particle_t> data;
 
     float _xmin, _ymin, _zmin, _rmin;
     float _xmax, _ymax, _zmax, _rmax;
@@ -75,44 +79,30 @@ class RendererData
       _n(__n), _rank(rank), _nrank(nrank), _comm(comm)
   {
     assert(rank < nrank);
-    _posx   = new float[_n];
-    _posy   = new float[_n];
-    _posz   = new float[_n];
-    _ID     = new long_t[_n];
-    _type   = new int  [_n];
-
-    for (int p = 0; p < NPROP; p++)
-      _attribute[p] = new float[_n];
+    data.resize(_n);
   }
 
     ~RendererData()
     {
-      delete[] _posx;
-      delete[] _posy;
-      delete[] _posz;
-      delete[] _ID;
-      delete[] _type;
-      for (int p = 0; p < NPROP; p++)
-        delete[] _attribute[p];
     }
 
     const int n() const { return _n; }
 
-    float  posx(const int i) const { return _posx[i]; }
-    float& posx(const int i)       { return _posx[i]; }
-    float  posy(const int i) const { return _posy[i]; }
-    float& posy(const int i)       { return _posy[i]; }
-    float  posz(const int i) const { return _posz[i]; }
-    float& posz(const int i)       { return _posz[i]; }
+    float  posx(const int i) const { return data[i].posx; }
+    float& posx(const int i)       { return data[i].posx; }
+    float  posy(const int i) const { return data[i].posy; }
+    float& posy(const int i)       { return data[i].posy; }
+    float  posz(const int i) const { return data[i].posz; }
+    float& posz(const int i)       { return data[i].posz; }
 
-    float  attribute(const Attribute_t p, const int i) const {return _attribute[p][i]; }
-    float& attribute(const Attribute_t p, const int i)       {return _attribute[p][i]; }
+    float  attribute(const Attribute_t p, const int i) const {return data[i].attribute[p]; }
+    float& attribute(const Attribute_t p, const int i)       {return data[i].attribute[p]; }
 
-    int  type(const int i) const { return _type[i]; }
-    int& type(const int i)       { return _type[i]; }
+    int  type(const int i) const { return data[i].type; }
+    int& type(const int i)       { return data[i].type; }
 
-    long_t  ID(const long_t i) const { return _ID[i]; }
-    long_t& ID(const long_t i)       { return _ID[i]; }
+    long_t  ID(const long_t i) const { return data[i].ID; }
+    long_t& ID(const long_t i)       { return data[i].ID; }
 
     void computeMinMax()
     {
@@ -126,16 +116,16 @@ class RendererData
 
       for (int i = 0; i < _n; i++)
       {
-        _xminl = std::min(_xminl, _posx[i]);
-        _yminl = std::min(_yminl, _posy[i]);
-        _zminl = std::min(_zminl, _posz[i]);
-        _xmaxl = std::max(_xmaxl, _posx[i]);
-        _ymaxl = std::max(_ymaxl, _posy[i]);
-        _zmaxl = std::max(_zmaxl, _posz[i]);
+        _xminl = std::min(_xminl, posx(i));
+        _yminl = std::min(_yminl, posy(i));
+        _zminl = std::min(_zminl, posz(i));
+        _xmaxl = std::max(_xmaxl, posx(i));
+        _ymaxl = std::max(_ymaxl, posy(i));
+        _zmaxl = std::max(_zmaxl, posz(i));
         for (int p = 0; p < NPROP; p++)
         {
-          _attributeMinL[p] = std::min(_attributeMinL[p], _attribute[p][i]);
-          _attributeMaxL[p] = std::max(_attributeMaxL[p], _attribute[p][i]);
+          _attributeMinL[p] = std::min(_attributeMinL[p], attribute(static_cast<Attribute_t>(p),i));
+          _attributeMaxL[p] = std::max(_attributeMaxL[p], attribute(static_cast<Attribute_t>(p),i));
         }
       }
       _rminl = std::min(_rminl, _xminl);
@@ -147,12 +137,12 @@ class RendererData
 
       for (int i = 0; i < _n; i++)
       {
-        assert(_posx[i] >= _xminl && _posx[i] <= _xmaxl);
-        assert(_posy[i] >= _yminl && _posy[i] <= _ymaxl);
-        assert(_posz[i] >= _zminl && _posz[i] <= _zmaxl);
-        assert(_posx[i] >= _rminl && _posx[i] <= _rmaxl);
-        assert(_posy[i] >= _rminl && _posy[i] <= _rmaxl);
-        assert(_posz[i] >= _rminl && _posz[i] <= _rmaxl);
+        assert(posx(i) >= _xminl && posx(i) <= _xmaxl);
+        assert(posy(i) >= _yminl && posy(i) <= _ymaxl);
+        assert(posz(i) >= _zminl && posz(i) <= _zmaxl);
+        assert(posx(i) >= _rminl && posx(i) <= _rmaxl);
+        assert(posy(i) >= _rminl && posy(i) <= _rmaxl);
+        assert(posz(i) >= _rminl && posz(i) <= _rmaxl);
       }
 
 
@@ -405,7 +395,7 @@ class RendererDataDistribute : public RendererData
     const int nbody = _n;
     sample_array.clear();
     for(int i=0,  ii=0; ii<nbody; i++, ii+=sample_freq)
-      sample_array.push_back(float4(_posx[i], _posy[i], _posz[i], 0.0f));
+      sample_array.push_back(float4(posx(i), posy(i), posz(i), 0.0f));
 
     int nsample = sample_array.size();
     MP::MP_gather_sample_coords(nsample, sample_array);
@@ -556,28 +546,13 @@ class RendererDataDistribute : public RendererData
       const vector3  xlow[],
       const vector3 xhigh[])
   {
-    using particle_t =  std::array<float, 3+NPROP>;
     int myid = MP::MP_myprocid();
     int nprocs = MP::MP_proccount();
 
     static std::vector<particle_t> psend[NMAXPROC];
     static std::vector<particle_t> precv[NMAXPROC];
-    static std::vector<particle_t> pb;
-    const int nbody = _n;
-
-    pb.resize(nbody);
-#pragma omp for schedule(static)
-    for (int i = 0; i < nbody; i++)
-    {
-      particle_t ptcl;
-      ptcl[0] = _posx[i];
-      ptcl[1] = _posy[i];
-      ptcl[2] = _posz[i];
-      for (int p = 0; p < NPROP; p++)
-        ptcl[3+p] = _attribute[p][i];
-      pb[i] = ptcl;
-    }
-
+    auto &pb = data;
+    const int nbody = pb.size();
 
     bool initcall = true;
     if(initcall)
@@ -593,8 +568,8 @@ class RendererDataDistribute : public RendererData
     int iloc = 0;
     Boundary boundary(xlow[myid], xhigh[myid]);
     for(int i=0; i<nbody; i++)
-      if(boundary.isinbox(vector3{{pb[i][0],pb[i][1],pb[i][2]}}))
-        pb[i].swap(pb[iloc++]);
+      if(boundary.isinbox(vector3{{pb[i].posx,pb[i].posy,pb[i].posz}}))
+        std::swap(pb[i],pb[iloc++]);
 
     for(int p=0; p<nprocs; p++)
     {
@@ -604,7 +579,7 @@ class RendererDataDistribute : public RendererData
 
     for(int i=iloc; i<nbody; i++)
     {
-      int ibox = which_box(vector3{{pb[i][0],pb[i][1],pb[i][2]}}, xlow, xhigh);
+      int ibox = which_box(vector3{{pb[i].posx,pb[i].posy,pb[i].posz}}, xlow, xhigh);
       if(ibox < 0)
       {
         std::cerr << myid <<" exchange_particle error: particle in no box..." << std::endl;
@@ -659,8 +634,6 @@ class RendererDataDistribute : public RendererData
     }
     pb.resize(iloc);
 
-    /* copy particles back to _posx, _posy, etc... */
-    assert(0);
   }
 
 
