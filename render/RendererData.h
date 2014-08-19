@@ -5,7 +5,6 @@
 #include <cmath>
 #include <array>
 #include <parallel/algorithm>
-#include "MP.h"
 
 #if 0
 struct float2 { float x, y; };
@@ -42,11 +41,9 @@ class RendererData
       H,
       NPROP};
   protected:
-    using vector3 = MP::vector3;
-    using float4  = MP::float4;
     const int _n;
-    const int _rank, _nrank;
-    const MPI_Comm &_comm;
+    const int rank, nrank;
+    const MPI_Comm &comm;
     struct particle_t
     {
       float posx, posy, posz;
@@ -70,13 +67,16 @@ class RendererData
    
     void minmaxAttributeGlb(const Attribute_t p)   
     {
-      MPI_Allreduce(&_attributeMinL[p], &_attributeMin[p], 1, MPI_FLOAT, MPI_MIN, _comm);
-      MPI_Allreduce(&_attributeMaxL[p], &_attributeMax[p], 1, MPI_FLOAT, MPI_MAX, _comm);
+      MPI_Allreduce(&_attributeMinL[p], &_attributeMin[p], 1, MPI_FLOAT, MPI_MIN, comm);
+      MPI_Allreduce(&_attributeMaxL[p], &_attributeMax[p], 1, MPI_FLOAT, MPI_MAX, comm);
     }
+
+    int  getMaster() const { return 0; }
+    bool isMaster() const { return getMaster() == rank; }
 
   public:
     RendererData(const int __n, const int rank, const int nrank, const MPI_Comm &comm) : 
-      _n(__n), _rank(rank), _nrank(nrank), _comm(comm)
+      _n(__n), rank(rank), nrank(nrank), comm(comm)
   {
     assert(rank < nrank);
     data.resize(_n);
@@ -152,8 +152,8 @@ class RendererData
       float maxloc[] = {_xmaxl, _ymaxl, _zmaxl};
       float maxglb[] = {_xmaxl, _ymaxl, _zmaxl};
 
-      MPI_Allreduce(minloc, minglb, 3, MPI_FLOAT, MPI_MIN, _comm);
-      MPI_Allreduce(maxloc, maxglb, 3, MPI_FLOAT, MPI_MAX, _comm);
+      MPI_Allreduce(minloc, minglb, 3, MPI_FLOAT, MPI_MIN, comm);
+      MPI_Allreduce(maxloc, maxglb, 3, MPI_FLOAT, MPI_MAX, comm);
 
       _xmin = minglb[0];
       _ymin = minglb[1];
@@ -284,11 +284,62 @@ class RendererData
 
 class RendererDataDistribute : public RendererData
 {
-  enum { NMAXPROC = 1024};
+  enum { NMAXPROC   = 1024};
   enum { NMAXSAMPLE = 200000 };
   int npx, npy, npz;
-  MP mp;
   int sample_freq;
+
+  using vector3 = std::array<double,3>;
+  struct float4
+  {
+    typedef float  v4sf __attribute__ ((vector_size(16)));
+    typedef double v2df __attribute__ ((vector_size(16)));
+    static v4sf v4sf_abs(v4sf x){
+      typedef int v4si __attribute__ ((vector_size(16)));
+      v4si mask = {0x7fffffff, 0x7fffffff, 0x7fffffff, 0x7fffffff};
+      return __builtin_ia32_andps(x, (v4sf)mask);
+    }
+    union{
+      v4sf v;
+      struct{
+        float x, y, z, w;
+      };
+    };
+    float4() : v((v4sf){0.f, 0.f, 0.f, 0.f}) {}
+    float4(float x, float y, float z, float w) : v((v4sf){x, y, z, w}) {}
+    float4(float x) : v((v4sf){x, x, x, x}) {}
+    float4(v4sf _v) : v(_v) {}
+    float4 abs(){
+      typedef int v4si __attribute__ ((vector_size(16)));
+      v4si mask = {0x7fffffff, 0x7fffffff, 0x7fffffff, 0x7fffffff};
+      return float4(__builtin_ia32_andps(v, (v4sf)mask));
+    }
+    void dump(){
+      std::cerr << x << " "
+        << y << " "
+        << z << " "
+        << w << std::endl;
+    }
+#if 1
+    v4sf operator=(const float4 &rhs){
+      v = rhs.v;
+      return v;
+    }
+    float4(const float4 &rhs){
+      v = rhs.v;
+    }
+#endif
+#if 0
+    const v4sf_stream operator=(const v4sf_stream &s){
+      __builtin_ia32_movntps((float *)&v, s.v);
+      return s;
+    }
+    float4(const v4sf_stream &s){
+      __builtin_ia32_movntps((float *)&v, s.v);
+    }
+#endif
+  };
+
 
   template <int mask> struct CmpFloat4{
     bool operator()(const float4 &lhs, const float4 &rhs){
@@ -297,6 +348,12 @@ class RendererDataDistribute : public RendererData
             (float4::v4sf)__builtin_ia32_cmpltps(lhs.v, rhs.v));
     }
   };
+
+  RendererDataDistribute(const int n, const int rank, const int nrank, const MPI_Comm &comm) : 
+    RendererData(n,rank,nrank,comm)
+  {
+    assert(nrank <= NMAXPROC);
+  }
     
   struct Boundary
   {
@@ -325,17 +382,17 @@ class RendererDataDistribute : public RendererData
     int &ny = npy;
     int &nz = npz;
   ////////
-    const int n = _nrank;
+    const int n = nrank;
     int n0, n1; 
     n0 = (int)pow(n+0.1,0.33333333333333333333);
     while(n%n0)n0--;
-    if (mp.MP_root())
+    if (isMaster())
       fprintf(stderr, "n= %d  n0= %d \n", n, n0);
     nx = n0;
     n1 = n/nx;
     n0 = (int)sqrt(n1+0.1);
     while(n1%n0)n0++;
-    if(mp.MP_root()){
+    if(isMaster()){
       fprintf(stderr, "n1= %d  n0= %d \n", n1, n0);
     }
     ny = n0; nz = n1/n0;
@@ -355,9 +412,9 @@ class RendererDataDistribute : public RendererData
     if (nx*ny*nz != n){
       std::cerr << "create_division: Intenal Error " << n << " " << nx
         << " " << ny << " " << nz <<std::endl;
-      mp.MP_Abort(1);
+      MPI_Abort(comm, 1);
     }
-    if(mp.MP_root()){
+    if(isMaster()) {
       fprintf(stderr, "[nx, ny, nz] = %d %d %d\n", nx, ny, nz);
     }
   }
@@ -367,17 +424,17 @@ class RendererDataDistribute : public RendererData
     const int nbody = _n;
 #if 0
     int nreal = nbody;
-    MP_int_sum(nreal);
+    MPI_int_sum(nreal);
     int maxsample = (int)(NMAXSAMPLE*0.8); // 0.8 is safety factor
     int sample_freq = (nreal+maxsample-1)/maxsample;
 #else
-    double nreal = nbody;
-    mp.MP_sum(nreal);
+    double nglb = nbody, nloc = nbody;
+    MPI_Allreduce(&nloc, &nglb, 1, MPI_DOUBLE, MPI_SUM, comm);
     // double maxsample = (NMAXSAMPLE*0.8); // 0.8 is safety factor
     double maxsample = (NMAXSAMPLE*0.8); // 0.8 is safety factor
-    int sample_freq = int((nreal+maxsample)/maxsample);
+    int sample_freq = int((nglb+maxsample)/maxsample);
 #endif
-    mp.MP_int_bcast(sample_freq);
+    MPI_Bcast(&sample_freq,1,MPI_INT,getMaster(),comm);
     return sample_freq;
   }
 
@@ -399,7 +456,27 @@ class RendererDataDistribute : public RendererData
     for(int i=0,  ii=0; ii<nbody; i++, ii+=sample_freq)
       sample_array.push_back(vector3{{posx(i), posy(i), posz(i)}});
 
-    mp.MP_gather_sample_coords(sample_array);
+    /* gather sample coords */
+    int nsample = sample_array.size();
+    if (!isMaster())
+    {
+      MPI_Send(&nsample,         1,         MPI_INT,    getMaster(), rank*2,   comm);
+      MPI_Send(&sample_array[0], 3*nsample, MPI_DOUBLE, getMaster(), rank*2+1, comm);
+    }
+    else
+    {
+      MPI_Status status;
+      for (int p = 0; p < nrank; p++)
+        if (p != getMaster())
+        {
+          int nrecv;
+          MPI_Recv(&nrecv, 1, MPI_INT, p, p*2, comm, &status);
+          sample_array.resize(nsample+nrecv);
+          MPI_Recv(&sample_array[nsample], 3*nrecv, MPI_DOUBLE, p, p*2+1, comm, &status);
+          nsample += nrecv;
+        }
+
+    }
   }
 
   void determine_division( // nitadori's version
@@ -542,12 +619,67 @@ class RendererDataDistribute : public RendererData
     return p;
   }
 
+  void alltoallv(std::vector<particle_t> psend[], std::vector<particle_t> precv[])
+  {
+    static MPI_Datatype MPI_PARTICLE = 0;
+    if (!MPI_PARTICLE)
+    {
+      int ss = sizeof(particle_t) / sizeof(float);
+      assert(0 == sizeof(particle_t) % sizeof(float));
+      MPI_Type_contiguous(ss, MPI_FLOAT, &MPI_PARTICLE);
+      MPI_Type_commit(&MPI_PARTICLE);
+    }
+
+    static std::vector<int> nsend(nrank), senddispl(nrank+1,0);
+    int nsendtot = 0;
+    for (int i = 0; i < nrank; i++)
+    {
+      nsend[i] = psend[i].size();
+      senddispl[i+1] = senddispl[i] + nsend[i];
+      nsendtot += nsend[i];
+    }
+
+    static std::vector<int> nrecv(nrank), recvdispl(nrank+1,0);
+    MPI_Alltoall(&nsend[0], 1, MPI_INT, &nrecv[0], 1, MPI_INT, comm);
+    
+    int nrecvtot = 0;
+    for (int i = 0; i < nrank; i++)
+    {
+      nrecv[i] = precv[i].size();
+      recvdispl[i+1] = recvdispl[i] + nrecv[i];
+      nrecvtot += nrecv[i];
+    }
+
+    
+    static std::vector<particle_t> sendbuf, recvbuf;
+    sendbuf.resize(nsendtot); 
+    recvbuf.resize(nrecvtot);
+    int iloc = 0;
+    for (int i = 0; i < nrank; i++)
+      for (int j = 0; j < nsend[i]; j++)
+        sendbuf[iloc++] = psend[i][j];
+
+    MPI_Alltoallv(
+        &sendbuf[0], &nsend[0], &senddispl[0], MPI_PARTICLE,
+        &recvbuf[0], &nrecv[0], &recvdispl[9], MPI_PARTICLE, 
+      comm);
+
+    for (int i = 0; i < nrank; i++)
+    {
+      precv[i].resize(nrecv[i]);
+      for (int j = 0; j < nrecv[i]; j++)
+        precv[i][j] = recvbuf[recvdispl[i] + j];
+    }
+
+  }
+
+
   void exchange_particles_alltoall_vector(
       const vector3  xlow[],
       const vector3 xhigh[])
   {
-    int myid = mp.MP_myprocid();
-    int nprocs = mp.MP_proccount();
+    int myid = rank;
+    int nprocs = nrank;
 
     static std::vector<particle_t> psend[NMAXPROC];
     static std::vector<particle_t> precv[NMAXPROC];
@@ -593,7 +725,7 @@ class RendererDataDistribute : public RendererData
           << std::endl;
 #endif
 //        pb[i].dump();
-        mp.MP_Abort(1);
+        MPI_Abort(comm,1);
       }
       else
       {
@@ -604,11 +736,11 @@ class RendererDataDistribute : public RendererData
     double dtime = 1.e9;
     {
       const double t0 = MPI_Wtime();
-      mp.MP_alltoallv(psend, precv);
+      alltoallv(psend, precv);
       const double t1 = MPI_Wtime();
       dtime = t1 - t0;
-      if (mp.MP_root())
-        fprintf(stderr, "MP_alltoallv= %g sec \n", t1-t0);
+      if (isMaster())
+        fprintf(stderr, "alltoallv= %g sec \n", t1-t0);
     }
 
     int nsendtot = 0, nrecvtot = 0;
@@ -616,10 +748,12 @@ class RendererDataDistribute : public RendererData
       nsendtot += psend[p].size();
       nrecvtot += precv[p].size();
     }
-    mp.MP_int_sum(nsendtot);
-    mp.MP_int_sum(nrecvtot);
+    int nsendloc = nsendtot, nrecvloc = nrecvtot;
+    MPI_Allreduce(&nsendloc,&nsendtot,1, MPI_INT, MPI_SUM,comm);
+    MPI_Allreduce(&nrecvloc,&nrecvtot,1, MPI_INT, MPI_SUM,comm);
     double bw = 2.0 * double(sizeof(particle_t) * nsendtot) / dtime * 1.e-9;
-    if(mp.MP_root()){
+    if(isMaster())
+    {
       assert(nsendtot == nrecvtot);
       std::cout << "Exchanged particles = " << nsendtot << ", " << dtime << "sec" << std::endl;
       std::cout << "Global Bandwidth " << bw << " GB/s" << std::endl;
@@ -640,8 +774,6 @@ class RendererDataDistribute : public RendererData
   /////////////////////
   void distribute()
   {
-    mp.mympi.initialize();
-
     initialize_division();
     std::vector<vector3> sample_array;
     collect_sample_particles(sample_array, sample_freq);
@@ -657,12 +789,12 @@ class RendererDataDistribute : public RendererData
     for (int i = 0; i < nsample; i++)
       pos[i] = float4(sample_array[i][0], sample_array[i][1], sample_array[i][2],0.0f);
 
-    if (mp.MP_myprocid() == 0)
+    if (rank == 0)
       determine_division(pos, rmax,xlow, xhigh);
     
-    const int nwords=mp.MP_proccount()*3;
-    mp.MP_double_bcast(reinterpret_cast<double*>(& xlow[0]), nwords);
-    mp.MP_double_bcast(reinterpret_cast<double*>(&xhigh[0]), nwords);
+    const int nwords=nrank*3;
+    MPI_Bcast(& xlow[0],nwords,MPI_DOUBLE,getMaster(),comm);
+    MPI_Bcast(&xhigh[0],nwords,MPI_DOUBLE,getMaster(),comm);
     
     exchange_particles_alltoall_vector(xlow, xhigh);
   }
