@@ -3,6 +3,10 @@
 #include <mpi.h>
 #include <cassert>
 #include <cmath>
+#include <array>
+#include <parallel/algorithm>
+#include "MP.h"
+
 #if 0
 struct float2 { float x, y; };
 struct float3 { float x, y, z; };
@@ -33,12 +37,13 @@ class RendererData
   public:
     typedef unsigned long long long_t;
     enum Attribute_t {
-      MASS,
       VEL,
       RHO,
       H,
       NPROP};
-  private:
+  protected:
+    using vector3 = std::array<double,3>;
+    using float4  = MP::float4;
     const int _n;
     const int _rank, _nrank;
     const MPI_Comm &_comm;
@@ -50,16 +55,19 @@ class RendererData
     float _xmin, _ymin, _zmin, _rmin;
     float _xmax, _ymax, _zmax, _rmax;
 
+    float _xminl, _yminl, _zminl, _rminl;
+    float _xmaxl, _ymaxl, _zmaxl, _rmaxl;
+
     float _attributeMin[NPROP];
     float _attributeMax[NPROP];
+    float _attributeMinL[NPROP];
+    float _attributeMaxL[NPROP];
+
    
     void minmaxAttributeGlb(const Attribute_t p)   
     {
-      float _min, _max;
-      MPI_Allreduce(&_attributeMin[p], &_min, 1, MPI_FLOAT, MPI_MIN, _comm);
-      MPI_Allreduce(&_attributeMax[p], &_max, 1, MPI_FLOAT, MPI_MAX, _comm);
-      _attributeMin[p] = std::min(_attributeMin[p], _min);
-      _attributeMax[p] = std::max(_attributeMax[p], _max);
+      MPI_Allreduce(&_attributeMinL[p], &_attributeMin[p], 1, MPI_FLOAT, MPI_MIN, _comm);
+      MPI_Allreduce(&_attributeMaxL[p], &_attributeMax[p], 1, MPI_FLOAT, MPI_MAX, _comm);
     }
 
   public:
@@ -108,51 +116,51 @@ class RendererData
 
     void computeMinMax()
     {
-      _xmin=_ymin=_zmin=_rmin = +HUGE;
-      _xmax=_ymax=_zmax=_rmax = -HUGE;
+      _xminl=_yminl=_zminl=_rminl = +HUGE;
+      _xmaxl=_ymaxl=_zmaxl=_rmaxl = -HUGE;
       for (int p = 0; p < NPROP; p++)
       {
-        _attributeMin[p] = +HUGE;
-        _attributeMax[p] = -HUGE;
+        _attributeMinL[p] = +HUGE;
+        _attributeMaxL[p] = -HUGE;
       }
 
       for (int i = 0; i < _n; i++)
       {
-        _xmin = std::min(_xmin, _posx[i]);
-        _ymin = std::min(_ymin, _posy[i]);
-        _zmin = std::min(_zmin, _posz[i]);
-        _xmax = std::max(_xmax, _posx[i]);
-        _ymax = std::max(_ymax, _posy[i]);
-        _zmax = std::max(_zmax, _posz[i]);
+        _xminl = std::min(_xminl, _posx[i]);
+        _yminl = std::min(_yminl, _posy[i]);
+        _zminl = std::min(_zminl, _posz[i]);
+        _xmaxl = std::max(_xmaxl, _posx[i]);
+        _ymaxl = std::max(_ymaxl, _posy[i]);
+        _zmaxl = std::max(_zmaxl, _posz[i]);
         for (int p = 0; p < NPROP; p++)
         {
-          _attributeMin[p] = std::min(_attributeMin[p], _attribute[p][i]);
-          _attributeMax[p] = std::max(_attributeMax[p], _attribute[p][i]);
+          _attributeMinL[p] = std::min(_attributeMinL[p], _attribute[p][i]);
+          _attributeMaxL[p] = std::max(_attributeMaxL[p], _attribute[p][i]);
         }
       }
-      _rmin = std::min(_rmin, _xmin);
-      _rmin = std::min(_rmin, _ymin);
-      _rmin = std::min(_rmin, _zmin);
-      _rmax = std::max(_rmax, _xmax);
-      _rmax = std::max(_rmax, _ymax);
-      _rmax = std::max(_rmax, _zmax);
+      _rminl = std::min(_rminl, _xminl);
+      _rminl = std::min(_rminl, _yminl);
+      _rminl = std::min(_rminl, _zminl);
+      _rmaxl = std::max(_rmaxl, _xmaxl);
+      _rmaxl = std::max(_rmaxl, _ymaxl);
+      _rmaxl = std::max(_rmaxl, _zmaxl);
 
       for (int i = 0; i < _n; i++)
       {
-        assert(_posx[i] >= _xmin && _posx[i] <= _xmax);
-        assert(_posy[i] >= _ymin && _posy[i] <= _ymax);
-        assert(_posz[i] >= _zmin && _posz[i] <= _zmax);
-        assert(_posx[i] >= _rmin && _posx[i] <= _rmax);
-        assert(_posy[i] >= _rmin && _posy[i] <= _rmax);
-        assert(_posz[i] >= _rmin && _posz[i] <= _rmax);
+        assert(_posx[i] >= _xminl && _posx[i] <= _xmaxl);
+        assert(_posy[i] >= _yminl && _posy[i] <= _ymaxl);
+        assert(_posz[i] >= _zminl && _posz[i] <= _zmaxl);
+        assert(_posx[i] >= _rminl && _posx[i] <= _rmaxl);
+        assert(_posy[i] >= _rminl && _posy[i] <= _rmaxl);
+        assert(_posz[i] >= _rminl && _posz[i] <= _rmaxl);
       }
 
 
-      float minloc[] = {_xmin, _ymin, _zmin};
-      float minglb[] = {_xmin, _ymin, _zmin};
+      float minloc[] = {_xminl, _yminl, _zminl};
+      float minglb[] = {_xminl, _yminl, _zminl};
 
-      float maxloc[] = {_xmax, _ymax, _zmax};
-      float maxglb[] = {_xmax, _ymax, _zmax};
+      float maxloc[] = {_xmaxl, _ymaxl, _zmaxl};
+      float maxglb[] = {_xmaxl, _ymaxl, _zmaxl};
 
       MPI_Allreduce(minloc, minglb, 3, MPI_FLOAT, MPI_MIN, _comm);
       MPI_Allreduce(maxloc, maxglb, 3, MPI_FLOAT, MPI_MAX, _comm);
@@ -186,6 +194,19 @@ class RendererData
 
     float attributeMin(const Attribute_t p) const { return _attributeMin[p]; }
     float attributeMax(const Attribute_t p) const { return _attributeMax[p]; }
+    
+    float xminLoc() const { return _xminl;} 
+    float yminLoc() const { return _yminl;} 
+    float zminLoc() const { return _zminl;} 
+    float rminLoc() const { return _rminl;} 
+    
+    float xmaxLoc() const { return _xmaxl;} 
+    float ymaxLoc() const { return _ymaxl;} 
+    float zmaxLoc() const { return _zmaxl;} 
+    float rmaxLoc() const { return _rmaxl;} 
+
+    float attributeMinLoc(const Attribute_t p) const { return _attributeMinL[p]; }
+    float attributeMaxLoc(const Attribute_t p) const { return _attributeMaxL[p]; }
 
 
     void rescaleLinear(const Attribute_t p, const float newMin, const float newMax)
@@ -204,8 +225,8 @@ class RendererData
         min = std::min(min, attribute(p,i));
         max = std::max(max, attribute(p,i));
       }
-      _attributeMin[p] = min;
-      _attributeMax[p] = max;
+      _attributeMinL[p] = min;
+      _attributeMaxL[p] = max;
 
       minmaxAttributeGlb(p);
     }
@@ -219,8 +240,8 @@ class RendererData
         min = std::min(min, attribute(p,i));
         max = std::max(max, attribute(p,i));
       }
-      _attributeMin[p] = min;
-      _attributeMax[p] = max;
+      _attributeMinL[p] = min;
+      _attributeMaxL[p] = max;
 
       minmaxAttributeGlb(p);
     }
@@ -233,8 +254,8 @@ class RendererData
         min = std::min(min, attribute(p,i));
         max = std::max(max, attribute(p,i));
       }
-      _attributeMin[p] = min;
-      _attributeMax[p] = max;
+      _attributeMinL[p] = min;
+      _attributeMaxL[p] = max;
 
       minmaxAttributeGlb(p);
     }
@@ -264,9 +285,403 @@ class RendererData
         max = std::max(max, val);
       }
 
-      _attributeMin[p] = min;
-      _attributeMax[p] = max;
+      _attributeMinL[p] = min;
+      _attributeMaxL[p] = max;
       
       minmaxAttributeGlb(p);
     }
+};
+
+class RendererDataDistribute : public RendererData
+{
+  enum { NMAXPROC = 1024};
+  enum { NMAXSAMPLE = 200000 };
+  int npx, npy, npz;
+  int sample_freq;
+  template <int mask> struct CmpFloat4{
+    bool operator()(const float4 &lhs, const float4 &rhs){
+      return 
+        mask & __builtin_ia32_movmskps(
+            (float4::v4sf)__builtin_ia32_cmpltps(lhs.v, rhs.v));
+    }
+  };
+    
+  struct Boundary
+  {
+    double xlow, xhigh;
+    double ylow, yhigh;
+    double zlow, zhigh;
+    Boundary(const vector3 &low, const vector3 &high){
+      xlow = low[0]; xhigh = high[0];
+      ylow = low[1]; yhigh = high[1];
+      zlow = low[2]; zhigh = high[2];
+    }
+    bool isinbox(const vector3 &pos) const {
+      return !(
+          (pos[0] < xlow ) || 
+          (pos[1] < ylow ) || 
+          (pos[2] < zlow ) || 
+          (pos[0] > xhigh) || 
+          (pos[1] > yhigh) || 
+          (pos[2] > zhigh) );
+    }
+  };
+
+  void create_division()
+  { 
+    int &nx = npx;
+    int &ny = npy;
+    int &nz = npz;
+  ////////
+    const int n = _nrank;
+    int n0, n1; 
+    n0 = (int)pow(n+0.1,0.33333333333333333333);
+    while(n%n0)n0--;
+    if (MP::MP_root())
+      fprintf(stderr, "n= %d  n0= %d \n", n, n0);
+    nx = n0;
+    n1 = n/nx;
+    n0 = (int)sqrt(n1+0.1);
+    while(n1%n0)n0++;
+    if(MP::MP_root()){
+      fprintf(stderr, "n1= %d  n0= %d \n", n1, n0);
+    }
+    ny = n0; nz = n1/n0;
+    // int ntmp;
+    if (nz > ny){
+      // ntmp = nz; nz = ny; ny = ntmp;
+      std::swap(ny, nz);
+    }
+    if (ny > nx){
+      // ntmp = nx; nx = ny; ny = ntmp;
+      std::swap(nx, ny);
+    }
+    if (nz > ny){
+      // ntmp = nz; nz = ny; ny = ntmp;
+      std::swap(ny, nz);
+    }
+    if (nx*ny*nz != n){
+      std::cerr << "create_division: Intenal Error " << n << " " << nx
+        << " " << ny << " " << nz <<std::endl;
+      MP::MP_Abort(1);
+    }
+    if(MP::MP_root()){
+      fprintf(stderr, "[nx, ny, nz] = %d %d %d\n", nx, ny, nz);
+    }
+  }
+
+  int determine_sample_freq()
+  {
+    const int nbody = _n;
+#if 0
+    int nreal = nbody;
+    MP_int_sum(nreal);
+    int maxsample = (int)(NMAXSAMPLE*0.8); // 0.8 is safety factor
+    int sample_freq = (nreal+maxsample-1)/maxsample;
+#else
+    double nreal = nbody;
+    MP::MP_sum(nreal);
+    // double maxsample = (NMAXSAMPLE*0.8); // 0.8 is safety factor
+    double maxsample = (NMAXSAMPLE*0.8); // 0.8 is safety factor
+    int sample_freq = int((nreal+maxsample)/maxsample);
+#endif
+    MP::MP_int_bcast(sample_freq);
+    return sample_freq;
+  }
+
+  void initialize_division()
+  {
+    static bool initcall = true;
+    if(initcall)
+    {
+      sample_freq = determine_sample_freq();
+      create_division();
+      initcall = false;
+    }
+  }
+
+  void collect_sample_particles(std::vector<float4> &sample_array, const int sample_freq)
+  {
+    const int nbody = _n;
+    sample_array.clear();
+    for(int i=0,  ii=0; ii<nbody; i++, ii+=sample_freq)
+      sample_array.push_back(float4(_posx[i], _posy[i], _posz[i], 0.0f));
+
+    int nsample = sample_array.size();
+    MP::MP_gather_sample_coords(nsample, sample_array);
+    nsample = sample_array.size();
+  }
+
+  void determine_division( // nitadori's version
+      std::vector<float4>  &pos,
+      const float rmax,
+      vector3  xlow[],  // left-bottom coordinate of divisions
+      vector3 xhigh[])  // size of divisions
+  {
+    const int nx = npx;
+    const int ny = npy;
+    const int nz = npz;
+    const int np = pos.size();
+
+    struct Address{
+      const int nx, ny, nz;
+      std::vector<int> offset;
+
+      Address(int _nx, int _ny, int _nz, int np) :
+        nx(_nx), ny(_ny), nz(_nz), offset(1 + nx*ny*nz)
+      {
+        const int n = nx*ny*nz;
+        for(int i=0; i<=n; i++){
+          offset[i] = (i*np)/n;
+        }
+      }
+      int idx(int ix, int iy, int iz){
+        return ix + nx*(iy + ny*(iz));
+      }
+      int xdi(int ix, int iy, int iz){
+        return iz + nz*(iy + ny*(ix));
+      }
+      int off(int ix, int iy, int iz){
+        return offset[xdi(ix, iy, iz)];
+      }
+    };
+
+    const int n = nx*ny*nz;
+    assert(n <= NMAXPROC);
+
+    Address addr(nx, ny, nz, np);
+
+
+    double buf[NMAXPROC+1];
+    // divide on x
+    {
+      double *xoff = buf; // xoff[nx+1]
+      __gnu_parallel::sort(&pos[addr.off(0, 0, 0)], &pos[addr.off(nx, 0, 0)], CmpFloat4<1>()); // sort by x
+      for(int ix=0; ix<nx; ix++)
+      {
+        const int ioff = addr.off(ix, 0, 0);
+        xoff[ix] = 0.5 * (pos[ioff].x + pos[1+ioff].x);
+        // PRC(xoff[ix]);
+      }
+      // cerr << endl;
+      xoff[0]  = -rmax;
+      xoff[nx] = +rmax;
+      for(int ix=0; ix<nx; ix++)
+        for(int iy=0; iy<ny; iy++)
+          for(int iz=0; iz<nz; iz++)
+          {
+            const int ii = addr.xdi(ix, iy, iz);
+            // PRC(ix); PRC(iy); PRC(iz); PRL(ii);
+            xlow [ii][0] = xoff[ix];
+            xhigh[ii][0] = xoff[ix+1];
+          }
+    }
+
+    // divide on y
+    {
+      double *yoff = buf; // yoff[ny+1];
+      for(int ix=0; ix<nx; ix++)
+      {
+        __gnu_parallel::sort(&pos[addr.off(ix, 0, 0)], &pos[addr.off(ix, ny, 0)], CmpFloat4<2>()); // sort by y
+        for(int iy=0; iy<ny; iy++)
+        {
+          const int ioff = addr.off(ix, iy, 0);
+          yoff[iy] = 0.5 * (pos[ioff].y + pos[1+ioff].y);
+          // PRC(yoff[iy]);
+        }
+        // cerr << endl;
+        yoff[0]  = -rmax;
+        yoff[ny] = +rmax;
+        for(int iy=0; iy<ny; iy++)
+          for(int iz=0; iz<nz; iz++)
+          {
+            const int ii = addr.xdi(ix, iy, iz);
+            xlow [ii][1] = yoff[iy];
+            xhigh[ii][1] = yoff[iy+1];
+          }
+      }
+    }
+    // divide on z
+    {
+      double *zoff = buf; // zoff[nz+1];
+      for(int ix=0; ix<nx; ix++)
+        for(int iy=0; iy<ny; iy++)
+        {
+          __gnu_parallel::sort(&pos[addr.off(ix, iy, 0)], &pos[addr.off(ix, iy, nz)], CmpFloat4<4>()); // sort by z
+          for(int iz=0; iz<nz; iz++)
+          {
+            const int ioff = addr.off(ix, iy, iz);
+            zoff[iz] = 0.5 * (pos[ioff].z + pos[1+ioff].z);
+          }
+          // cerr << endl;
+          zoff[0]  = -rmax;
+          zoff[nz] = +rmax;
+          for(int iz=0; iz<nz; iz++){
+            const int ii = addr.xdi(ix, iy, iz);
+            xlow [ii][2] = zoff[iz];
+            xhigh[ii][2] = zoff[iz+1];
+          }
+        }
+    }
+  }
+
+  inline int which_box(
+		const vector3 &pos,
+		const vector3 xlow[],
+		const vector3 xhigh[])
+  {
+    int p = 0;
+    if(pos[0] < xlow[p][0]) return -1;
+    for(int ix=0; ix<npx; ix++, p+=npy*npz){
+      if(pos[0] < xhigh[p][0]) break;
+    }
+    if(pos[0] > xhigh[p][0]) return -1;
+
+    if(pos[1] < xlow[p][1]) return -1;
+    for(int iy=0; iy<npy; iy++, p+=npz){
+      if(pos[1] < xhigh[p][1]) break;
+    }
+    if(pos[1] > xhigh[p][1]) return -1;
+
+    if(pos[2] < xlow[p][2]) return -1;
+    for(int iy=0; iy<npy; iy++, p++){
+      if(pos[2] < xhigh[p][2]) break;
+    }
+    if(pos[2] > xhigh[p][2]) return -1;
+
+    return p;
+  }
+
+  void exchange_particles_alltoall_vector(
+      const vector3  xlow[],
+      const vector3 xhigh[])
+  {
+    using particle_t =  std::array<float, 3+NPROP>;
+    int myid = MP::MP_myprocid();
+    int nprocs = MP::MP_proccount();
+
+    static std::vector<particle_t> psend[NMAXPROC];
+    static std::vector<particle_t> precv[NMAXPROC];
+    static std::vector<particle_t> pb;
+    const int nbody = _n;
+
+    pb.resize(nbody);
+#pragma omp for schedule(static)
+    for (int i = 0; i < nbody; i++)
+    {
+      particle_t ptcl;
+      ptcl[0] = _posx[i];
+      ptcl[1] = _posy[i];
+      ptcl[2] = _posz[i];
+      for (int p = 0; p < NPROP; p++)
+        ptcl[3+p] = _attribute[p][i];
+      pb[i] = ptcl;
+    }
+
+
+    bool initcall = true;
+    if(initcall)
+    {
+      initcall = false;
+      for(int p=0; p<nprocs; p++)
+      {
+        psend[p].reserve(64);
+        precv[p].reserve(64);
+      }
+    }
+
+    int iloc = 0;
+    Boundary boundary(xlow[myid], xhigh[myid]);
+    for(int i=0; i<nbody; i++)
+      if(boundary.isinbox(vector3{{pb[i][0],pb[i][1],pb[i][2]}}))
+        pb[i].swap(pb[iloc++]);
+
+    for(int p=0; p<nprocs; p++)
+    {
+      psend[p].clear();
+      precv[p].clear();
+    }
+
+    for(int i=iloc; i<nbody; i++)
+    {
+      int ibox = which_box(vector3{{pb[i][0],pb[i][1],pb[i][2]}}, xlow, xhigh);
+      if(ibox < 0)
+      {
+        std::cerr << myid <<" exchange_particle error: particle in no box..." << std::endl;
+      #if 0
+        vector3 fpos{{pb[i][0], pb[i][1], pb[i][2]}}; // = pb[i].get_pos();
+        unsigned long *upos = (unsigned long *)&fpos[0];
+        // cerr << pb[i].get_pos() << endl;
+        std::cout << // boost::format("[%f %f %f], [%lx %lx %lx]")
+          % fpos[0] % fpos[1] % fpos[2]
+          % upos[0] % upos[1] % upos[2]
+          << std::endl;
+#endif
+//        pb[i].dump();
+        MP::MP_Abort(1);
+      }
+      else
+      {
+        psend[ibox].push_back(pb[i]);
+      }
+    }
+
+    double dtime = 1.e9;
+    {
+      const double t0 = MPI_Wtime();
+      MP::MP_alltoallv(psend, precv);
+      const double t1 = MPI_Wtime();
+      dtime = t1 - t0;
+      if (MP::MP_root())
+        fprintf(stderr, "MP_alltoallv= %g sec \n", t1-t0);
+    }
+
+    int nsendtot = 0, nrecvtot = 0;
+    for(int p=0; p<nprocs; p++){
+      nsendtot += psend[p].size();
+      nrecvtot += precv[p].size();
+    }
+    MP::MP_int_sum(nsendtot);
+    MP::MP_int_sum(nrecvtot);
+    double bw = 2.0 * double(sizeof(particle_t) * nsendtot) / dtime * 1.e-9;
+    if(MP::MP_root()){
+      assert(nsendtot == nrecvtot);
+      std::cout << "Exchanged particles = " << nsendtot << ", " << dtime << "sec" << std::endl;
+      std::cout << "Global Bandwidth " << bw << " GB/s" << std::endl;
+    }
+    pb.clear();
+    pb.reserve(nbody);
+    for(int p=0; p<nprocs; p++)
+    {
+      int size = precv[p].size();
+      for(int i=0; i<size; i++)
+        pb.push_back(precv[p][i]);
+    }
+    pb.resize(iloc);
+
+    /* copy particles back to _posx, _posy, etc... */
+    assert(0);
+  }
+
+
+  /////////////////////
+  void distribute()
+  {
+    initialize_division();
+    std::vector<float4> sample_array;
+    collect_sample_particles(sample_array, sample_freq);
+
+    /* determine division */
+    vector3  xlow[NMAXPROC];
+    vector3 xhigh[NMAXPROC];
+    const float rmax = _rmax * 1.0001;
+    if (MP::MP_myprocid() == 0)
+      determine_division(sample_array, rmax,xlow, xhigh);
+    
+    const int nwords=MP::MP_proccount()*3;
+    MP::MP_double_bcast(reinterpret_cast<double*>(& xlow[0]), nwords);
+    MP::MP_double_bcast(reinterpret_cast<double*>(&xhigh[0]), nwords);
+    
+    exchange_particles_alltoall_vector(xlow, xhigh);
+  }
 };

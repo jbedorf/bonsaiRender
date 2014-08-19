@@ -76,7 +76,7 @@ static RendererData* readBonsaiReduced(
     rData.posz(ip) = posStars[i][2];
     rData.ID  (ip) = i;
     rData.type(ip) = 1;
-    rData.attribute(RendererData::MASS, ip) = 1.0/nS;
+//    rData.attribute(RendererData::MASS, ip) = 1.0/nS;
     rData.attribute(RendererData::VEL,  ip) =
       std::sqrt(
           attrStars[i][0]*attrStars[i][0] +
@@ -94,7 +94,7 @@ static RendererData* readBonsaiReduced(
     rData.posz(ip) = posDM[i][2];
     rData.ID  (ip) = i+1000000000;
     rData.type(ip) = 0;
-    rData.attribute(RendererData::MASS, ip) = 1.0/nDM;
+//    rData.attribute(RendererData::MASS, ip) = 1.0/nDM;
     rData.attribute(RendererData::VEL,  ip) =
       std::sqrt(
           attrDM[i][0]*attrDM[i][0] +
@@ -202,7 +202,7 @@ static RendererData* readBonsaiFull(
     rData.ID  (ip) = IDListS[i].getID();
     rData.type(ip) = IDListS[i].getType();
     assert(rData.type(ip) == 1); /* sanity check */
-    rData.attribute(RendererData::MASS, ip) = posS[i][3];
+//    rData.attribute(RendererData::MASS, ip) = posS[i][3];
     rData.attribute(RendererData::VEL,  ip) =
       std::sqrt(
           velS[i][0]*velS[i][0] +
@@ -228,7 +228,7 @@ static RendererData* readBonsaiFull(
     rData.ID  (ip) = IDListDM[i].getID();
     rData.type(ip) = IDListDM[i].getType();
     assert(rData.type(ip) == 0); /* sanity check */
-    rData.attribute(RendererData::MASS, ip) = posDM[i][3];
+//    rData.attribute(RendererData::MASS, ip) = posDM[i][3];
     rData.attribute(RendererData::VEL,  ip) =
       std::sqrt(
           velDM[i][0]*velDM[i][0] +
