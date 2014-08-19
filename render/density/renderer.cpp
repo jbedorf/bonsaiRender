@@ -1368,38 +1368,70 @@ void SmokeRenderer::render()
 }
 
 static void lCompose(
-    float *src, float *dst, const int n, const int rank, const int nrank, const MPI_Comm &comm)
+    float4 *src, float4 *dst, float *depth,
+    const int n, const int rank, const int nrank, const MPI_Comm &comm)
 {
   const int master = 0;
 #if 0
   MPI_Reduce(src, dst, 4*n, MPI_FLOAT, MPI_SUM, master, comm);
 #else
-  static std::vector<float> tmp;
+  static std::vector<float4> colorArray;
+  static std::vector<float > depthArray;
   const int nsend = (n+nrank-1)/nrank;
-  tmp.resize(4*nsend*nrank);
+  colorArray.resize(nsend*nrank);
+
+  if (!depth)
+  {
+#pragma omp parallel for schedule(static)
+    for (int i = n; i < nsend*nrank; i++)
+      src[i] = make_float4(0.0f);
+
+    MPI_Alltoall(src, nsend*4, MPI_FLOAT, &colorArray[0], nsend*4, MPI_FLOAT, comm);
 
 #pragma omp parallel for schedule(static)
-  for (int i = n; i < nsend*nrank; i++)
-    reinterpret_cast<float4*>(src)[i] = make_float4(0.0f);
-
-  MPI_Alltoall(src, nsend*4, MPI_FLOAT, &tmp[0], nsend*4, MPI_FLOAT, comm);
-
-
-  float4 *colorArray = reinterpret_cast<float4*>(&tmp[0]);
+    for (int i = 0; i < nsend; i++)
+      for (int p = 1; p < nrank; p++)
+      {
+        float4 dst = colorArray[i];
+        float4 src = colorArray[i + p*nsend];
+        dst.x += src.x;
+        dst.y += src.y;
+        dst.z += src.z;
+        dst.w += src.w;
+        colorArray[i] = dst;
+      }
+  }
+  else
+  {
+    assert(0);
+    depthArray.resize(nsend*nrank);
 #pragma omp parallel for schedule(static)
-  for (int i = 0; i < nsend; i++)
-    for (int p = 1; p < nrank; p++)
+    for (int i = n; i < nsend*nrank; i++)
     {
-      float4 dst = colorArray[i];
-      float4 src = colorArray[i + p*nsend];
-      dst.x += src.x;
-      dst.y += src.y;
-      dst.z += src.z;
-      dst.w += src.w;
-      colorArray[i] = dst;
+      src[i] = make_float4(0.0f);
+      depth[i] = HUGE;
     }
 
-  MPI_Gather(&tmp[0], nsend*4, MPI_FLOAT, dst, 4*nsend, MPI_FLOAT, master, comm);
+    MPI_Alltoall(src, nsend*4, MPI_FLOAT, &colorArray[0], nsend*4, MPI_FLOAT, comm);
+    MPI_Alltoall(depth, nsend, MPI_FLOAT, &depthArray[0], nsend, MPI_FLOAT, comm);
+
+
+
+#pragma omp parallel for schedule(static)
+    for (int i = 0; i < nsend; i++)
+      for (int p = 1; p < nrank; p++)
+      {
+        float4 dst = colorArray[i];
+        float4 src = colorArray[i + p*nsend];
+        dst.x += src.x;
+        dst.y += src.y;
+        dst.z += src.z;
+        dst.w += src.w;
+        colorArray[i] = dst;
+      }
+  }
+
+  MPI_Gather(&colorArray[0], nsend*4, MPI_FLOAT, dst, 4*nsend, MPI_FLOAT, master, comm);
 #endif
 }
 
@@ -1486,9 +1518,9 @@ void SmokeRenderer::splotchDraw(bool sorted)
     glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_WIDTH,  &w);
     glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_HEIGHT, &h);
     glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_INTERNAL_FORMAT, &internalformat);
-    static std::vector<float> imgLoc, imgGlb;
-    imgLoc.resize(8*w*h);
-    imgGlb.resize(8*w*h);
+    static std::vector<float4> imgLoc, imgGlb;
+    imgLoc.resize(2*w*h);
+    imgGlb.resize(2*w*h);
     const int imgSize = w*h*4*sizeof(float);
 
     const double t1 = MPI_Wtime();
@@ -1583,8 +1615,8 @@ void SmokeRenderer::splotchDraw(bool sorted)
       GLvoid *rptr = glMapBufferRange(GL_PIXEL_PACK_BUFFER, 0, imgSize, GL_MAP_READ_BIT);
 
 #pragma omp parallel for schedule(static)
-      for (int i = 0; i < 4*w*h; i++)
-        imgLoc[i] = reinterpret_cast<float*>(rptr)[i];
+      for (int i = 0; i < w*h; i++)
+        imgLoc[i] = reinterpret_cast<float4*>(rptr)[i];
 
 //      memcpy(&imgLoc[0], rptr, imgSize);
       glUnmapBuffer(GL_PIXEL_PACK_BUFFER);
@@ -1592,7 +1624,7 @@ void SmokeRenderer::splotchDraw(bool sorted)
       glFinish();
       const double t3 = MPI_Wtime();
 
-      lCompose(&imgLoc[0], &imgGlb[0], w*h, rank, nrank, comm);
+      lCompose(&imgLoc[0], &imgGlb[0], NULL, w*h, rank, nrank, comm);
       glFinish();
       const double t4 = MPI_Wtime();
 
@@ -1602,8 +1634,8 @@ void SmokeRenderer::splotchDraw(bool sorted)
         GLvoid *wptr = glMapBufferRange(GL_PIXEL_UNPACK_BUFFER, 0, imgSize, GL_MAP_WRITE_BIT);
 
 #pragma omp parallel for schedule(static)
-        for (int i = 0; i < 4*w*h; i++)
-          reinterpret_cast<float*>(wptr)[i] = imgGlb[i];
+        for (int i = 0; i < w*h; i++)
+          reinterpret_cast<float4*>(wptr)[i] = imgGlb[i];
         glFinish();
         const double t5 = MPI_Wtime();
 
