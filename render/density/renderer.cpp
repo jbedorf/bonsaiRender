@@ -276,8 +276,11 @@ SmokeRenderer::SmokeRenderer(int numParticles, int maxParticles, const int _rank
   //  cudaMalloc( &mParticleDepths_devID, mMaxParticles*sizeof(float));
   //  cudaMalloc( &mParticleIndices_devID, mMaxParticles*sizeof(uint));
 
-  printf("Vendor: %s\n", glGetString(GL_VENDOR));
-  printf("Renderer: %s\n", glGetString(GL_RENDERER));
+  if (isMaster())
+  {
+    printf("Vendor: %s\n", glGetString(GL_VENDOR));
+    printf("Renderer: %s\n", glGetString(GL_RENDERER));
+  }
 
   glutReportErrors();
 }
@@ -1906,7 +1909,8 @@ void SmokeRenderer::createBuffers(int w, int h)
 
   m_imageW = w / m_downSample;
   m_imageH = h / m_downSample;
-  printf("image size: %d %d\n", m_imageW, m_imageH);
+  if (isMaster())
+    printf("image size: %d %d\n", m_imageW, m_imageH);
 
   // create texture for image buffer
   GLint format = GL_RGBA32F;
@@ -1925,7 +1929,8 @@ void SmokeRenderer::createBuffers(int w, int h)
 
   m_downSampledW = m_imageW / m_blurDownSample;
   m_downSampledH = m_imageH / m_blurDownSample;
-  printf("downsampled size: %d %d\n", m_downSampledW, m_downSampledH);
+  if (isMaster())
+    printf("downsampled size: %d %d\n", m_downSampledW, m_downSampledH);
 
   m_downSampledTex[0] = createTexture(GL_TEXTURE_2D, m_downSampledW, m_downSampledH, format, GL_RGBA);
   m_downSampledTex[1] = createTexture(GL_TEXTURE_2D, m_downSampledW, m_downSampledH, format, GL_RGBA);

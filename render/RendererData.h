@@ -107,6 +107,11 @@ class RendererData
 
     long_t  ID(const long_t i) const { return data[i].ID; }
     long_t& ID(const long_t i)       { return data[i].ID; }
+   
+    void randomShuffle()   
+    {
+      std::random_shuffle(data.begin(), data.end());
+    }
 
     void computeMinMax()
     {
@@ -294,7 +299,7 @@ class RendererDataDistribute : public RendererData
 {
   private:
     enum { NMAXPROC   = 1024};
-    enum { NMAXSAMPLE = 200000 };
+    int NMAXSAMPLE;
     int npx, npy, npz;
     int sample_freq;
 
@@ -361,10 +366,12 @@ class RendererDataDistribute : public RendererData
   public:
 
     RendererDataDistribute(const int rank, const int nrank, const MPI_Comm &comm) : 
-      RendererData(rank,nrank,comm)
+      RendererData(rank,nrank,comm), NMAXSAMPLE(200000)
   {
     assert(nrank <= NMAXPROC);
   }
+
+    void setNMAXSAMPLE(const int n) {NMAXSAMPLE = n;}
 
   private:
 
@@ -801,6 +808,8 @@ class RendererDataDistribute : public RendererData
       }
       assert(ip == nrecvloc);
 
+
+      randomShuffle();
       computeMinMax();
     }
 
@@ -821,6 +830,8 @@ class RendererDataDistribute : public RendererData
       const float rmax = std::max(std::abs(_rmin), std::abs(_rmax)) * 1.0001;
 
       const int nsample = sample_array.size();
+      if (rank == 0)
+        fprintf(stderr, " -- nsample= %d\n", nsample);
       std::vector<float4> pos(nsample);
 #pragma omp parallel for schedule(static)
       for (int i = 0; i < nsample; i++)

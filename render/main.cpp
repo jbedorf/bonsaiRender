@@ -272,7 +272,8 @@ int main(int argc, char * argv[])
   std::string fullScreenMode    = "";
   bool stereo     = false;
 #endif
-
+  int nmaxsample = 200000;
+  bool doDD = false;
 
   {
 		AnyOption opt;
@@ -284,13 +285,14 @@ int main(int argc, char * argv[])
 		ADDUSAGE(" ");
 		ADDUSAGE(" -h  --help             Prints this help ");
 		ADDUSAGE(" -i  --infile #         Input snapshot filename ");
-		ADDUSAGE("     --reduceDM    #   cut down DM dataset by # factor [10]. 0-disable DM");
-		ADDUSAGE("     --reduceS     #   cut down stars dataset by # factor [1]. 0-disable S");
+		ADDUSAGE("     --reduceDM    #    cut down DM dataset by # factor [10]. 0-disable DM");
+		ADDUSAGE("     --reduceS     #    cut down stars dataset by # factor [1]. 0-disable S");
 #ifndef PARTICLESRENDERER
-		ADDUSAGE("     --fullscreen #     set fullscreen mode string");
+		ADDUSAGE("     --fullscreen  #    set fullscreen mode string");
 		ADDUSAGE("     --stereo           enable stereo rendering");
 #endif
-		ADDUSAGE(" ");
+		ADDUSAGE(" -d  --doDD             enable domain decomposition  [disabled]");
+    ADDUSAGE(" -s  --nmaxsample   #   set max number of samples for DD [" << nmaxsample << "]");
 
 
 		opt.setFlag  ( "help" ,        'h');
@@ -299,6 +301,8 @@ int main(int argc, char * argv[])
 		opt.setOption( "reduceS");
     opt.setOption( "fullscreen");
     opt.setFlag("stereo");
+    opt.setFlag("doDD", 'd');
+    opt.setOption("nmaxsample", 's');
 
     opt.processCommandArgs( argc, argv );
 
@@ -318,6 +322,8 @@ int main(int argc, char * argv[])
     if ((optarg = opt.getValue("fullscreen")))	 fullScreenMode     = std::string(optarg);
     if (opt.getFlag("stereo"))  stereo = true;
 #endif
+    if ((optarg = opt.getValue("nmaxsample"))) nmaxsample = atoi(optarg);
+    if (opt.getFlag("doDD"))  doDD = true;
 
     if (fileName.empty() ||
         reduceDM < 0 || reduceS < 0)
@@ -344,6 +350,7 @@ int main(int argc, char * argv[])
 
 
   assert(rDataPtr != 0);
+  rDataPtr->randomShuffle();
   rDataPtr->computeMinMax();
 
 #if 0
@@ -352,11 +359,20 @@ int main(int argc, char * argv[])
       rDataPtr->xminLoc(), rDataPtr->yminLoc(), rDataPtr->zminLoc(),
       rDataPtr->xmaxLoc(), rDataPtr->ymaxLoc(), rDataPtr->zmaxLoc());
 #endif
-  const double t0 = MPI_Wtime();
-  rDataPtr->distribute();
-  const double t1 = MPI_Wtime();
-  if (rank == 0)
-    fprintf(stderr, " DD= %g sec \n", t1-t0);
+  fprintf(stderr, " rank= %d: n= %d\n", rank, rDataPtr->n());
+  if (doDD)
+  {
+    MPI_Barrier(comm);
+    const double t0 = MPI_Wtime();
+    rDataPtr->setNMAXSAMPLE(nmaxsample);
+    rDataPtr->distribute();
+//    rDataPtr->distribute();
+    MPI_Barrier(comm);
+    const double t1 = MPI_Wtime();
+    fprintf(stderr, " rank= %d: n= %d\n", rank, rDataPtr->n());
+    if (rank == 0)
+      fprintf(stderr, " DD= %g sec \n", t1-t0);
+  }
 #if 0
   fprintf(stderr, "rank= %d: min= %g %g %g  max= %g %g %g \n",
       rank, 
@@ -376,7 +392,6 @@ int main(int argc, char * argv[])
 //  rDataPtr->scaleExp(RendererData::VEL);
   
 
-  fprintf(stderr, " rank= %d: n= %d\n", rank, rDataPtr->n());
 #if 1
   initAppRenderer(argc, argv, 
       rank, nranks, comm,

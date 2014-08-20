@@ -2,6 +2,9 @@
 #include <stdio.h>
 #include "renderloop.h"
 
+#define WINX 1024
+#define WINY 768
+
 #ifdef WIN32
 #define NOMINMAX
 #endif
@@ -366,7 +369,7 @@ class Demo
       m_enableStats(true)
   {
     assert(rank < nrank);
-    m_windowDims = make_int2(1024, 768);
+    m_windowDims = make_int2(WINX, WINY);
     m_cameraTrans = make_float3(0, -2, -100);
     m_cameraTransLag = m_cameraTrans;
     m_cameraRot = make_float3(0, 0, 0);
@@ -1562,7 +1565,8 @@ class Demo
     {
       FILE *fp = fopen(filename, "r");
       if (!fp) {
-        fprintf(stderr, "Couldn't open camera file '%s'\n", filename);
+        if (isMaster())
+          fprintf(stderr, "Couldn't open camera file '%s'\n", filename);
         return false;
       }
       for(int i=0; i<maxCameras; i++) {
@@ -1892,7 +1896,7 @@ void initGL(int argc, char** argv,
     }
 #endif
   } else {
-    glutInitWindowSize(1024, 768);
+    glutInitWindowSize(WINX, WINY);
     glutCreateWindow("Bonsai Tree-code Gravitational N-body Simulation");
   }
 
