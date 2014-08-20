@@ -1434,6 +1434,7 @@ static void lCompose(
           }};
       }
 
+    /* not working. seems to be more complicated than simple GL_ONE_MINUS_SRC_ALPHA */
 #pragma omp parallel for schedule(static)
     for (int i = 0; i < nsend; i++)
     {
@@ -1454,7 +1455,7 @@ static void lCompose(
             colorArrayDepth[stride+p][3]
             );
 
-#if 0
+#if 1
         dst.x *= 1.0f - src.w;
         dst.y *= 1.0f - src.w;
         dst.z *= 1.0f - src.w;
@@ -1476,7 +1477,13 @@ static void lCompose(
         dst.w += src.w;
 #endif
 
+#if 0
+        dst.x = std::min(1.0f, dst.z);
+        dst.y = std::min(1.0f, dst.y);
+        dst.z = std::min(1.0f, dst.z);
+#endif
         dst.w = std::min(1.0f, dst.w);
+        assert(dst.w >= 0.0f);
       }
       colorArray[i] = dst;
     }
