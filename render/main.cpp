@@ -11,8 +11,9 @@
 #include "renderloop.h"
 #include "anyoption.h"
 #include "RendererData.h"
-  
-static RendererDataDistribute* readBonsaiReduced(
+
+template<typename T>
+static T* readBonsaiReduced(
     const int rank, const int nranks, const MPI_Comm &comm,
     const std::string &fileName,
     const int reduceDM,
@@ -66,7 +67,7 @@ static RendererDataDistribute* readBonsaiReduced(
   }
 
 
-  RendererDataDistribute *rDataPtr = new RendererDataDistribute(rank,nranks,comm);
+  T *rDataPtr = new T(rank,nranks,comm);
   rDataPtr->resize(nS+nDM);
   auto &rData = *rDataPtr;
   for (int i = 0; i < nS; i++)
@@ -107,7 +108,8 @@ static RendererDataDistribute* readBonsaiReduced(
   return rDataPtr;
 }
 
-static RendererDataDistribute* readBonsaiFull(
+template<typename T>
+static T* readBonsaiFull(
     const int rank, const int nranks, const MPI_Comm &comm,
     const std::string &fileName,
     const int reduceDM,
@@ -192,7 +194,7 @@ static RendererDataDistribute* readBonsaiFull(
   }
 
 
-  RendererDataDistribute *rDataPtr = new RendererDataDistribute(rank,nranks,comm);
+  T *rDataPtr = new T(rank,nranks,comm);
   rDataPtr->resize(nS+nDM);
   auto &rData = *rDataPtr;
   for (int i = 0; i < nS; i++)
@@ -328,9 +330,10 @@ int main(int argc, char * argv[])
   }
 
 
-  RendererDataDistribute *rDataPtr;
-  if ((rDataPtr = readBonsaiFull(rank, nranks, comm, fileName, reduceDM, reduceS))) {}
-  else if ((rDataPtr = readBonsaiReduced(rank, nranks, comm, fileName, reduceDM, reduceS))) {}
+  using RendererDataT = RendererDataDistribute;
+  RendererDataT *rDataPtr;
+  if ((rDataPtr = readBonsaiFull<RendererDataT>(rank, nranks, comm, fileName, reduceDM, reduceS))) {}
+  else if ((rDataPtr = readBonsaiReduced<RendererDataT>(rank, nranks, comm, fileName, reduceDM, reduceS))) {}
   else
   {
     if (rank == 0)

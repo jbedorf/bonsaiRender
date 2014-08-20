@@ -151,28 +151,24 @@ class RendererData
       }
 
 
-      float minloc[] = {_xminl, _yminl, _zminl};
-      float minglb[] = {_xminl, _yminl, _zminl};
+      float minloc[] = {_xminl, _yminl, _zminl, _rminl};
+      float minglb[] = {_xminl, _yminl, _zminl, _rminl};
 
-      float maxloc[] = {_xmaxl, _ymaxl, _zmaxl};
-      float maxglb[] = {_xmaxl, _ymaxl, _zmaxl};
+      float maxloc[] = {_xmaxl, _ymaxl, _zmaxl, _rmaxl};
+      float maxglb[] = {_xmaxl, _ymaxl, _zmaxl, _rmaxl};
 
-      MPI_Allreduce(minloc, minglb, 3, MPI_FLOAT, MPI_MIN, comm);
-      MPI_Allreduce(maxloc, maxglb, 3, MPI_FLOAT, MPI_MAX, comm);
+      MPI_Allreduce(minloc, minglb, 4, MPI_FLOAT, MPI_MIN, comm);
+      MPI_Allreduce(maxloc, maxglb, 4, MPI_FLOAT, MPI_MAX, comm);
 
       _xmin = minglb[0];
       _ymin = minglb[1];
       _zmin = minglb[2];
+      _rmin = minglb[3];
       _xmax = maxglb[0];
       _ymax = maxglb[1];
       _zmax = maxglb[2];
-      _rmin = std::min(_rmin, _xmin);
-      _rmin = std::min(_rmin, _ymin);
-      _rmin = std::min(_rmin, _zmin);
-      _rmax = std::max(_rmax, _xmax);
-      _rmax = std::max(_rmax, _ymax);
-      _rmax = std::max(_rmax, _zmax);
-        
+      _rmax = maxglb[3];
+      
       for (int p = 0; p < NPROP; p++)
         minmaxAttributeGlb(static_cast<Attribute_t>(p));
     }
@@ -738,16 +734,18 @@ class RendererDataDistribute : public RendererData
         if(ibox < 0)
         {
           std::cerr << myid <<" exchange_particle error: particle in no box..." << std::endl;
-#if 0
-          vector3 fpos{{pb[i][0], pb[i][1], pb[i][2]}}; // = pb[i].get_pos();
-          unsigned long *upos = (unsigned long *)&fpos[0];
+          vector3 fpos{{data[i].posx,data[i].posy,data[i].posz}};
           // cerr << pb[i].get_pos() << endl;
-          std::cout << // boost::format("[%f %f %f], [%lx %lx %lx]")
-            % fpos[0] % fpos[1] % fpos[2]
-            % upos[0] % upos[1] % upos[2]
-            << std::endl;
-#endif
+          std::cout // << boost::format("[%f %f %f], [%lx %lx %lx]")
+            << fpos[0] << " " << fpos[1] << " " << fpos[2] << std::endl;
           //        pb[i].dump();
+       
+          for (int p = 0; p < nrank; p++)
+          {
+            fprintf(stderr," rank= %d: xlow= %g %g %g  xhigh= %g %g %g \n", p,
+                xlow[p][0],  xlow[p][1],  xlow[p][2],
+                xhigh[p][0], xhigh[p][1], xhigh[p][2]);
+          }
           MPI_Abort(comm,1);
         }
         else
@@ -820,7 +818,7 @@ class RendererDataDistribute : public RendererData
       /* determine division */
       vector3  xlow[NMAXPROC];
       vector3 xhigh[NMAXPROC];
-      const float rmax = _rmax * 1.0001;
+      const float rmax = std::max(std::abs(_rmin), std::abs(_rmax)) * 1.0001;
 
       const int nsample = sample_array.size();
       std::vector<float4> pos(nsample);
