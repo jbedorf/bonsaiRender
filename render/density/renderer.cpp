@@ -1434,37 +1434,62 @@ static void lCompose(
           }};
       }
 
-    /* not working. seems to be more complicated than simple GL_ONE_MINUS_SRC_ALPHA */
+    /* composition seems to work but depth buffer is not correct. see if depthTex is properly populated in splotchDrawSort */
 #pragma omp parallel for schedule(static)
     for (int i = 0; i < nsend; i++)
     {
       const int stride = i*nrank;
+#if 1
       std::sort(
           colorArrayDepth.begin() + stride, 
           colorArrayDepth.begin() + stride + nrank,
-          [](const vec5 &a, const vec5 &b){ return a[4] < b[4]; }
+          [](const vec5 &a, const vec5 &b){ return a[4] > b[4]; }
           );
+#endif
 
-      float4 dst = make_float4(0.0);
+      float4 _dst = make_float4(0.0);
       for (int p = 0; p < nrank; p++)
       {
-        float4 src = make_float4(
+        float4 _src = make_float4(
             colorArrayDepth[stride+p][0],
             colorArrayDepth[stride+p][1],
             colorArrayDepth[stride+p][2],
             colorArrayDepth[stride+p][3]
             );
 
-#if 1
-        dst.x *= 1.0f - src.w;
-        dst.y *= 1.0f - src.w;
-        dst.z *= 1.0f - src.w;
-        dst.w *= 1.0f - src.w;
+#if 0
+        const float4 Ca = src;
+        const float4 Cb = dst;
 
-        dst.x += src.x;
-        dst.y += src.y;
-        dst.z += src.z;
-        dst.w += src.w;
+#if 1
+        dst.w = Ca.w + Cb.w*(1.0f - Ca.w);
+        dst.x = Ca.x*Ca.w + Cb.x*Cb.w*(1.0f - Ca.w);
+        dst.y = Ca.y*Ca.w + Cb.y*Cb.w*(1.0f - Ca.w);
+        dst.z = Ca.z*Ca.w + Cb.z*Cb.w*(1.0f - Ca.w);
+        const float f = 1.0f/dst.w;
+#else
+        dst.x = Ca.x + Cb.x*(1.0f - Ca.w);
+        dst.y = Ca.y + Cb.y*(1.0f - Ca.w);
+        dst.z = Ca.z + Cb.z*(1.0f - Ca.w);
+        dst.w = Ca.w + Cb.w*(1.0f - Ca.w);
+        const float f = 1.0f;
+#endif
+
+        dst.x *= f;
+        dst.y *= f;
+        dst.z *= f;
+#elif 1
+        const float4 src = _src;
+        const float4 dst = _dst;
+
+        const float g = 1.0f - src.w;
+        _dst.w = src.w + dst.w*g;
+
+        const float f = 1.0f; ///_dst.w;
+        _dst.x = (src.x*src.w + dst.x*dst.w*g) * f;
+        _dst.y = (src.y*src.w + dst.y*dst.w*g) * f;
+        _dst.z = (src.z*src.w + dst.z*dst.w*g) * f;
+
 #else
         src.x *= 1.0f - dst.w;
         src.y *= 1.0f - dst.w;
@@ -1482,10 +1507,10 @@ static void lCompose(
         dst.y = std::min(1.0f, dst.y);
         dst.z = std::min(1.0f, dst.z);
 #endif
-        dst.w = std::min(1.0f, dst.w);
-        assert(dst.w >= 0.0f);
+        _dst.w = std::min(1.0f, _dst.w);
+        assert(_dst.w >= 0.0f);
       }
-      colorArray[i] = dst;
+      colorArray[i] = _dst;
     }
   }
 
@@ -1768,6 +1793,7 @@ void SmokeRenderer::splotchDrawSort()
   glEnable(GL_BLEND);
 #if 1
   glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);
+  glDepthFunc(GL_LESS);
 #define _DRAWIMG
 #else
   glDepthFunc(GL_ALWAYS);
@@ -1906,7 +1932,7 @@ void SmokeRenderer::splotchDrawSort()
     glBindTexture(GL_TEXTURE_2D, m_depthTex);
     glBindBuffer(GL_PIXEL_PACK_BUFFER, pbo_id[0]);
     glGetTexImage(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT, GL_FLOAT, 0);
-    rptr = glMapBufferRange(GL_PIXEL_PACK_BUFFER, 0, imgSize, GL_MAP_READ_BIT);
+    rptr = glMapBufferRange(GL_PIXEL_PACK_BUFFER, 0, imgSize/4.0, GL_MAP_READ_BIT);
 
 #pragma omp parallel for schedule(static)
     for (int i = 0; i < w*h; i++)
