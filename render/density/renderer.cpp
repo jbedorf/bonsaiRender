@@ -22,6 +22,8 @@
 //#include <nvImage.h>
 #include "depthSort.h"
 #include "Cubemap.h"
+#include <array>
+#include <algorithm>
 
 #if defined(__APPLE__) || defined(MACOSX)
 #include <GLUT/glut.h>
@@ -1378,9 +1380,8 @@ static void lCompose(
 #if 0
   MPI_Reduce(src, dst, 4*n, MPI_FLOAT, MPI_SUM, master, comm);
 #else
-  static std::vector<float4> colorArray;
-  static std::vector<float > depthArray;
   const int nsend = (n+nrank-1)/nrank;
+  static std::vector<float4> colorArray;
   colorArray.resize(nsend*nrank);
 
   if (!depth)
@@ -1406,7 +1407,7 @@ static void lCompose(
   }
   else
   {
-    assert(0);
+    static std::vector<float > depthArray;
     depthArray.resize(nsend*nrank);
 #pragma omp parallel for schedule(static)
     for (int i = n; i < nsend*nrank; i++)
@@ -1418,20 +1419,67 @@ static void lCompose(
     MPI_Alltoall(src, nsend*4, MPI_FLOAT, &colorArray[0], nsend*4, MPI_FLOAT, comm);
     MPI_Alltoall(depth, nsend, MPI_FLOAT, &depthArray[0], nsend, MPI_FLOAT, comm);
 
-
+    using vec5 = std::array<float,5>;
+    std::vector<vec5> colorArrayDepth(nsend*nrank);
+#pragma omp parallel for schedule(static)
+    for (int i = 0; i < nsend; i++)
+      for (int p = 0; p < nrank; p++)
+      {
+        const int dst = i*nrank+p;
+        const int src = p*nsend+i;
+        colorArrayDepth[dst] = 
+          vec5{{
+            colorArray[src].x,colorArray[src].y,colorArray[src].z,colorArray[src].w,
+            depthArray[src]
+          }};
+      }
 
 #pragma omp parallel for schedule(static)
     for (int i = 0; i < nsend; i++)
-      for (int p = 1; p < nrank; p++)
+    {
+      const int stride = i*nrank;
+      std::sort(
+          colorArrayDepth.begin() + stride, 
+          colorArrayDepth.begin() + stride + nrank,
+          [](const vec5 &a, const vec5 &b){ return a[4] < b[4]; }
+          );
+
+      float4 dst = make_float4(0.0);
+      for (int p = 0; p < nrank; p++)
       {
-        float4 dst = colorArray[i];
-        float4 src = colorArray[i + p*nsend];
+        float4 src = make_float4(
+            colorArrayDepth[stride+p][0],
+            colorArrayDepth[stride+p][1],
+            colorArrayDepth[stride+p][2],
+            colorArrayDepth[stride+p][3]
+            );
+
+#if 0
+        dst.x *= 1.0f - src.w;
+        dst.y *= 1.0f - src.w;
+        dst.z *= 1.0f - src.w;
+        dst.w *= 1.0f - src.w;
+
         dst.x += src.x;
         dst.y += src.y;
         dst.z += src.z;
         dst.w += src.w;
-        colorArray[i] = dst;
+#else
+        src.x *= 1.0f - dst.w;
+        src.y *= 1.0f - dst.w;
+        src.z *= 1.0f - dst.w;
+        src.w *= 1.0f - dst.w;
+
+        dst.x += src.x;
+        dst.y += src.y;
+        dst.z += src.z;
+        dst.w += src.w;
+#endif
+
+        dst.w = std::min(1.0f, dst.w);
       }
+      colorArray[i] = dst;
+    }
   }
 
   MPI_Gather(&colorArray[0], nsend*4, MPI_FLOAT, dst, 4*nsend, MPI_FLOAT, master, comm);
@@ -1872,7 +1920,7 @@ void SmokeRenderer::splotchDrawSort()
     glFinish();
     const double t3 = MPI_Wtime();
 
-    lCompose(&imgLoc[0], &imgGlb[0], NULL, w*h, rank, nrank, comm);
+    lCompose(&imgLoc[0], &imgGlb[0], &depth[0], w*h, rank, nrank, comm);
     glFinish();
     const double t4 = MPI_Wtime();
 
