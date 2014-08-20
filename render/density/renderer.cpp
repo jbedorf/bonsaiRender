@@ -1711,7 +1711,7 @@ void SmokeRenderer::splotchDrawSort()
   glEnable(GL_DEPTH_TEST);
   glDepthMask(GL_TRUE);  // don't write depth
   glEnable(GL_BLEND);
-#if 0
+#if 1
   glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);
 #define _DRAWIMG
 #else
@@ -1754,9 +1754,9 @@ void SmokeRenderer::splotchDrawSort()
   glDepthMask(GL_FALSE);  // don't write depth
   glEnable(GL_BLEND);
   glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+  m_fbo->AttachTexture(GL_TEXTURE_2D, 0, GL_DEPTH_ATTACHMENT_EXT);
 
   prog->enable();
-  glBindVertexArray(mSizeVao);
 
   // VS
   prog->setUniform1f("spriteScale", viewport[3] / mInvFocalLen);
