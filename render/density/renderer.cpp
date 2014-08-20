@@ -1599,7 +1599,7 @@ void SmokeRenderer::splotchDraw(bool sorted)
       static GLuint pbo_id[2];
       if (!pbo_id[0])
       {
-        const int pbo_size = 1920*1080*4*sizeof(float);
+        const int pbo_size = 8*1920*1080*4*sizeof(float);
         glGenBuffers(2, pbo_id);
         glBindBuffer(GL_PIXEL_PACK_BUFFER, pbo_id[0]);
         glBufferData(GL_PIXEL_PACK_BUFFER, pbo_size, 0, GL_STATIC_READ);

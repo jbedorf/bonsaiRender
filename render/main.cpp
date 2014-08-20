@@ -274,6 +274,7 @@ int main(int argc, char * argv[])
 #endif
   int nmaxsample = 200000;
   bool doDD = false;
+  std::string display;
 
   {
 		AnyOption opt;
@@ -293,6 +294,7 @@ int main(int argc, char * argv[])
 #endif
 		ADDUSAGE(" -d  --doDD             enable domain decomposition  [disabled]");
     ADDUSAGE(" -s  --nmaxsample   #   set max number of samples for DD [" << nmaxsample << "]");
+    ADDUSAGE(" -D  --display      #   set DISPLAY=display, otherwise inherited from environment");
 
 
 		opt.setFlag  ( "help" ,        'h');
@@ -303,6 +305,7 @@ int main(int argc, char * argv[])
     opt.setFlag("stereo");
     opt.setFlag("doDD", 'd');
     opt.setOption("nmaxsample", 's');
+    opt.setOption("display", 'D');
 
     opt.processCommandArgs( argc, argv );
 
@@ -324,6 +327,7 @@ int main(int argc, char * argv[])
 #endif
     if ((optarg = opt.getValue("nmaxsample"))) nmaxsample = atoi(optarg);
     if (opt.getFlag("doDD"))  doDD = true;
+    if ((optarg = opt.getValue("display"))) display = std::string(optarg);
 
     if (fileName.empty() ||
         reduceDM < 0 || reduceS < 0)
@@ -334,6 +338,13 @@ int main(int argc, char * argv[])
 
 #undef ADDUSAGE
   }
+
+  if (!display.empty())
+  {
+    std::string var="DISPLAY="+display;
+    putenv((char*)var.c_str());
+  }
+
 
 
   using RendererDataT = RendererDataDistribute;
