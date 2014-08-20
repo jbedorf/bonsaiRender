@@ -190,6 +190,9 @@ class RendererData
     float attributeMin(const Attribute_t p) const { return _attributeMin[p]; }
     float attributeMax(const Attribute_t p) const { return _attributeMax[p]; }
     
+    void setAttributeMin(const Attribute_t p, const float val) { _attributeMin[p] = val; }
+    void setAttributeMax(const Attribute_t p, const float val) { _attributeMax[p] = val; }
+    
     float xminLoc() const { return _xminl;} 
     float yminLoc() const { return _yminl;} 
     float zminLoc() const { return _zminl;} 
