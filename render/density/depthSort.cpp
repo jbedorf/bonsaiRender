@@ -34,7 +34,7 @@ void sort_by_key(float* keys, int* values, int count)
 #pragma omp parallel for
   for (int i = 0; i < count; i++)
     pairs[i] = std::make_pair(keys[i], values[i]);
-#if 0
+#if 1
   __gnu_parallel::sort(pairs.begin(), pairs.end(), Cmp());
 #endif
 #pragma omp parallel for

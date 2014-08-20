@@ -1346,10 +1346,10 @@ void SmokeRenderer::render()
 #endif
     
     case SPLOTCH:
-      splotchDraw(false);
+      splotchDraw();
       break;
     case SPLOTCH_SORTED:
-      splotchDraw(true);
+      splotchDrawSort();
       break;
 
     case NUM_MODES:
@@ -1438,7 +1438,7 @@ static void lCompose(
 #endif
 }
 
-void SmokeRenderer::splotchDraw(bool sorted)
+void SmokeRenderer::splotchDraw()
 {
   m_fbo->Bind();
   m_fbo->AttachTexture(GL_TEXTURE_2D, m_imageTex[0], GL_COLOR_ATTACHMENT0_EXT);
@@ -1446,6 +1446,7 @@ void SmokeRenderer::splotchDraw(bool sorted)
   glViewport(0, 0, m_imageW, m_imageH);
   glClearColor(0.0, 0.0, 0.0, 0.0); 
   glClear(GL_COLOR_BUFFER_BIT);
+  glClear(GL_DEPTH_BUFFER_BIT);
   glDisable(GL_BLEND);
 
 
@@ -1453,15 +1454,7 @@ void SmokeRenderer::splotchDraw(bool sorted)
   const int count = mNumParticles;
 
   calcVectors();
-  if (sorted)
-  {
-    depthSortCopy();
-    glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);   
-  }
-  else
-  {
-    glBlendFunc(GL_ONE, GL_ONE);
-  }
+  glBlendFunc(GL_ONE, GL_ONE);
 
   glDisable(GL_DEPTH_TEST);
   glDepthMask(GL_FALSE);  // don't write depth
@@ -1491,13 +1484,13 @@ void SmokeRenderer::splotchDraw(bool sorted)
   prog->setUniform1f("starAlpha", m_starAlpha);
   prog->setUniform1f("dmScale",  powf(10.0f, m_dmScaleLog));
   prog->setUniform1f("dmAlpha",  m_dmAlpha);
-  prog->setUniform1f("spriteSizeMax", (sorted ? 1.0 : 5.0)*powf(10.0f, m_spriteSizeMaxLog));
+  prog->setUniform1f("spriteSizeMax", 5.0*powf(10.0f, m_spriteSizeMaxLog));
   // PS
   prog->bindTexture("spriteTex",  m_sphTex, GL_TEXTURE_2D, 1);
   prog->setUniform1f("alphaScale", m_spriteAlpha);
   prog->setUniform1f("transmission", m_transmission);
 
-  prog->setUniform1f("sorted", (float)sorted);
+  prog->setUniform1f("sorted", 0);
 
   //glClientActiveTexture(GL_TEXTURE0);
   glActiveTexture(GL_TEXTURE0);
@@ -1505,7 +1498,7 @@ void SmokeRenderer::splotchDraw(bool sorted)
   glEnable(GL_VERTEX_PROGRAM_POINT_SIZE_ARB);
   glEnable(GL_POINT_SPRITE_ARB);
 
-  drawPoints(start,count,sorted);
+  drawPoints(start,count,false);
 
   prog->disable();
 #if 1
@@ -1516,11 +1509,14 @@ void SmokeRenderer::splotchDraw(bool sorted)
 #if 1
   {
     const double t0 = MPI_Wtime();
-    glBindTexture(GL_TEXTURE_2D, m_imageTex[0]);
     GLint w, h, internalformat;
+
+    glBindTexture(GL_TEXTURE_2D, m_imageTex[0]);
     glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_WIDTH,  &w);
     glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_HEIGHT, &h);
     glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_INTERNAL_FORMAT, &internalformat);
+    glBindTexture(GL_TEXTURE_2D,0);
+
     static std::vector<float4> imgLoc, imgGlb;
     imgLoc.resize(2*w*h);
     imgGlb.resize(2*w*h);
@@ -1528,139 +1524,77 @@ void SmokeRenderer::splotchDraw(bool sorted)
 
     const double t1 = MPI_Wtime();
 
-#if 0 /* eg: buggy, when 'h' is pressed, half screen is gone... why? */
+    static GLuint pbo_id[2];
+    if (!pbo_id[0])
     {
-      static GLuint pbo_id[2];
-      if (!pbo_id[0])
-      {
-        const int pbo_size = 1920*1080*4*sizeof(float);
-        glGenBuffers(2, pbo_id);
-        glBindBuffer(GL_PIXEL_PACK_BUFFER, pbo_id[0]);
-        glBufferData(GL_PIXEL_PACK_BUFFER, pbo_size, 0, GL_STATIC_READ);
-        glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
-        glBindBuffer(GL_PIXEL_UNPACK_BUFFER, pbo_id[1]);
-        glBufferData(GL_PIXEL_UNPACK_BUFFER, pbo_size, 0, GL_STATIC_DRAW);
-        glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
-      }
-
-      assert(pbo_id[0] && pbo_id[1]);
-      glReadBuffer((GLenum)GL_COLOR_ATTACHMENT0_EXT);
+      const int pbo_size = 8*1920*1080*4*sizeof(float);
+      glGenBuffers(2, pbo_id);
       glBindBuffer(GL_PIXEL_PACK_BUFFER, pbo_id[0]);
-      glReadPixels(0, 0, w, h, GL_RGBA, GL_FLOAT, 0);
-      const double t2 = MPI_Wtime();
-
-      GLvoid *rptr = glMapBufferRange(GL_PIXEL_PACK_BUFFER, 0, imgSize, GL_MAP_READ_BIT);
-      memcpy(&imgLoc[0], rptr, imgSize);
-      glUnmapBuffer(GL_PIXEL_PACK_BUFFER);
+      glBufferData(GL_PIXEL_PACK_BUFFER, pbo_size, 0, GL_STATIC_READ);
       glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
-      const double t3 = MPI_Wtime();
-
-      MPI_Reduce(&imgLoc[0], &imgGlb[0], 4*w*h, MPI_FLOAT, MPI_SUM, getMaster(), comm);
-      const double t4 = MPI_Wtime();
-
-      glDrawBuffer((GLenum)GL_COLOR_ATTACHMENT0_EXT);
       glBindBuffer(GL_PIXEL_UNPACK_BUFFER, pbo_id[1]);
-      GLvoid *wptr = glMapBufferRange(GL_PIXEL_UNPACK_BUFFER, 0, imgSize, GL_MAP_READ_BIT);
-      memcpy(wptr, &imgGlb[0], imgSize);
-      glUnmapBuffer(GL_PIXEL_UNPACK_BUFFER);
-      const double t5 = MPI_Wtime();
-
-      glDisable(GL_BLEND);
-      glDrawPixels(w,h,GL_RGBA,GL_FLOAT,0);
-      const double t6 = MPI_Wtime();
+      glBufferData(GL_PIXEL_UNPACK_BUFFER, pbo_size, 0, GL_STATIC_DRAW);
       glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
-      if (1 && isMaster())
-      {
-        fprintf(stderr, 
-            "total= %g: getParam= %g  getImg= %g memcpy= %g red= %g mem2= %g drawImg= %g \n", t6-t0,
-            t1-t0,         t2-t1,    t3 -t2,    t4-t3,  t5-t4,  t6-t5 );
-      }
     }
-#elif 0
+    assert(pbo_id[0] && pbo_id[1]);
+
+    /** fetch image ***/
+    glBindTexture(GL_TEXTURE_2D, m_imageTex[0]);
+    glBindBuffer(GL_PIXEL_PACK_BUFFER, pbo_id[0]);
+    glGetTexImage(GL_TEXTURE_2D, 0, GL_RGBA, GL_FLOAT, 0);
+    //      glReadPixels(0, 0, w, h, GL_RGBA, GL_FLOAT, 0);
+    glFinish();
+    const double t2 = MPI_Wtime();
+
+    GLvoid *rptr = glMapBufferRange(GL_PIXEL_PACK_BUFFER, 0, imgSize, GL_MAP_READ_BIT);
+
+#pragma omp parallel for schedule(static)
+    for (int i = 0; i < w*h; i++)
+      imgLoc[i] = reinterpret_cast<float4*>(rptr)[i];
+
+    //      memcpy(&imgLoc[0], rptr, imgSize);
+    glUnmapBuffer(GL_PIXEL_PACK_BUFFER);
+    glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
+    glBindTexture(GL_TEXTURE_2D,0);
+
+
+    glFinish();
+    const double t3 = MPI_Wtime();
+
+    lCompose(&imgLoc[0], &imgGlb[0], NULL, w*h, rank, nrank, comm);
+    glFinish();
+    const double t4 = MPI_Wtime();
+
+    if (isMaster())
     {
-      glGetTexImage(GL_TEXTURE_2D, 0, GL_RGBA, GL_FLOAT, &imgLoc[0]);
-      const double t2 = MPI_Wtime();
-
-      MPI_Reduce(&imgLoc[0], &imgGlb[0], 4*w*h, MPI_FLOAT, MPI_SUM, getMaster(), comm);
-      const double t3 = MPI_Wtime();
-
-      glTexImage2D(GL_TEXTURE_2D, 0, internalformat, w,h,0,GL_RGBA,GL_FLOAT, &imgGlb[0]);
-      const double t4 = MPI_Wtime();
-
-      if (1 && isMaster())
-      {
-        fprintf(stderr, 
-            "total= %g: getParam= %g  getImg= %g  red= %g  drawImg= %g \n", t4-t0,
-            t1-t0,         t2-t1,       t3 -t2,    t4-t3);
-      }
-    }
-#else
-    {
-      static GLuint pbo_id[2];
-      if (!pbo_id[0])
-      {
-        const int pbo_size = 8*1920*1080*4*sizeof(float);
-        glGenBuffers(2, pbo_id);
-        glBindBuffer(GL_PIXEL_PACK_BUFFER, pbo_id[0]);
-        glBufferData(GL_PIXEL_PACK_BUFFER, pbo_size, 0, GL_STATIC_READ);
-        glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
-        glBindBuffer(GL_PIXEL_UNPACK_BUFFER, pbo_id[1]);
-        glBufferData(GL_PIXEL_UNPACK_BUFFER, pbo_size, 0, GL_STATIC_DRAW);
-        glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
-      }
-      assert(pbo_id[0] && pbo_id[1]);
-      glBindBuffer(GL_PIXEL_PACK_BUFFER, pbo_id[0]);
-      glGetTexImage(GL_TEXTURE_2D, 0, GL_RGBA, GL_FLOAT, 0);
-//      glReadPixels(0, 0, w, h, GL_RGBA, GL_FLOAT, 0);
-      glFinish();
-      const double t2 = MPI_Wtime();
-
-      GLvoid *rptr = glMapBufferRange(GL_PIXEL_PACK_BUFFER, 0, imgSize, GL_MAP_READ_BIT);
+      glBindBuffer(GL_PIXEL_UNPACK_BUFFER, pbo_id[1]);
+      GLvoid *wptr = glMapBufferRange(GL_PIXEL_UNPACK_BUFFER, 0, imgSize, GL_MAP_WRITE_BIT);
 
 #pragma omp parallel for schedule(static)
       for (int i = 0; i < w*h; i++)
-        imgLoc[i] = reinterpret_cast<float4*>(rptr)[i];
-
-//      memcpy(&imgLoc[0], rptr, imgSize);
-      glUnmapBuffer(GL_PIXEL_PACK_BUFFER);
-      glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
+        reinterpret_cast<float4*>(wptr)[i] = imgGlb[i];
       glFinish();
-      const double t3 = MPI_Wtime();
+      const double t5 = MPI_Wtime();
 
-      lCompose(&imgLoc[0], &imgGlb[0], NULL, w*h, rank, nrank, comm);
+      glUnmapBuffer(GL_PIXEL_UNPACK_BUFFER);
+
+      glBindTexture(GL_TEXTURE_2D, m_imageTex[0]);
+      glTexImage2D(GL_TEXTURE_2D, 0, internalformat, w,h,0,GL_RGBA,GL_FLOAT, 0);
       glFinish();
-      const double t4 = MPI_Wtime();
+      glBindTexture(GL_TEXTURE_2D,0);
+      glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
+      const double t6 = MPI_Wtime();
 
-      if (isMaster())
-      {
-        glBindBuffer(GL_PIXEL_UNPACK_BUFFER, pbo_id[1]);
-        GLvoid *wptr = glMapBufferRange(GL_PIXEL_UNPACK_BUFFER, 0, imgSize, GL_MAP_WRITE_BIT);
-
-#pragma omp parallel for schedule(static)
-        for (int i = 0; i < w*h; i++)
-          reinterpret_cast<float4*>(wptr)[i] = imgGlb[i];
-        glFinish();
-        const double t5 = MPI_Wtime();
-
-        glUnmapBuffer(GL_PIXEL_UNPACK_BUFFER);
-        glTexImage2D(GL_TEXTURE_2D, 0, internalformat, w,h,0,GL_RGBA,GL_FLOAT, 0);
-        glFinish();
-        glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
-        const double t6 = MPI_Wtime();
-
-        if (1)
-          fprintf(stderr, 
-              "total= %g: d2h= %g cpy= %g  mpi= %g  cpy= %g h2d= %g :: bwMPI= %g bwD2H= %g  bwH2D= %g\n", t6-t0,
-              t2-t1,   t3-t2,       t4-t3,   t5-t4,     t6-t5,
-              3.0*imgSize/(t4-t3)/1e6, imgSize/(t2-t1)/1e6, imgSize/(t6-t5)/1e6);
-      }
-      
+      if (1)
+        fprintf(stderr, 
+            "total= %g: d2h= %g cpy= %g  mpi= %g  cpy= %g h2d= %g :: bwMPI= %g bwD2H= %g  bwH2D= %g\n", t6-t0,
+            t2-t1,   t3-t2,       t4-t3,   t5-t4,     t6-t5,
+            3.0*imgSize/(t4-t3)/1e6, imgSize/(t2-t1)/1e6, imgSize/(t6-t5)/1e6);
     }
-#endif
+
   }
 #endif
 
-  glBindTexture(GL_TEXTURE_2D,0);
   m_fbo->Disable();
 
 
@@ -1673,7 +1607,7 @@ void SmokeRenderer::splotchDraw(bool sorted)
   m_splotch2texProg->setUniform1f("gamma_pre", m_gammaPre);
   m_splotch2texProg->setUniform1f("scale_post", m_imageBrightnessPost);
   m_splotch2texProg->setUniform1f("gamma_post", m_gammaPost);
-  m_splotch2texProg->setUniform1f("sorted", (float)sorted);
+  m_splotch2texProg->setUniform1f("sorted", 0);
   drawQuad();
   m_splotch2texProg->disable();
 #else
@@ -1737,6 +1671,255 @@ void SmokeRenderer::splotchDraw(bool sorted)
     glDepthMask(GL_TRUE);
   }
 #endif
+}
+
+void SmokeRenderer::splotchDrawSort()
+{
+  m_fbo->Bind();
+  m_fbo->AttachTexture(GL_TEXTURE_2D, m_imageTex[0], GL_COLOR_ATTACHMENT0_EXT);
+  m_fbo->AttachTexture(GL_TEXTURE_2D, m_depthTex, GL_DEPTH_ATTACHMENT_EXT);
+  glViewport(0, 0, m_imageW, m_imageH);
+  glClearColor(0.0, 0.0, 0.0, 0.0); 
+  glClear(GL_COLOR_BUFFER_BIT);
+  glClear(GL_DEPTH_BUFFER_BIT);
+  glDisable(GL_BLEND);
+
+
+  const int start = 0;
+  const int count = mNumParticles;
+
+  calcVectors();
+  depthSortCopy();
+  glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);   
+
+
+  auto &prog = m_splotchProg;
+
+  GLuint vertexLoc = -1;
+  if (!mSizeVao && mSizeVbo)
+  {
+    glGenVertexArrays(1, &mSizeVao);
+    glBindVertexArray(mSizeVao);
+    glBindBufferARB(GL_ARRAY_BUFFER_ARB, mSizeVbo);
+    vertexLoc = prog->getAttribLoc("particleSize");
+    glEnableVertexAttribArray(vertexLoc);
+    glVertexAttribPointer(vertexLoc , 1, GL_FLOAT, 0, 0, 0);
+  }
+
+  /******  get depth info ************/
+  
+  glEnable(GL_DEPTH_TEST);
+  glDepthMask(GL_TRUE);  // don't write depth
+  glEnable(GL_BLEND);
+#if 0
+  glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);
+#define _DRAWIMG
+#else
+  glDepthFunc(GL_ALWAYS);
+#endif
+
+  prog->enable();
+  glBindVertexArray(mSizeVao);
+
+  GLint viewport[4];
+  glGetIntegerv(GL_VIEWPORT, viewport);
+  // VS
+  prog->setUniform1f("spriteScale", viewport[3] / mInvFocalLen);
+  prog->setUniform1f("starScale", powf(10.0f, m_starScaleLog));
+  prog->setUniform1f("starAlpha", m_starAlpha);
+  prog->setUniform1f("dmScale",  powf(10.0f, m_dmScaleLog));
+  prog->setUniform1f("dmAlpha",  m_dmAlpha);
+  prog->setUniform1f("spriteSizeMax", powf(10.0f, m_spriteSizeMaxLog));
+  // PS
+  prog->bindTexture("spriteTex",  m_sphTex, GL_TEXTURE_2D, 1);
+  prog->setUniform1f("alphaScale", m_spriteAlpha);
+  prog->setUniform1f("transmission", m_transmission);
+
+  prog->setUniform1f("sorted", 1.0);
+
+  //glClientActiveTexture(GL_TEXTURE0);
+  glActiveTexture(GL_TEXTURE0);
+  glTexEnvi(GL_POINT_SPRITE_ARB, GL_COORD_REPLACE_ARB, GL_TRUE);
+  glEnable(GL_VERTEX_PROGRAM_POINT_SIZE_ARB);
+  glEnable(GL_POINT_SPRITE_ARB);
+
+  drawPoints(start,count,true);
+
+  prog->disable();
+
+  /***** generate image ********/
+ 
+#ifdef _DRAWIMG
+  glDisable(GL_DEPTH_TEST);
+  glDepthMask(GL_FALSE);  // don't write depth
+  glEnable(GL_BLEND);
+  glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+
+  prog->enable();
+  glBindVertexArray(mSizeVao);
+
+  // VS
+  prog->setUniform1f("spriteScale", viewport[3] / mInvFocalLen);
+  prog->setUniform1f("starScale", powf(10.0f, m_starScaleLog));
+  prog->setUniform1f("starAlpha", m_starAlpha);
+  prog->setUniform1f("dmScale",  powf(10.0f, m_dmScaleLog));
+  prog->setUniform1f("dmAlpha",  m_dmAlpha);
+  prog->setUniform1f("spriteSizeMax", powf(10.0f, m_spriteSizeMaxLog));
+  // PS
+  prog->bindTexture("spriteTex",  m_sphTex, GL_TEXTURE_2D, 1);
+  prog->setUniform1f("alphaScale", m_spriteAlpha);
+  prog->setUniform1f("transmission", m_transmission);
+
+  prog->setUniform1f("sorted", 1.0);
+
+  //glClientActiveTexture(GL_TEXTURE0);
+  glActiveTexture(GL_TEXTURE0);
+  glTexEnvi(GL_POINT_SPRITE_ARB, GL_COORD_REPLACE_ARB, GL_TRUE);
+  glEnable(GL_VERTEX_PROGRAM_POINT_SIZE_ARB);
+  glEnable(GL_POINT_SPRITE_ARB);
+
+  drawPoints(start,count,true);
+
+  prog->disable();
+
+#endif
+
+
+  /********* compose ********/
+
+#if 1
+  glFlush();
+  glFinish();
+#endif
+
+
+#if 1
+  {
+    const double t0 = MPI_Wtime();
+    GLint w, h, internalformat;
+
+    glBindTexture(GL_TEXTURE_2D, m_imageTex[0]);
+    glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_WIDTH,  &w);
+    glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_HEIGHT, &h);
+    glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_INTERNAL_FORMAT, &internalformat);
+    glBindTexture(GL_TEXTURE_2D,0);
+
+    static std::vector<float4> imgLoc, imgGlb;
+    static std::vector<float > depth;
+    imgLoc.resize(2*w*h);
+    imgGlb.resize(2*w*h);
+    depth.resize(2*w*h);
+    const int imgSize = w*h*4*sizeof(float);
+
+    const double t1 = MPI_Wtime();
+
+    static GLuint pbo_id[2];
+    if (!pbo_id[0])
+    {
+      const int pbo_size = 8*1920*1080*4*sizeof(float);
+      glGenBuffers(2, pbo_id);
+      glBindBuffer(GL_PIXEL_PACK_BUFFER, pbo_id[0]);
+      glBufferData(GL_PIXEL_PACK_BUFFER, pbo_size, 0, GL_STATIC_READ);
+      glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
+      glBindBuffer(GL_PIXEL_UNPACK_BUFFER, pbo_id[1]);
+      glBufferData(GL_PIXEL_UNPACK_BUFFER, pbo_size, 0, GL_STATIC_DRAW);
+      glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
+    }
+    assert(pbo_id[0] && pbo_id[1]);
+
+    /** fetch image ***/
+    glBindTexture(GL_TEXTURE_2D, m_imageTex[0]);
+    glBindBuffer(GL_PIXEL_PACK_BUFFER, pbo_id[0]);
+    glGetTexImage(GL_TEXTURE_2D, 0, GL_RGBA, GL_FLOAT, 0);
+    //      glReadPixels(0, 0, w, h, GL_RGBA, GL_FLOAT, 0);
+    glFinish();
+    const double t2 = MPI_Wtime();
+
+    GLvoid *rptr = glMapBufferRange(GL_PIXEL_PACK_BUFFER, 0, imgSize, GL_MAP_READ_BIT);
+
+#pragma omp parallel for schedule(static)
+    for (int i = 0; i < w*h; i++)
+      imgLoc[i] = reinterpret_cast<float4*>(rptr)[i];
+
+    //      memcpy(&imgLoc[0], rptr, imgSize);
+    glUnmapBuffer(GL_PIXEL_PACK_BUFFER);
+    glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
+    glBindTexture(GL_TEXTURE_2D,0);
+
+    /***** fetch depth *****/
+
+    glBindTexture(GL_TEXTURE_2D, m_depthTex);
+    glBindBuffer(GL_PIXEL_PACK_BUFFER, pbo_id[0]);
+    glGetTexImage(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT, GL_FLOAT, 0);
+    rptr = glMapBufferRange(GL_PIXEL_PACK_BUFFER, 0, imgSize, GL_MAP_READ_BIT);
+
+#pragma omp parallel for schedule(static)
+    for (int i = 0; i < w*h; i++)
+    {
+      depth[i] = reinterpret_cast<float*>(rptr)[i];
+#if 0
+      if (depth[i] < 0.5)
+        fprintf(stderr, "i= %d  depth= %g\n", i, depth[i]);
+#endif
+//      assert(depth[i] == 1.0f); // if not triggered, depth buffer has not been used ... 
+    }
+
+    //      memcpy(&imgLoc[0], rptr, imgSize);
+    glUnmapBuffer(GL_PIXEL_PACK_BUFFER);
+    glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
+    glBindTexture(GL_TEXTURE_2D,0);
+
+    glFinish();
+    const double t3 = MPI_Wtime();
+
+    lCompose(&imgLoc[0], &imgGlb[0], NULL, w*h, rank, nrank, comm);
+    glFinish();
+    const double t4 = MPI_Wtime();
+
+    if (isMaster())
+    {
+      glBindBuffer(GL_PIXEL_UNPACK_BUFFER, pbo_id[1]);
+      GLvoid *wptr = glMapBufferRange(GL_PIXEL_UNPACK_BUFFER, 0, imgSize, GL_MAP_WRITE_BIT);
+
+#pragma omp parallel for schedule(static)
+      for (int i = 0; i < w*h; i++)
+        reinterpret_cast<float4*>(wptr)[i] = imgGlb[i];
+      glFinish();
+      const double t5 = MPI_Wtime();
+
+      glUnmapBuffer(GL_PIXEL_UNPACK_BUFFER);
+
+      glBindTexture(GL_TEXTURE_2D, m_imageTex[0]);
+      glTexImage2D(GL_TEXTURE_2D, 0, internalformat, w,h,0,GL_RGBA,GL_FLOAT, 0);
+      glFinish();
+      glBindTexture(GL_TEXTURE_2D,0);
+      glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
+      const double t6 = MPI_Wtime();
+
+      if (1)
+        fprintf(stderr, 
+            "total= %g: d2h= %g cpy= %g  mpi= %g  cpy= %g h2d= %g :: bwMPI= %g bwD2H= %g  bwH2D= %g\n", t6-t0,
+            t2-t1,   t3-t2,       t4-t3,   t5-t4,     t6-t5,
+            3.0*imgSize/(t4-t3)/1e6, imgSize/(t2-t1)/1e6, imgSize/(t6-t5)/1e6);
+    }
+
+  }
+#endif
+
+  m_fbo->Disable();
+
+
+
+  glDisable(GL_BLEND);
+  m_splotch2texProg->enable();
+  m_splotch2texProg->bindTexture("tex", m_imageTex[0], GL_TEXTURE_2D, 0);
+  m_splotch2texProg->setUniform1f("scale_pre", 0.1*m_imageBrightnessPre);
+  m_splotch2texProg->setUniform1f("gamma_pre", m_gammaPre);
+  m_splotch2texProg->setUniform1f("scale_post", m_imageBrightnessPost);
+  m_splotch2texProg->setUniform1f("gamma_post", m_gammaPost);
+  m_splotch2texProg->setUniform1f("sorted", 1.0f);
+  drawQuad();
+  m_splotch2texProg->disable();
 }
 
 // render scene depth to texture
@@ -1923,7 +2106,8 @@ void SmokeRenderer::createBuffers(int w, int h)
   m_imageTex[3] = createTexture(GL_TEXTURE_2D, m_imageW, m_imageH, format, GL_RGBA);
   m_imageTex[4] = createTexture(GL_TEXTURE_2D, m_imageW, m_imageH, format, GL_RGBA);
 
-  m_depthTex = createTexture(GL_TEXTURE_2D, m_imageW, m_imageH, GL_DEPTH_COMPONENT24_ARB, GL_DEPTH_COMPONENT);
+//  m_depthTex = createTexture(GL_TEXTURE_2D, m_imageW, m_imageH, GL_DEPTH_COMPONENT24_ARB, GL_DEPTH_COMPONENT);
+  m_depthTex = createTexture(GL_TEXTURE_2D, m_imageW, m_imageH, GL_DEPTH_COMPONENT32_ARB, GL_DEPTH_COMPONENT);
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
 

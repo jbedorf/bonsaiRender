@@ -261,7 +261,8 @@ class SmokeRenderer : public SmokeRendererParams
     void blurLightBuffer();
     void processImage(GLSLProgram *prog, GLuint src, GLuint dest);
 
-    void splotchDraw(bool sorted = true);
+    void splotchDraw    ();
+    void splotchDrawSort();
 
     GLuint createTexture(GLenum target, int w, int h, GLint internalformat, GLenum format, void *data = 0);
     GLuint createNoiseTexture(int w, int h, int d);
