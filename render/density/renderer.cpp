@@ -1443,7 +1443,7 @@ static void lCompose(
       std::sort(
           colorArrayDepth.begin() + stride, 
           colorArrayDepth.begin() + stride + nrank,
-          [](const vec5 &a, const vec5 &b){ return a[4] > b[4]; }
+          [](const vec5 &a, const vec5 &b){ return a[4] < b[4]; }
           );
 #endif
 
@@ -1760,8 +1760,9 @@ void SmokeRenderer::splotchDrawSort()
   m_fbo->AttachTexture(GL_TEXTURE_2D, m_depthTex, GL_DEPTH_ATTACHMENT_EXT);
   glViewport(0, 0, m_imageW, m_imageH);
   glClearColor(0.0, 0.0, 0.0, 0.0); 
-  glClear(GL_COLOR_BUFFER_BIT);
-  glClear(GL_DEPTH_BUFFER_BIT);
+  glClearDepth(1.0f);
+  glDepthMask(GL_TRUE);
+  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
   glDisable(GL_BLEND);
 
 
@@ -1771,7 +1772,6 @@ void SmokeRenderer::splotchDrawSort()
   calcVectors();
   depthSortCopy();
   glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);   
-
 
   auto &prog = m_splotchProg;
 
@@ -1788,19 +1788,21 @@ void SmokeRenderer::splotchDrawSort()
 
   /******  get depth info ************/
   
-  glEnable(GL_DEPTH_TEST);
-  glDepthMask(GL_TRUE);  // don't write depth
-  glEnable(GL_BLEND);
-#if 1
   glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);
   glDepthFunc(GL_LESS);
+  glDisable(GL_BLEND);
+  glEnable(GL_DEPTH_TEST);
+  glDepthMask(GL_TRUE);  // don't write depth
 #define _DRAWIMG
-#else
-  glDepthFunc(GL_ALWAYS);
-#endif
 
   prog->enable();
   glBindVertexArray(mSizeVao);
+
+#if 0
+  glDisable(GL_DEPTH_TEST);
+  glDepthMask(GL_FALSE);  // don't write depth
+  glEnable(GL_BLEND);
+#endif
 
   GLint viewport[4];
   glGetIntegerv(GL_VIEWPORT, viewport);
@@ -1816,7 +1818,7 @@ void SmokeRenderer::splotchDrawSort()
   prog->setUniform1f("alphaScale", m_spriteAlpha);
   prog->setUniform1f("transmission", m_transmission);
 
-  prog->setUniform1f("sorted", 1.0);
+  prog->setUniform1f("sorted", 2.0);
 
   //glClientActiveTexture(GL_TEXTURE0);
   glActiveTexture(GL_TEXTURE0);
@@ -1830,11 +1832,11 @@ void SmokeRenderer::splotchDrawSort()
 
   /***** generate image ********/
  
+  glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
 #ifdef _DRAWIMG
   glDisable(GL_DEPTH_TEST);
   glDepthMask(GL_FALSE);  // don't write depth
   glEnable(GL_BLEND);
-  glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
   m_fbo->AttachTexture(GL_TEXTURE_2D, 0, GL_DEPTH_ATTACHMENT_EXT);
 
   prog->enable();
@@ -1932,20 +1934,18 @@ void SmokeRenderer::splotchDrawSort()
     glBindTexture(GL_TEXTURE_2D, m_depthTex);
     glBindBuffer(GL_PIXEL_PACK_BUFFER, pbo_id[0]);
     glGetTexImage(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT, GL_FLOAT, 0);
-    rptr = glMapBufferRange(GL_PIXEL_PACK_BUFFER, 0, imgSize/4.0, GL_MAP_READ_BIT);
+    rptr = glMapBufferRange(GL_PIXEL_PACK_BUFFER, 0, imgSize/4, GL_MAP_READ_BIT);
 
-#pragma omp parallel for schedule(static)
+    float dmin = +HUGE, dmax = -HUGE;
+#pragma omp parallel for schedule(static) reduction(min:dmin) reduction(max:dmax)
     for (int i = 0; i < w*h; i++)
     {
       depth[i] = reinterpret_cast<float*>(rptr)[i];
-#if 0
-      if (depth[i] < 0.5)
-        fprintf(stderr, "i= %d  depth= %g\n", i, depth[i]);
-#endif
-//      assert(depth[i] == 1.0f); // if not triggered, depth buffer has not been used ... 
+      dmin = std::min(dmin, depth[i]);
+      dmax = std::max(dmax, depth[i]);
     }
+    fprintf(stderr, "rank= %d: dmin= %g  dmax= %g\n", rank, dmin,dmax);
 
-    //      memcpy(&imgLoc[0], rptr, imgSize);
     glUnmapBuffer(GL_PIXEL_PACK_BUFFER);
     glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
     glBindTexture(GL_TEXTURE_2D,0);
@@ -1953,7 +1953,11 @@ void SmokeRenderer::splotchDrawSort()
     glFinish();
     const double t3 = MPI_Wtime();
 
+#if 1
     lCompose(&imgLoc[0], &imgGlb[0], &depth[0], w*h, rank, nrank, comm);
+#else
+    lCompose(&imgLoc[0], &imgGlb[0], NULL, w*h, rank, nrank, comm);
+#endif
     glFinish();
     const double t4 = MPI_Wtime();
 
@@ -2187,8 +2191,8 @@ void SmokeRenderer::createBuffers(int w, int h)
   m_imageTex[3] = createTexture(GL_TEXTURE_2D, m_imageW, m_imageH, format, GL_RGBA);
   m_imageTex[4] = createTexture(GL_TEXTURE_2D, m_imageW, m_imageH, format, GL_RGBA);
 
-//  m_depthTex = createTexture(GL_TEXTURE_2D, m_imageW, m_imageH, GL_DEPTH_COMPONENT24_ARB, GL_DEPTH_COMPONENT);
-  m_depthTex = createTexture(GL_TEXTURE_2D, m_imageW, m_imageH, GL_DEPTH_COMPONENT32_ARB, GL_DEPTH_COMPONENT);
+  m_depthTex = createTexture(GL_TEXTURE_2D, m_imageW, m_imageH, GL_DEPTH_COMPONENT24_ARB, GL_DEPTH_COMPONENT);
+//  m_depthTex = createTexture(GL_TEXTURE_2D, m_imageW, m_imageH, GL_DEPTH_COMPONENT32_ARB, GL_DEPTH_COMPONENT);
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
 

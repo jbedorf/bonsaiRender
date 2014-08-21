@@ -835,6 +835,8 @@ const char *splotchVS = STRINGIFY(
 );
 
 const char *splotchPS = STRINGIFY(
+    attribute float particleSize;                             \n
+    uniform float spriteScale;                                \n
     uniform sampler2D spriteTex;                                       \n
     uniform float alphaScale;                                          \n
     uniform float transmission;                                        \n
@@ -843,12 +845,31 @@ const char *splotchPS = STRINGIFY(
     {                                                                  \n
       float type = gl_TexCoord[1].w;                                   \n
       float alpha = texture2D(spriteTex, gl_TexCoord[0].xy).x;         \n
-      if (sorted == 1.0)                                               \n
+      if (sorted != 0.0)                                               \n
       {                                                                \n
         alpha *= gl_Color.w*alphaScale;                                \n
         alpha = clamp(alpha, 0.0, 1.0);                                \n
       }                                                                \n
       vec4 c = vec4(gl_Color.xyz * alpha, max(0, alpha-transmission)); \n
       gl_FragColor = c;                                                \n
+
+       // calculate depth                                             \n
+      float pointRadius = particleSize*spriteScale;             \n
+      // calculate eye-space sphere normal from texture coordinates  \n
+      vec3 N;                                                        \n
+      N.xy = gl_TexCoord[0].xy*vec2(2.0, -2.0) + vec2(-1.0, 1.0);    \n
+      float r2 = dot(N.xy, N.xy);                                    \n
+      if (r2 > 1.0) discard;   // kill pixels outside circle         \n
+      N.z = sqrt(1.0-r2);                                            \n
+
+      vec4 eyeSpacePos = vec4(gl_TexCoord[1].xyz + N*pointRadius, 1.0);   // position of this pixel on sphere in eye space \n
+      vec4 clipSpacePos = gl_ProjectionMatrix * eyeSpacePos;         \n
+      float depth = (clipSpacePos.z / clipSpacePos.w)*0.5+0.5;      \n
+//      gl_FragColor.x = gl_FragCoord.z;
+ //     gl_FragColor.y = gl_FragCoord.z;
+  //    gl_FragColor.z = gl_FragCoord.z;
+   //   gl_FragColor.w = 0.0f;
+//      gl_FragColor = vec4(depth, depth, depth, 0.0);
+//      gl_FragDepth = depth;
     }                                                                  \n
   );
