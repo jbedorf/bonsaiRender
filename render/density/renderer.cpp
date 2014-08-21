@@ -1784,23 +1784,16 @@ void SmokeRenderer::splotchDrawSort()
     glVertexAttribPointer(vertexLoc , 1, GL_FLOAT, 0, 0, 0);
   }
 
-  /******  get depth info ************/
+  /******   depth buffer pass *****/
   
   glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);
-  glDepthFunc(GL_LESS);
+  glDepthFunc(GL_LEQUAL);
   glDisable(GL_BLEND);
   glEnable(GL_DEPTH_TEST);
   glDepthMask(GL_TRUE);  // don't write depth
-#define _DRAWIMG
 
   prog->enable();
   glBindVertexArray(mSizeVao);
-
-#if 0
-  glDisable(GL_DEPTH_TEST);
-  glDepthMask(GL_FALSE);  // don't write depth
-  glEnable(GL_BLEND);
-#endif
 
   GLint viewport[4];
   glGetIntegerv(GL_VIEWPORT, viewport);
@@ -1828,10 +1821,9 @@ void SmokeRenderer::splotchDrawSort()
 
   prog->disable();
 
-  /***** generate image ********/
+  /***** generate image pass *****/
  
   glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
-#ifdef _DRAWIMG
   glDisable(GL_DEPTH_TEST);
   glDepthMask(GL_FALSE);  // don't write depth
   glEnable(GL_BLEND);
@@ -1862,8 +1854,6 @@ void SmokeRenderer::splotchDrawSort()
   drawPoints(start,count,true);
 
   prog->disable();
-
-#endif
 
 
   /********* compose ********/
@@ -1908,7 +1898,8 @@ void SmokeRenderer::splotchDrawSort()
     }
     assert(pbo_id[0] && pbo_id[1]);
 
-    /** fetch image ***/
+    /***** fetch image *****/
+
     glBindTexture(GL_TEXTURE_2D, m_imageTex[0]);
     glBindBuffer(GL_PIXEL_PACK_BUFFER, pbo_id[0]);
     glGetTexImage(GL_TEXTURE_2D, 0, GL_RGBA, GL_FLOAT, 0);
@@ -1922,17 +1913,16 @@ void SmokeRenderer::splotchDrawSort()
     for (int i = 0; i < w*h; i++)
       imgLoc[i] = reinterpret_cast<float4*>(rptr)[i];
 
-    //      memcpy(&imgLoc[0], rptr, imgSize);
     glUnmapBuffer(GL_PIXEL_PACK_BUFFER);
     glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
     glBindTexture(GL_TEXTURE_2D,0);
 
-    /***** fetch depth *****/
+    /***** fetch depth buffer *****/
 
     glBindTexture(GL_TEXTURE_2D, m_depthTex);
     glBindBuffer(GL_PIXEL_PACK_BUFFER, pbo_id[0]);
     glGetTexImage(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT, GL_FLOAT, 0);
-    rptr = glMapBufferRange(GL_PIXEL_PACK_BUFFER, 0, imgSize/4, GL_MAP_READ_BIT);
+    rptr = glMapBufferRange(GL_PIXEL_PACK_BUFFER, 0, imgSize, GL_MAP_READ_BIT);
 
     float dmin = +HUGE, dmax = -HUGE;
 #pragma omp parallel for schedule(static) reduction(min:dmin) reduction(max:dmax)
@@ -1942,7 +1932,7 @@ void SmokeRenderer::splotchDrawSort()
       dmin = std::min(dmin, depth[i]);
       dmax = std::max(dmax, depth[i]);
     }
-    fprintf(stderr, "rank= %d: dmin= %g  dmax= %g\n", rank, dmin,dmax);
+//    fprintf(stderr, "rank= %d: dmin= %g  dmax= %g\n", rank, dmin,dmax);
 
     glUnmapBuffer(GL_PIXEL_PACK_BUFFER);
     glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
@@ -1951,16 +1941,17 @@ void SmokeRenderer::splotchDrawSort()
     glFinish();
     const double t3 = MPI_Wtime();
 
-#if 1
+    /***** compose image *****/
+
     lCompose(&imgLoc[0], &imgGlb[0], &depth[0], w*h, rank, nrank, comm);
-#else
-    lCompose(&imgLoc[0], &imgGlb[0], NULL, w*h, rank, nrank, comm);
-#endif
     glFinish();
     const double t4 = MPI_Wtime();
 
     if (isMaster())
     {
+
+      /***** place back to fbo *****/
+
       glBindBuffer(GL_PIXEL_UNPACK_BUFFER, pbo_id[1]);
       GLvoid *wptr = glMapBufferRange(GL_PIXEL_UNPACK_BUFFER, 0, imgSize, GL_MAP_WRITE_BIT);
 
