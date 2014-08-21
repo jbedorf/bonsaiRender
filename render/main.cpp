@@ -264,6 +264,14 @@ int main(int argc, char * argv[])
   MPI_Comm_size(comm, &nranks);
   MPI_Comm_rank(comm, &rank);
 
+  if (rank == 0)
+  {
+    char hostname[256];
+    gethostname(hostname,256);
+    char * display = getenv("DISPLAY");
+    fprintf(stderr, "root: %s  display: %s", hostname, display);
+  }
+
 
   std::string fileName;
   int reduceDM    =  10;
