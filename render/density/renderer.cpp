@@ -1319,7 +1319,8 @@ void SmokeRenderer::splotchDraw(bool sorted)
   }
 
   glDisable(GL_DEPTH_TEST);
-  glDepthMask(GL_FALSE);  // don't write depth
+  //glDepthMask(GL_FALSE);  // don't write depth
+  glDepthMask(GL_TRUE);  // don't write depth
   glEnable(GL_BLEND);
 
   auto &prog = m_splotchProg;

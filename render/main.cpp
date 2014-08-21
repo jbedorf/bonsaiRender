@@ -5,24 +5,19 @@
 #include <unistd.h>
 #include <sstream>
 #include <cmath>
-#if 0
-#include "read_tipsy.h"
-#define OLDIO
-#else
 #include "IDType.h"
 #include "BonsaiIO.h"
-#endif
 
 #include "renderloop.h"
 #include "anyoption.h"
 #include "RendererData.h"
 
-
 #include <IceT.h>
 #include <IceTGL.h>
 #include <IceTMPI.h>
-  
-static RendererData* readBonsaiReduced(
+
+template<typename T>
+static T* readBonsaiReduced(
     const int rank, const int nranks, const MPI_Comm &comm,
     const std::string &fileName,
     const int reduceDM,
@@ -76,7 +71,8 @@ static RendererData* readBonsaiReduced(
   }
 
 
-  RendererData *rDataPtr = new RendererData(nS+nDM);
+  T *rDataPtr = new T(rank,nranks,comm);
+  rDataPtr->resize(nS+nDM);
   auto &rData = *rDataPtr;
   for (int i = 0; i < nS; i++)
   {
@@ -86,7 +82,7 @@ static RendererData* readBonsaiReduced(
     rData.posz(ip) = posStars[i][2];
     rData.ID  (ip) = i;
     rData.type(ip) = 1;
-    rData.attribute(RendererData::MASS, ip) = 1.0/nS;
+//    rData.attribute(RendererData::MASS, ip) = 1.0/nS;
     rData.attribute(RendererData::VEL,  ip) =
       std::sqrt(
           attrStars[i][0]*attrStars[i][0] +
@@ -104,7 +100,7 @@ static RendererData* readBonsaiReduced(
     rData.posz(ip) = posDM[i][2];
     rData.ID  (ip) = i+1000000000;
     rData.type(ip) = 0;
-    rData.attribute(RendererData::MASS, ip) = 1.0/nDM;
+//    rData.attribute(RendererData::MASS, ip) = 1.0/nDM;
     rData.attribute(RendererData::VEL,  ip) =
       std::sqrt(
           attrDM[i][0]*attrDM[i][0] +
@@ -116,7 +112,8 @@ static RendererData* readBonsaiReduced(
   return rDataPtr;
 }
 
-static RendererData* readBonsaiFull(
+template<typename T>
+static T* readBonsaiFull(
     const int rank, const int nranks, const MPI_Comm &comm,
     const std::string &fileName,
     const int reduceDM,
@@ -201,7 +198,8 @@ static RendererData* readBonsaiFull(
   }
 
 
-  RendererData *rDataPtr = new RendererData(nS+nDM);
+  T *rDataPtr = new T(rank,nranks,comm);
+  rDataPtr->resize(nS+nDM);
   auto &rData = *rDataPtr;
   for (int i = 0; i < nS; i++)
   {
@@ -212,7 +210,7 @@ static RendererData* readBonsaiFull(
     rData.ID  (ip) = IDListS[i].getID();
     rData.type(ip) = IDListS[i].getType();
     assert(rData.type(ip) == 1); /* sanity check */
-    rData.attribute(RendererData::MASS, ip) = posS[i][3];
+//    rData.attribute(RendererData::MASS, ip) = posS[i][3];
     rData.attribute(RendererData::VEL,  ip) =
       std::sqrt(
           velS[i][0]*velS[i][0] +
@@ -238,7 +236,7 @@ static RendererData* readBonsaiFull(
     rData.ID  (ip) = IDListDM[i].getID();
     rData.type(ip) = IDListDM[i].getType();
     assert(rData.type(ip) == 0); /* sanity check */
-    rData.attribute(RendererData::MASS, ip) = posDM[i][3];
+//    rData.attribute(RendererData::MASS, ip) = posDM[i][3];
     rData.attribute(RendererData::VEL,  ip) =
       std::sqrt(
           velDM[i][0]*velDM[i][0] +
@@ -270,23 +268,17 @@ int main(int argc, char * argv[])
   MPI_Comm_size(comm, &nranks);
   MPI_Comm_rank(comm, &rank);
 
-  //assert(nranks == 1);
-  //assert(rank   == 0);
 
   std::string fileName;
-#ifdef OLDIO
-  int nDomains     = -1;
-#endif
   int reduceDM    =  10;
   int reduceS=  1;
 #ifndef PARTICLESRENDERER
   std::string fullScreenMode    = "";
   bool stereo     = false;
 #endif
+  int nmaxsample = 200000;
+  bool doDD = false;
 
-
-  //if (rank == 0)  
-  if(1)
   {
 		AnyOption opt;
 
@@ -297,27 +289,24 @@ int main(int argc, char * argv[])
 		ADDUSAGE(" ");
 		ADDUSAGE(" -h  --help             Prints this help ");
 		ADDUSAGE(" -i  --infile #         Input snapshot filename ");
-#ifdef OLDIO
-    ADDUSAGE(" -n  --ndomains #       Number of domains ");
-#endif
-		ADDUSAGE("     --reduceDM    #   cut down DM dataset by # factor [10]. 0-disable DM");
-		ADDUSAGE("     --reduceS     #   cut down stars dataset by # factor [1]. 0-disable S");
+		ADDUSAGE("     --reduceDM    #    cut down DM dataset by # factor [10]. 0-disable DM");
+		ADDUSAGE("     --reduceS     #    cut down stars dataset by # factor [1]. 0-disable S");
 #ifndef PARTICLESRENDERER
-		ADDUSAGE("     --fullscreen #     set fullscreen mode string");
+		ADDUSAGE("     --fullscreen  #    set fullscreen mode string");
 		ADDUSAGE("     --stereo           enable stereo rendering");
 #endif
-		ADDUSAGE(" ");
+		ADDUSAGE(" -d  --doDD             enable domain decomposition  [disabled]");
+    ADDUSAGE(" -s  --nmaxsample   #   set max number of samples for DD [" << nmaxsample << "]");
 
 
 		opt.setFlag  ( "help" ,        'h');
 		opt.setOption( "infile",       'i');
-#ifdef OLDIO
-		opt.setOption( "ndomains",     'n');
-#endif
 		opt.setOption( "reduceDM");
 		opt.setOption( "reduceS");
     opt.setOption( "fullscreen");
     opt.setFlag("stereo");
+    opt.setFlag("doDD", 'd');
+    opt.setOption("nmaxsample", 's');
 
     opt.processCommandArgs( argc, argv );
 
@@ -331,20 +320,16 @@ int main(int argc, char * argv[])
 
     char *optarg = NULL;
     if ((optarg = opt.getValue("infile")))       fileName           = std::string(optarg);
-#ifdef OLDIO
-    if ((optarg = opt.getValue("ndomains")))     nDomains           = atoi(optarg);
-#endif
     if ((optarg = opt.getValue("reduceDM"))) reduceDM       = atoi(optarg);
     if ((optarg = opt.getValue("reduceS"))) reduceS       = atoi(optarg);
 #ifndef PARTICLESRENDERER
     if ((optarg = opt.getValue("fullscreen")))	 fullScreenMode     = std::string(optarg);
     if (opt.getFlag("stereo"))  stereo = true;
 #endif
+    if ((optarg = opt.getValue("nmaxsample"))) nmaxsample = atoi(optarg);
+    if (opt.getFlag("doDD"))  doDD = true;
 
     if (fileName.empty() ||
-#ifdef OLDIO
-        nDomains == -1 || 
-#endif
         reduceDM < 0 || reduceS < 0)
     {
       opt.printUsage();
@@ -355,67 +340,10 @@ int main(int argc, char * argv[])
   }
 
 
-#ifdef OLDIO
-  assert(reduceDM > 0);
-  assert(reduceS > 0);
-  ReadTipsy data(
-      fileName, 
-      rank, nranks,
-      nDomains, 
-      reduceDM,
-      reduceS);
-
-  long long nFirstLocal = data.firstID.size();
-  long long nSecondLocal = data.secondID.size();
-
-  long long nFirst, nSecond;
-  MPI_Allreduce(&nFirstLocal, &nFirst, 1, MPI_LONG, MPI_SUM, comm);
-  MPI_Allreduce(&nSecondLocal, &nSecond, 1, MPI_LONG, MPI_SUM, comm);
-
-  if (rank == 0)
-  {
-    fprintf(stderr, " nFirst = %lld \n", nFirst);
-    fprintf(stderr, " nSecond= %lld \n", nSecond);
-    fprintf(stderr, " nTotal= %lld \n", nFirst + nSecond);
-  }
-
-  const int nPtcl = nFirstLocal+ nSecondLocal;
-  RendererData rData(nPtcl);
-  for (int i = 0; i < nFirstLocal; i++)
-  {
-    const int ip = i;
-    rData.posx(ip) = data.firstPos[i].x;
-    rData.posy(ip) = data.firstPos[i].y;
-    rData.posz(ip) = data.firstPos[i].z;
-    rData.ID  (ip) = data.firstID[i];
-    rData.type(ip) = 0;
-    rData.attribute(RendererData::MASS, ip) = data.firstPos[i].w;
-    rData.attribute(RendererData::VEL,  ip) =
-      std::sqrt(
-          data.firstVel[i].x*data.firstVel[i].x +
-          data.firstVel[i].y*data.firstVel[i].y +
-          data.firstVel[i].z*data.firstVel[i].z);
-  }
-  for (int i = 0; i < nSecondLocal; i++)
-  {
-    const int ip = i + nFirstLocal;
-    rData.posx(ip) = data.secondPos[i].x;
-    rData.posy(ip) = data.secondPos[i].y;
-    rData.posz(ip) = data.secondPos[i].z;
-    rData.ID  (ip) = data.secondID[i];
-    rData.type(ip) = 1;
-    rData.attribute(RendererData::MASS, ip) = data.secondPos[i].w;
-    rData.attribute(RendererData::VEL,  ip) =
-      std::sqrt(
-          data.secondVel[i].x*data.secondVel[i].x +
-          data.secondVel[i].y*data.secondVel[i].y +
-          data.secondVel[i].z*data.secondVel[i].z);
-  }
-#else  /* end OLDIO */
-
-  RendererData *rDataPtr;
-  if ((rDataPtr = readBonsaiFull(rank, nranks, comm, fileName, reduceDM, reduceS))) {}
-  else if ((rDataPtr = readBonsaiReduced(rank, nranks, comm, fileName, reduceDM, reduceS))) {}
+  using RendererDataT = RendererDataDistribute;
+  RendererDataT *rDataPtr;
+  if ((rDataPtr = readBonsaiFull<RendererDataT>(rank, nranks, comm, fileName, reduceDM, reduceS))) {}
+  else if ((rDataPtr = readBonsaiReduced<RendererDataT>(rank, nranks, comm, fileName, reduceDM, reduceS))) {}
   else
   {
     if (rank == 0)
@@ -424,10 +352,37 @@ int main(int argc, char * argv[])
     exit(-1);
   }
 
-#endif
 
   assert(rDataPtr != 0);
+  rDataPtr->randomShuffle();
   rDataPtr->computeMinMax();
+
+#if 0
+  fprintf(stderr, "rank= %d: min= %g %g %g  max= %g %g %g \n",
+      rank, 
+      rDataPtr->xminLoc(), rDataPtr->yminLoc(), rDataPtr->zminLoc(),
+      rDataPtr->xmaxLoc(), rDataPtr->ymaxLoc(), rDataPtr->zmaxLoc());
+#endif
+  fprintf(stderr, " rank= %d: n= %d\n", rank, rDataPtr->n());
+  if (doDD)
+  {
+    MPI_Barrier(comm);
+    const double t0 = MPI_Wtime();
+    rDataPtr->setNMAXSAMPLE(nmaxsample);
+    rDataPtr->distribute();
+//    rDataPtr->distribute();
+    MPI_Barrier(comm);
+    const double t1 = MPI_Wtime();
+    fprintf(stderr, " rank= %d: n= %d\n", rank, rDataPtr->n());
+    if (rank == 0)
+      fprintf(stderr, " DD= %g sec \n", t1-t0);
+  }
+#if 0
+  fprintf(stderr, "rank= %d: min= %g %g %g  max= %g %g %g \n",
+      rank, 
+      rDataPtr->xminLoc(), rDataPtr->yminLoc(), rDataPtr->zminLoc(),
+      rDataPtr->xmaxLoc(), rDataPtr->ymaxLoc(), rDataPtr->zmaxLoc());
+#endif
 
   if (rDataPtr->attributeMin(RendererData::RHO) > 0.0)
   {
@@ -440,24 +395,23 @@ int main(int argc, char * argv[])
 //  rDataPtr->clamp(RendererData::VEL, 0.25, 0.25);
 //  rDataPtr->scaleExp(RendererData::VEL);
   
-  //Compute bounds
-  rDataPtr->computeMinMax();
+
+// #if 1
+//   initAppRenderer(argc, argv, 
+//       rank, nranks, comm,
+//       *rDataPtr,
+//       fullScreenMode.c_str(), stereo);
+// #else
+// 
+//   sleep(1);
+//   MPI_Barrier(comm);
+//   if (rank == 0)
+//     fprintf(stderr, " -- Done -- \n");
+//   MPI_Finalize();
+// #endif
   
   
-  float lMin = rDataPtr->rmin();
-  float lMax = rDataPtr->rmax();
-  float gMin = 0;
-  float gMax = 0;
-  
-  MPI_Allreduce(&lMin, &gMin, 1, MPI_FLOAT, MPI_MIN, comm);
-  MPI_Allreduce(&lMax, &gMax, 1, MPI_FLOAT, MPI_MAX, comm);
-  
-  fprintf(stderr,"Dimensions: %f %f %f %f\n", lMin, lMax, gMin, gMax);
-  
-  rDataPtr->set_globalMin(gMin);
-  rDataPtr->set_globalMax(gMax);  
-  
-  //Setup the IceT context and communicators
+    //Setup the IceT context and communicators
   IceTCommunicator icetComm    = icetCreateMPICommunicator(MPI_COMM_WORLD);
   IceTContext      icetContext = icetCreateContext(icetComm);
   icetDestroyMPICommunicator(icetComm); //Save since the comm is copied to the icetContext
@@ -476,10 +430,10 @@ int main(int argc, char * argv[])
   //Start the visualization
   initAppRenderer_start();
   
-    
-    
-
-  fprintf(stderr, " -- Done -- \n");
+  
+  
+  
+  
   while(1) {}
   return 0;
 }

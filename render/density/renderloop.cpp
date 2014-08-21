@@ -1960,14 +1960,19 @@ void initIceT()
   glClearColor(0.0, 0.0, 0.0, 1.0);
 
   icetGLDrawCallback(display); //Calls our display func
+  
+  float maxDim = -1;
+  float minDim = 10e10f;
+  std::max(theDemo->m_idata.xmax(), std::max(theDemo->m_idata.ymax(), std::max(maxDim, theDemo->m_idata.zmax())));
+  std::min(theDemo->m_idata.xmin(), std::min(theDemo->m_idata.ymin(), std::min(minDim, theDemo->m_idata.zmin())));
 
   //Set the bounding box, xmin,xmax,ymin,ymax,zmin,zmax
-  icetBoundingBoxf(theDemo->m_idata.globalMin(), 
-                   theDemo->m_idata.globalMax(), 
-                   theDemo->m_idata.globalMin(), 
-                   theDemo->m_idata.globalMax(), 
-                   theDemo->m_idata.globalMin(), 
-                   theDemo->m_idata.globalMax());
+  icetBoundingBoxf(minDim, 
+                   maxDim, 
+                   minDim, 
+                   maxDim, 
+                   minDim, 
+                   maxDim);
 
   //Setup a single tile
   icetResetTiles();
@@ -1983,7 +1988,7 @@ void initIceT()
   icetSetColorFormat(ICET_IMAGE_COLOR_RGBA_UBYTE);
   icetSetDepthFormat(ICET_IMAGE_DEPTH_NONE);
   
-//   icetEnable(ICET_ORDERED_COMPOSITE);
+   icetEnable(ICET_ORDERED_COMPOSITE);
 //   int order[] = {1,0};
 //   icetCompositeOrder(order);
 #endif
