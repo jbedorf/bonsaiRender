@@ -1374,7 +1374,8 @@ void SmokeRenderer::render()
 
 static void lCompose(
     float4 *src, float4 *dst, float *depth,
-    const int n, const int rank, const int nrank, const MPI_Comm &comm)
+    const int n, const int rank, const int nrank, const MPI_Comm &comm,
+    const int showDomain)
 {
   const int master = 0;
 #if 0
@@ -1392,18 +1393,27 @@ static void lCompose(
 
     MPI_Alltoall(src, nsend*4, MPI_FLOAT, &colorArray[0], nsend*4, MPI_FLOAT, comm);
 
+    assert(showDomain >= -1 && showDomain < nrank);
+    if (showDomain == -1)
+    {
 #pragma omp parallel for schedule(static)
-    for (int i = 0; i < nsend; i++)
-      for (int p = 1; p < nrank; p++)
-      {
-        float4 dst = colorArray[i];
-        float4 src = colorArray[i + p*nsend];
-        dst.x += src.x;
-        dst.y += src.y;
-        dst.z += src.z;
-        dst.w += src.w;
-        colorArray[i] = dst;
-      }
+      for (int i = 0; i < nsend; i++)
+        for (int p = 1; p < nrank; p++)
+        {
+          float4 dst = colorArray[i];
+          float4 src = colorArray[i + p*nsend];
+          dst.x += src.x;
+          dst.y += src.y;
+          dst.z += src.z;
+          dst.w += src.w;
+          colorArray[i] = dst;
+        }
+    }
+    else
+      std::copy(
+          colorArray.begin() + showDomain*nsend,
+          colorArray.begin() + showDomain*nsend + nsend,
+          colorArray.begin());
   }
   else
   {
@@ -1434,82 +1444,49 @@ static void lCompose(
           }};
       }
 
-    
+   
+   if (showDomain == -1)
+   { 
 #pragma omp parallel for schedule(static)
-    for (int i = 0; i < nsend; i++)
-    {
-      const int stride = i*nrank;
-      std::sort(
-          colorArrayDepth.begin() + stride, 
-          colorArrayDepth.begin() + stride + nrank,
-          [](const vec5 &a, const vec5 &b){ return a[4] < b[4]; }
-          );
+     for (int i = 0; i < nsend; i++)
+     {
+       const int stride = i*nrank;
+       std::sort(
+           colorArrayDepth.begin() + stride, 
+           colorArrayDepth.begin() + stride + nrank,
+           [](const vec5 &a, const vec5 &b){ return a[4] < b[4]; }
+           );
 
-      float4 _dst = make_float4(0.0);
-      for (int p = 0; p < nrank; p++)
-      {
-        float4 _src = make_float4(
-            colorArrayDepth[stride+p][0],
-            colorArrayDepth[stride+p][1],
-            colorArrayDepth[stride+p][2],
-            colorArrayDepth[stride+p][3]
-            );
+       float4 _dst = make_float4(0.0);
+       for (int p = 0; p < nrank; p++)
+       {
+         float4 _src = make_float4(
+             colorArrayDepth[stride+p][0],
+             colorArrayDepth[stride+p][1],
+             colorArrayDepth[stride+p][2],
+             colorArrayDepth[stride+p][3]
+             );
 
-#if 0
-        const float4 Ca = src;
-        const float4 Cb = dst;
+         _src.x *= 1.0f - _dst.w;
+         _src.y *= 1.0f - _dst.w;
+         _src.z *= 1.0f - _dst.w;
+         _src.w *= 1.0f - _dst.w;
 
-#if 1
-        dst.w = Ca.w + Cb.w*(1.0f - Ca.w);
-        dst.x = Ca.x*Ca.w + Cb.x*Cb.w*(1.0f - Ca.w);
-        dst.y = Ca.y*Ca.w + Cb.y*Cb.w*(1.0f - Ca.w);
-        dst.z = Ca.z*Ca.w + Cb.z*Cb.w*(1.0f - Ca.w);
-        const float f = 1.0f/dst.w;
-#else
-        dst.x = Ca.x + Cb.x*(1.0f - Ca.w);
-        dst.y = Ca.y + Cb.y*(1.0f - Ca.w);
-        dst.z = Ca.z + Cb.z*(1.0f - Ca.w);
-        dst.w = Ca.w + Cb.w*(1.0f - Ca.w);
-        const float f = 1.0f;
-#endif
-
-        dst.x *= f;
-        dst.y *= f;
-        dst.z *= f;
-#elif 0
-        const float4 src = _src;
-        const float4 dst = _dst;
-
-        const float g = 1.0f - src.w;
-        _dst.w = src.w + dst.w*g;
-
-        const float f = 1.0f; ///_dst.w;
-        _dst.x = (src.x*src.w + dst.x*dst.w*g) * f;
-        _dst.y = (src.y*src.w + dst.y*dst.w*g) * f;
-        _dst.z = (src.z*src.w + dst.z*dst.w*g) * f;
-
-#else
-        _src.x *= 1.0f - _dst.w;
-        _src.y *= 1.0f - _dst.w;
-        _src.z *= 1.0f - _dst.w;
-        _src.w *= 1.0f - _dst.w;
-
-        _dst.x += _src.x;
-        _dst.y += _src.y;
-        _dst.z += _src.z;
-        _dst.w += _src.w;
-#endif
-
-#if 0
-        dst.x = std::min(1.0f, dst.z);
-        dst.y = std::min(1.0f, dst.y);
-        dst.z = std::min(1.0f, dst.z);
-#endif
-        _dst.w = std::min(1.0f, _dst.w);
-        assert(_dst.w >= 0.0f);
-      }
-      colorArray[i] = _dst;
-    }
+         _dst.x += _src.x;
+         _dst.y += _src.y;
+         _dst.z += _src.z;
+         _dst.w += _src.w;
+         _dst.w = std::min(1.0f, _dst.w);
+         assert(_dst.w >= 0.0f);
+       }
+       colorArray[i] = _dst;
+     }
+   }
+   else
+     std::copy(
+         colorArray.begin() + showDomain*nsend,
+         colorArray.begin() + showDomain*nsend + nsend,
+         colorArray.begin());
   }
 
   MPI_Gather(&colorArray[0], nsend*4, MPI_FLOAT, dst, 4*nsend, MPI_FLOAT, master, comm);
@@ -1639,7 +1616,8 @@ void SmokeRenderer::splotchDraw()
     glFinish();
     const double t3 = MPI_Wtime();
 
-    lCompose(&imgLoc[0], &imgGlb[0], NULL, w*h, rank, nrank, comm);
+    lCompose(&imgLoc[0], &imgGlb[0], NULL, w*h, rank, nrank, comm,
+        m_domainView ? m_domainViewIdx : -1);
     glFinish();
     const double t4 = MPI_Wtime();
 
@@ -1943,7 +1921,8 @@ void SmokeRenderer::splotchDrawSort()
 
     /***** compose image *****/
 
-    lCompose(&imgLoc[0], &imgGlb[0], &depth[0], w*h, rank, nrank, comm);
+    lCompose(&imgLoc[0], &imgGlb[0], &depth[0], w*h, rank, nrank, comm,
+        m_domainView ? m_domainViewIdx : -1);
     glFinish();
     const double t4 = MPI_Wtime();
 

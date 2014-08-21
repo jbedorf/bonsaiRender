@@ -356,6 +356,7 @@ class Demo
       m_paused(false),
       m_renderingEnabled(true),
       m_displayBoxes(false), 
+      m_domainView(false),
       m_displaySliders(false),
       m_displayCursor(1),
       m_cursorSize(0.5),
@@ -364,6 +365,7 @@ class Demo
       m_directGravitation(false),
       m_octreeMinDepth(0),
       m_octreeMaxDepth(3),
+      m_domainIdx(0),
       m_flyMode(false),
       m_fov(60.0f),
       m_nearZ(0.2),
@@ -453,12 +455,20 @@ class Demo
     }
     void togglePause() { m_paused = !m_paused; }
     void toggleBoxes() { m_displayBoxes = !m_displayBoxes; }
+    void toggleDomainView() { m_domainView = !m_domainView; m_renderer.setDomainView(m_domainView); }
     void toggleSliders() { m_displaySliders = !m_displaySliders; }
     void toggleGlow() { m_enableGlow = !m_enableGlow; m_renderer.setEnableFilters(m_enableGlow); }
     void toggleLightBuffer() { m_displayLightBuffer = !m_displayLightBuffer; m_renderer.setDisplayLightBuffer(m_displayLightBuffer); }
 
     void incrementOctreeMaxDepth(int inc) { 
       m_octreeMaxDepth += inc;
+      //m_octreeMaxDepth = std::max(m_octreeMinDepth, std::min(m_octreeMaxDepth, m_tree->localTree.n_levels));
+    }
+    
+    void incrementDomainIdx(int inc) { 
+      m_domainIdx += inc;
+      m_domainIdx = m_domainIdx % nrank;
+      m_renderer.setDomainViewIdx(m_domainIdx);
       //m_octreeMaxDepth = std::max(m_octreeMinDepth, std::min(m_octreeMaxDepth, m_tree->localTree.n_levels));
     }
 
@@ -952,6 +962,10 @@ class Demo
       m_keyModifiers = glutGetModifiers();
 
       switch (key) {
+        case 'd':
+        case 'D':
+          toggleDomainView();
+          break;
         case ' ':
           togglePause();
           break;
@@ -982,11 +996,13 @@ class Demo
           fitCamera();
           break;
         case '-':
-          incrementOctreeMaxDepth(-1);
+          incrementDomainIdx(-1);
+//          incrementOctreeMaxDepth(-1);
           break;
         case '=':
         case '+':
-          incrementOctreeMaxDepth(+1);
+          incrementDomainIdx(+1);
+//          incrementOctreeMaxDepth(+1);
           break;
         case '[':
           incrementOctreeMinDepth(-1);
@@ -1058,6 +1074,7 @@ class Demo
           m_renderer.setNumSlices(m_renderer.getNumSlices()/2);
           m_renderer.setNumDisplayedSlices(m_renderer.getNumSlices());
           break;
+#if 0
         case 'D':
           //printf("%f %f %f %f %f %f\n", m_cameraTrans.x, m_cameraTrans.y, m_cameraTrans.z, m_cameraRot.x, m_cameraRot.y, m_cameraRot.z);
           writeCameras("cameras.txt");
@@ -1065,6 +1082,7 @@ class Demo
           writeParams(m_colorParams, "colorparams.txt");
           glClearColor(0.0f, 1.0f, 0.0f, 1.0f); glClear(GL_COLOR_BUFFER_BIT); glClearColor(0.0f, 0.0f, 0.0f, 1.0f); glutSwapBuffers();
           break;
+#endif
         case 'j':
           if (m_params == m_colorParams) {
             m_params = m_renderer.getParams();
@@ -1461,6 +1479,7 @@ class Demo
     SmokeRenderer ::DisplayMode m_displayMode; 
     int m_octreeMinDepth;
     int m_octreeMaxDepth;
+    int m_domainIdx;
 
     float4 *m_particleColors;
     float4 *m_particlePos;
@@ -1500,6 +1519,7 @@ class Demo
 
     bool m_paused;
     bool m_displayBoxes;
+    bool m_domainView;
     bool m_displaySliders;
     bool m_enableGlow;
     bool m_displayLightBuffer;

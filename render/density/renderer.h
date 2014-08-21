@@ -23,115 +23,122 @@
 #include <cuda_runtime.h>
 //#include "GpuArray.h"
 //
-struct SmokeRendererParams
+class SmokeRendererParams
 {
-  enum DisplayMode
-  {
-    POINTS,
+  public:
+    enum DisplayMode
+    {
+      POINTS,
 #if 0
-    SPRITES,
-    SPRITES_SORTED,
-    VOLUMETRIC,
+      SPRITES,
+      SPRITES_SORTED,
+      VOLUMETRIC,
 #endif
-    SPLOTCH,
-    SPLOTCH_SORTED,
-    NUM_MODES
-  };
-  float               mParticleRadius;
-  float               mParticleScaleLog;
-  DisplayMode	        mDisplayMode;
+      SPLOTCH,
+      SPLOTCH_SORTED,
+      NUM_MODES
+    };
+  protected:
+    float               mParticleRadius;
+    float               mParticleScaleLog;
+    DisplayMode	        mDisplayMode;
 
-  // window
-  unsigned int        mWindowW, mWindowH;
-  float               mAspect, mInvFocalLen;
-  float               mFov;
+    // window
+    unsigned int        mWindowW, mWindowH;
+    float               mAspect, mInvFocalLen;
+    float               mFov;
 
-  int                 m_downSample;
-  int                 m_blurDownSample;
-  int                 m_imageW, m_imageH;
-  int                 m_downSampledW, m_downSampledH;
+    int                 m_downSample;
+    int                 m_blurDownSample;
+    int                 m_imageW, m_imageH;
+    int                 m_downSampledW, m_downSampledH;
 
-  int                 m_numSlices;
-  int                 m_numDisplayedSlices;
-  int                 m_batchSize;
-  int                 m_sliceNo;
+    int                 m_numSlices;
+    int                 m_numDisplayedSlices;
+    int                 m_batchSize;
+    int                 m_sliceNo;
 
-  // parameters
-  float               m_shadowAlpha;
-  float               m_dustAlpha;
-  bool                m_doBlur;
-  float               m_blurRadius;
-  bool                m_displayLightBuffer;
+    // parameters
+    float               m_shadowAlpha;
+    float               m_dustAlpha;
+    bool                m_doBlur;
+    float               m_blurRadius;
+    bool                m_displayLightBuffer;
+    bool                m_domainView;
+    int                 m_domainViewIdx;
 
-  nv::vec3f               m_lightVector, m_lightPos, m_lightTarget;
-  nv::vec3f               m_lightColor;
-  nv::vec3f               m_colorOpacity;
-  float               m_lightDistance;
+    nv::vec3f               m_lightVector, m_lightPos, m_lightTarget;
+    nv::vec3f               m_lightColor;
+    nv::vec3f               m_colorOpacity;
+    float               m_lightDistance;
 
-  nv::matrix4f            m_modelView, m_lightView, m_lightProj, m_shadowMatrix;
-  nv::vec3f               m_viewVector, m_halfVector;
-  bool                m_invertedView;
-  nv::vec4f               m_eyePos;
-  nv::vec4f               m_halfVectorEye;
-  nv::vec4f               m_lightPosEye;
+    nv::matrix4f            m_modelView, m_lightView, m_lightProj, m_shadowMatrix;
+    nv::vec3f               m_viewVector, m_halfVector;
+    bool                m_invertedView;
+    nv::vec4f               m_eyePos;
+    nv::vec4f               m_halfVectorEye;
+    nv::vec4f               m_lightPosEye;
 
-  float				m_minDepth, m_maxDepth;
-  bool                m_enableAA;
-  bool				m_enableVolume;
-  bool				m_enableFilters;
+    float				m_minDepth, m_maxDepth;
+    bool                m_enableAA;
+    bool				m_enableVolume;
+    bool				m_enableFilters;
 
-  /****************/
-  float m_starScaleLog;
-  float m_starAlpha;
+    /****************/
+    float m_starScaleLog;
+    float m_starAlpha;
 
-  float m_dmScaleLog;
-  float m_dmAlpha;
+    float m_dmScaleLog;
+    float m_dmAlpha;
 
-  float m_spriteSizeMaxLog;
-  float m_spriteAlpha;
-  float m_transmission;
+    float m_spriteSizeMaxLog;
+    float m_spriteAlpha;
+    float m_transmission;
 
-  float m_imageBrightnessPre;
-  float m_gammaPre;
-  float m_imageBrightnessPost;
-  float m_gammaPost;
+    float m_imageBrightnessPre;
+    float m_gammaPre;
+    float m_imageBrightnessPost;
+    float m_gammaPost;
 
-  /****************/
+    /****************/
 
-  float m_overBright;
-  float m_overBrightThreshold;
-  float m_imageBrightness;
-  int m_blurPasses;
-  float m_indirectAmount;
+    float m_overBright;
+    float m_overBrightThreshold;
+    float m_imageBrightness;
+    int m_blurPasses;
+    float m_indirectAmount;
 
-  float m_starBlurRadius;
-  float m_starPower;
-  float m_starIntensity;
-  float m_starThreshold;
+    float m_starBlurRadius;
+    float m_starPower;
+    float m_starIntensity;
+    float m_starThreshold;
 
-  float m_glowRadius;
-  float m_glowIntensity;
-  float m_gamma;
+    float m_glowRadius;
+    float m_glowIntensity;
+    float m_gamma;
 
-  float m_sourceIntensity;
-  float m_flareIntensity;
-  float m_flareThreshold;
-  float m_flareRadius;
+    float m_sourceIntensity;
+    float m_flareIntensity;
+    float m_flareThreshold;
+    float m_flareRadius;
 
-  float m_ageScale;
-  float m_fog;
-  float m_skyboxBrightness;
+    float m_ageScale;
+    float m_fog;
+    float m_skyboxBrightness;
 
-  float m_volumeAlpha;
-  nv::vec3f m_volumeColor;
-  float m_noiseFreq;
-  float m_noiseAmp;
-  float m_volumeIndirect;
-  float m_volumeStart;
-  float m_volumeWidth;
+    float m_volumeAlpha;
+    nv::vec3f m_volumeColor;
+    float m_noiseFreq;
+    float m_noiseAmp;
+    float m_volumeIndirect;
+    float m_volumeStart;
+    float m_volumeWidth;
 
-  bool m_cullDarkMatter;
-  SmokeRendererParams();
+    bool m_cullDarkMatter;
+    SmokeRendererParams();
+  public:
+    void setDomainView(const bool m) {  m_domainView = m;}
+    void setDomainViewIdx(const int idx) { m_domainViewIdx = idx; }
 };
 
 class SmokeRenderer : public SmokeRendererParams
