@@ -1413,7 +1413,7 @@ static void lCompose(
     for (int i = n; i < nsend*nrank; i++)
     {
       src[i] = make_float4(0.0f);
-      depth[i] = HUGE;
+      depth[i] = 1.0f;
     }
 
     MPI_Alltoall(src, nsend*4, MPI_FLOAT, &colorArray[0], nsend*4, MPI_FLOAT, comm);
@@ -1434,18 +1434,16 @@ static void lCompose(
           }};
       }
 
-    /* composition seems to work but depth buffer is not correct. see if depthTex is properly populated in splotchDrawSort */
+    
 #pragma omp parallel for schedule(static)
     for (int i = 0; i < nsend; i++)
     {
       const int stride = i*nrank;
-#if 1
       std::sort(
           colorArrayDepth.begin() + stride, 
           colorArrayDepth.begin() + stride + nrank,
           [](const vec5 &a, const vec5 &b){ return a[4] < b[4]; }
           );
-#endif
 
       float4 _dst = make_float4(0.0);
       for (int p = 0; p < nrank; p++)
@@ -1478,7 +1476,7 @@ static void lCompose(
         dst.x *= f;
         dst.y *= f;
         dst.z *= f;
-#elif 1
+#elif 0
         const float4 src = _src;
         const float4 dst = _dst;
 
@@ -1491,15 +1489,15 @@ static void lCompose(
         _dst.z = (src.z*src.w + dst.z*dst.w*g) * f;
 
 #else
-        src.x *= 1.0f - dst.w;
-        src.y *= 1.0f - dst.w;
-        src.z *= 1.0f - dst.w;
-        src.w *= 1.0f - dst.w;
+        _src.x *= 1.0f - _dst.w;
+        _src.y *= 1.0f - _dst.w;
+        _src.z *= 1.0f - _dst.w;
+        _src.w *= 1.0f - _dst.w;
 
-        dst.x += src.x;
-        dst.y += src.y;
-        dst.z += src.z;
-        dst.w += src.w;
+        _dst.x += _src.x;
+        _dst.y += _src.y;
+        _dst.z += _src.z;
+        _dst.w += _src.w;
 #endif
 
 #if 0
@@ -2191,8 +2189,8 @@ void SmokeRenderer::createBuffers(int w, int h)
   m_imageTex[3] = createTexture(GL_TEXTURE_2D, m_imageW, m_imageH, format, GL_RGBA);
   m_imageTex[4] = createTexture(GL_TEXTURE_2D, m_imageW, m_imageH, format, GL_RGBA);
 
-  m_depthTex = createTexture(GL_TEXTURE_2D, m_imageW, m_imageH, GL_DEPTH_COMPONENT24_ARB, GL_DEPTH_COMPONENT);
-//  m_depthTex = createTexture(GL_TEXTURE_2D, m_imageW, m_imageH, GL_DEPTH_COMPONENT32_ARB, GL_DEPTH_COMPONENT);
+//  m_depthTex = createTexture(GL_TEXTURE_2D, m_imageW, m_imageH, GL_DEPTH_COMPONENT24_ARB, GL_DEPTH_COMPONENT);
+  m_depthTex = createTexture(GL_TEXTURE_2D, m_imageW, m_imageH, GL_DEPTH_COMPONENT32_ARB, GL_DEPTH_COMPONENT);
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
 
