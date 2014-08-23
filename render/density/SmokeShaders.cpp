@@ -873,7 +873,7 @@ STRINGIFY(
       s *= vdist[0];
 //     s = min(s,256);
       float sx = s / resx;
-      float sy = s / resy;
+      float sy = s / resx;
       s = min(s, 0.2);
 
       vec4 pos = vmvp[0] * vpos[0];
@@ -882,15 +882,15 @@ STRINGIFY(
       EmitVertex();
 
       gl_Position   = (pos + vec4(+sx,-sy,0,0));
-      texCrd = vec2(1,-1);
+      texCrd = vec2(1,0);
       EmitVertex();
 
       gl_Position   = (pos + vec4(-sx,+sy,0,0));
-      texCrd = vec2(-1,+1);
+      texCrd = vec2(0,1);
       EmitVertex();
 
       gl_Position   = (pos + vec4(-sx,-sy,0,0));
-      texCrd = vec2(-1,-1);
+      texCrd = vec2(0,0);
       EmitVertex();
       
       EndPrimitive();
