@@ -395,9 +395,9 @@ class Demo
   {
     assert(rank < nrank);
     m_windowDims = make_int2(WINX, WINY);
-    m_cameraTrans = make_float3(0, -2, -100);
+    m_cameraTrans = make_float3(0, 0, -100);
     m_cameraTransLag = m_cameraTrans;
-    m_cameraRot = make_float3(0, 0, 0);
+    m_cameraRot = make_float3(0, -5.5/180.0*M_PI, 0);
     m_cameraRotLag = m_cameraRot;
     //m_cursorPos = make_float3(-41.043961, 37.102409,-42.675949);//the ogl cursor position, hardcoding it based on the treemin & max
 
@@ -422,16 +422,34 @@ class Demo
     m_renderer.setWindowSize(m_windowDims.x, m_windowDims.y);
     m_renderer.setDisplayMode(m_displayMode);
 
-    const float3 r0 = make_float3(
+    float3 r0 = make_float3(
         m_idata.getBoundBoxLow(0),
         m_idata.getBoundBoxLow(1),
         m_idata.getBoundBoxLow(2)
         );
-    const float3 r1 = make_float3(
+    float3 r1 = make_float3(
         m_idata.getBoundBoxHigh(0),
         m_idata.getBoundBoxHigh(1),
         m_idata.getBoundBoxHigh(2)
         );
+
+    float3 dr = make_float3(
+        r1.x-r0.x,
+        r1.y-r0.y,
+        r1.z-r0.z);
+
+    assert(dr.x > 0.0);
+    assert(dr.y > 0.0);
+    assert(dr.z > 0.0);
+
+    const float f = 0.01;
+    r0.x -= f*dr.x;
+    r0.y -= f*dr.y;
+    r0.z -= f*dr.z;
+    
+    r1.x += f*dr.x;
+    r1.y += f*dr.y;
+    r1.z += f*dr.z;
 
     m_renderer.setClippingPlane(0, lPlaneEquation(
           make_float3(r0.x,r0.y,r0.z),
@@ -724,7 +742,7 @@ class Demo
         //getBodyDataTime = GetTimer();
 
         moveCamera();
-#if 1
+#if 0
         m_cameraTransLag += (m_cameraTrans - m_cameraTransLag) * m_inertia;
         m_cameraRotLag += (m_cameraRot - m_cameraRotLag) * m_inertia;
 #else

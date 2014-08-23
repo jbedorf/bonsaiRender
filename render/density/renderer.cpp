@@ -1783,12 +1783,14 @@ void SmokeRenderer::splotchDrawSort()
     glVertexAttribPointer(vertexLoc , 1, GL_FLOAT, 0, 0, 0);
   }
 
+#if 1
   glEnable(GL_CLIP_DISTANCE0);
   glEnable(GL_CLIP_DISTANCE1);
   glEnable(GL_CLIP_DISTANCE2);
   glEnable(GL_CLIP_DISTANCE3);
   glEnable(GL_CLIP_DISTANCE4);
   glEnable(GL_CLIP_DISTANCE5);
+#endif
 
 
 

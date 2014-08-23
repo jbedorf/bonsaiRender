@@ -963,97 +963,6 @@ STRINGIFY(
     }
   );
 
-const char *splotchGSX = 
-"#version 150\n"
-STRINGIFY(
-    in vec4 vpos[];
-    in vec4 vcol[];
-    in float vsize[];
-    in mat4 vmodel[];
-    in mat4 vproj[];
-    in mat4 vmvp[];
-    in float vdist[];
-    void main ()
-    {
-      gl_FrontColor = vcol[0];
-      float s = vsize[0] * 0.003;
-      vec4 pos = vmodel[0] * vpos[0];
-      vec4 pos0 = vpos[0];
-
-      vec4 pos000 = pos0 + vec4(+s,+s,+s,0.0);
-      vec4 pos100 = pos0 + vec4(-s,+s,+s,0.0);
-      vec4 pos010 = pos0 + vec4(+s,-s,+s,0.0);
-      vec4 pos110 = pos0 + vec4(-s,-s,+s,0.0);
-      vec4 pos001 = pos0 + vec4(+s,+s,-s,0.0);
-      vec4 pos101 = pos0 + vec4(-s,+s,-s,0.0);
-      vec4 pos011 = pos0 + vec4(+s,-s,-s,0.0);
-      vec4 pos111 = pos0 + vec4(-s,-s,-s,0.0);
-
-      mat4 m = vmvp[0];
-
-      vec4 posP = m * pos0;
-      pos000 = m * pos000;
-      pos100 = m * pos100;
-      pos010 = m * pos010;
-      pos110 = m * pos110;
-      pos001 = m * pos001;
-      pos101 = m * pos101;
-      pos011 = m * pos011;
-      pos111 = m * pos111;
-      
-      vec2 xymin = pos000.xy;
-      vec2 xymax = pos000.xy;
-
-      xymin = min(xymin, pos000.xy);
-      xymin = min(xymin, pos100.xy);
-      xymin = min(xymin, pos010.xy);
-      xymin = min(xymin, pos110.xy);
-      xymin = min(xymin, pos001.xy);
-      xymin = min(xymin, pos101.xy);
-      xymin = min(xymin, pos011.xy);
-      xymin = min(xymin, pos111.xy);
-
-      xymax = max(xymax, pos000.xy);
-      xymax = max(xymax, pos100.xy);
-      xymax = max(xymax, pos010.xy);
-      xymax = max(xymax, pos110.xy);
-      xymax = max(xymax, pos001.xy);
-      xymax = max(xymax, pos101.xy);
-      xymax = max(xymax, pos011.xy);
-      xymax = max(xymax, pos111.xy);
-
-      vec2 s2 = xymax - xymin;
-
-
-      float l = max(s2.x, s2.y);;
-      l = min(l,0.3);
-
-      float z = posP.z;
-      
-//      gl_Position   = vproj[0]*(pos + vec4(+s,+s,0,0));
-      gl_Position = vec4(xymax.x, xymax.y, z,1.0);
-      gl_Position = vec4(posP.x+l,posP.y+l, z,1.0);
-      EmitVertex();
-
-//      gl_Position   = vproj[0]*(pos + vec4(+s,-s,0,0));
-      gl_Position = vec4(xymax.x, xymin.y, z,1.0);
-      gl_Position = vec4(posP.x+l,posP.y-l, z,1.0);
-      EmitVertex();
-
- //     gl_Position   = vproj[0]*(pos + vec4(-s,+s,0,0));
-      gl_Position = vec4(xymin.x, xymax.y, z,1.0);
-      gl_Position = vec4(posP.x-l,posP.y+l, z,1.0);
-      EmitVertex();
-
-//      gl_Position   = vproj[0]*(pos + vec4(-s,-s,0,0));
-      gl_Position = vec4(xymin.x, xymin.y, z,1.0);
-      gl_Position = vec4(posP.x-l,posP.y-l, z,1.0);
-      EmitVertex();
-      
-      EndPrimitive();
-    }
-  );
-
 const char *splotchPS = 
 //"#version 150\n"
 STRINGIFY(
@@ -1069,8 +978,8 @@ STRINGIFY(
       float type = gl_TexCoord[1].w;                                   \n
       float alpha = texture2D(spriteTex, gl_TexCoord[0].xy).x;         \n
       alpha = texture2D(spriteTex, texCrd).x;         \n
-//      alpha = 0.5f;
-//      if (alpha == 0.0f) discard;                                    \n
+//      alpha = 0.75f;
+      if (alpha == 0.0f) discard;                                    \n
       if (sorted != 0.0)                                               \n
       {                                                                \n
         alpha *= gl_Color.w*alphaScale;                                \n
