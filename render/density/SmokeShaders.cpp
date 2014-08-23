@@ -862,22 +862,30 @@ STRINGIFY(
     in mat4 vproj[];
     in mat4 vmvp[];
     in float vdist[];
+    uniform float resx;
+    uniform float resy;
+    uniform float spriteSizeMax;                              \n
     void main ()
     {
       gl_FrontColor = vcol[0];
       float s = vsize[0];
-      s = min(s,0.3);
+      s *= vdist[0];
+//     s = min(s,256);
+      float sx = s / resx;
+      float sy = s / resy;
+      s = min(s, 0.2);
+
       vec4 pos = vmvp[0] * vpos[0];
-      gl_Position   = (pos + vec4(+s,+s,0,0));
+      gl_Position   = (pos + vec4(+sx,+sy,0,0));
       EmitVertex();
 
-      gl_Position   = (pos + vec4(+s,-s,0,0));
+      gl_Position   = (pos + vec4(+sx,-sy,0,0));
       EmitVertex();
 
-      gl_Position   = (pos + vec4(-s,+s,0,0));
+      gl_Position   = (pos + vec4(-sx,+sy,0,0));
       EmitVertex();
 
-      gl_Position   = (pos + vec4(-s,-s,0,0));
+      gl_Position   = (pos + vec4(-sx,-sy,0,0));
       EmitVertex();
       
       EndPrimitive();

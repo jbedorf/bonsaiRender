@@ -1551,6 +1551,8 @@ void SmokeRenderer::splotchDraw()
   prog->bindTexture("spriteTex",  m_sphTex, GL_TEXTURE_2D, 1);
   prog->setUniform1f("alphaScale", m_spriteAlpha);
   prog->setUniform1f("transmission", m_transmission);
+  prog->setUniform1f("resx", m_imageW);
+  prog->setUniform1f("resy", m_imageH);
 
   prog->setUniform1f("sorted", 0);
 
@@ -1813,6 +1815,8 @@ void SmokeRenderer::splotchDrawSort()
   prog->bindTexture("spriteTex",  m_sphTex, GL_TEXTURE_2D, 1);
   prog->setUniform1f("alphaScale", m_spriteAlpha);
   prog->setUniform1f("transmission", m_transmission);
+  prog->setUniform1f("resx", m_imageW);
+  prog->setUniform1f("resy", m_imageH);
 
   prog->setUniform1f("sorted", 2.0);
 
@@ -1847,6 +1851,8 @@ void SmokeRenderer::splotchDrawSort()
   prog->bindTexture("spriteTex",  m_sphTex, GL_TEXTURE_2D, 1);
   prog->setUniform1f("alphaScale", m_spriteAlpha);
   prog->setUniform1f("transmission", m_transmission);
+  prog->setUniform1f("resx", m_imageW);
+  prog->setUniform1f("resy", m_imageH);
 
   prog->setUniform1f("sorted", 1.0);
 
