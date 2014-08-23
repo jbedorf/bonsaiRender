@@ -452,6 +452,14 @@ class SmokeRenderer : public SmokeRendererParams
     float  *mParticleDepths;
     uint   *mParticleIndices;
 
+    float4 m_clippingPlane[6];  
+
+  public:
+    void setClippingPlane(const int i, const float4 &plane)
+    {
+      assert(i>=0 && i<6);
+      m_clippingPlane[i] = plane;
+    }
 };
 
 #endif

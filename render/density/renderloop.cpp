@@ -332,6 +332,16 @@ void glPrintf(float x, float y, const char* format, ...)
   glutStrokePrint(x, y, buffer, font);
   va_end(args);
 }
+  
+float4 lPlaneEquation(float3 v1, float3 v2, float3 v3)
+{
+  float4 eq;
+  eq.x = (v1.y*(v2.z - v3.z)) + (v2.y*(v3.z - v1.z)) + (v3.y*(v1.z - v2.z));
+  eq.y = (v1.z*(v2.x - v3.x)) + (v2.z*(v3.x - v1.x)) + (v3.z*(v1.x - v2.x));
+  eq.z = (v1.x*(v2.y - v3.y)) + (v2.x*(v3.y - v1.y)) + (v3.x*(v1.y - v2.y));
+  eq.w = -((v1.x*((v2.y*v3.z) - (v3.y*v2.z))) + (v2.x*((v3.y*v1.z) - (v1.y*v3.z))) + (v3.x*((v1.y*v2.z) - (v2.y*v1.z))));
+  return eq;
+}
 
 // reducing to improve perf
 #define MAX_PARTICLES 10000000
@@ -341,6 +351,7 @@ class Demo
   const int rank, nrank;
   const MPI_Comm &comm;
   bool isMaster() const { return rank == 0; };
+
 
   public:
     Demo(RendererData &idata, const int _rank, const int _nrank, const MPI_Comm &_comm)
@@ -411,6 +422,55 @@ class Demo
     m_renderer.setWindowSize(m_windowDims.x, m_windowDims.y);
     m_renderer.setDisplayMode(m_displayMode);
 
+    const float3 r0 = make_float3(
+        m_idata.getBoundBoxLow(0),
+        m_idata.getBoundBoxLow(1),
+        m_idata.getBoundBoxLow(2)
+        );
+    const float3 r1 = make_float3(
+        m_idata.getBoundBoxHigh(0),
+        m_idata.getBoundBoxHigh(1),
+        m_idata.getBoundBoxHigh(2)
+        );
+
+    m_renderer.setClippingPlane(0, lPlaneEquation(
+          make_float3(r0.x,r0.y,r0.z),
+          make_float3(r0.x,r1.y,r0.z),
+          make_float3(r1.x,r1.y,r0.z)
+          ));
+
+    m_renderer.setClippingPlane(1, lPlaneEquation(
+          make_float3(r1.x,r0.y,r0.z),
+          make_float3(r1.x,r1.y,r0.z),
+          make_float3(r1.x,r1.y,r1.z)
+          ));
+    
+    m_renderer.setClippingPlane(2, lPlaneEquation(
+          make_float3(r1.x,r0.y,r1.z),
+          make_float3(r1.x,r1.y,r1.z),
+          make_float3(r0.x,r1.y,r1.z)
+          ));
+    
+    m_renderer.setClippingPlane(3, lPlaneEquation(
+          make_float3(r0.x,r0.y,r1.z),
+          make_float3(r0.x,r1.y,r1.z),
+          make_float3(r0.x,r1.y,r0.z)
+          ));
+    
+    m_renderer.setClippingPlane(4, lPlaneEquation(
+          make_float3(r1.x,r1.y,r0.z),
+          make_float3(r0.x,r1.y,r0.z),
+          make_float3(r0.x,r1.y,r1.z)
+          ));
+    
+    m_renderer.setClippingPlane(5, lPlaneEquation(
+          make_float3(r0.x,r0.y,r0.z),
+          make_float3(r1.x,r0.y,r0.z),
+          make_float3(r1.x,r0.y,r1.z)
+          ));
+
+
+
     for(int i=0; i<256; i++) m_keyDown[i] = false;
 
     initColors();
@@ -424,6 +484,10 @@ class Demo
     //    cudaEventRecord(startEvent, 0);
 
     StartTimer();
+
+
+
+
   }
 
     ~Demo() {

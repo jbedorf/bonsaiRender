@@ -63,6 +63,9 @@ class RendererData
     float _attributeMax[NPROP];
     float _attributeMinL[NPROP];
     float _attributeMaxL[NPROP];
+    
+    float xlow[3], xhigh[3];
+
 
    
     void minmaxAttributeGlb(const Attribute_t p)   
@@ -73,6 +76,7 @@ class RendererData
 
     int  getMaster() const { return 0; }
     bool isMaster() const { return getMaster() == rank; }
+
 
   public:
     RendererData(const int rank, const int nrank, const MPI_Comm &comm) : 
@@ -89,6 +93,9 @@ class RendererData
     ~RendererData()
     {
     }
+
+    float getBoundBoxLow (const int i) const {return  xlow[i];}
+    float getBoundBoxHigh(const int i) const {return xhigh[i];}
 
     int n() const { return data.size(); }
 
@@ -858,6 +865,13 @@ class RendererDataDistribute : public RendererData
       }
 #endif
       exchange_particles_alltoall_vector(xlow, xhigh);
+
+      for (int k = 0; k < 3; k++)
+      {
+        this-> xlow[k] =  xlow[rank][k];
+        this->xhigh[k] = xhigh[rank][k];
+      }
+
 
 #if 1
       {

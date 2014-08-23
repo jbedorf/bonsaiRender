@@ -1749,6 +1749,7 @@ float4 lPlaneEquation(float x1, float y1, float z1, float x2, float y2, float z2
   return eq;
 }
 #endif
+
 void SmokeRenderer::splotchDrawSort()
 {
   m_fbo->Bind();
@@ -1817,6 +1818,13 @@ void SmokeRenderer::splotchDrawSort()
   prog->setUniform1f("transmission", m_transmission);
   prog->setUniform1f("resx", m_imageW);
   prog->setUniform1f("resy", m_imageH);
+
+  prog->setUniformfv("p0", (GLfloat*)&m_clippingPlane[0], 4, 1);
+  prog->setUniformfv("p1", (GLfloat*)&m_clippingPlane[1], 4, 1);
+  prog->setUniformfv("p2", (GLfloat*)&m_clippingPlane[2], 4, 1);
+  prog->setUniformfv("p3", (GLfloat*)&m_clippingPlane[3], 4, 1);
+  prog->setUniformfv("p4", (GLfloat*)&m_clippingPlane[4], 4, 1);
+  prog->setUniformfv("p5", (GLfloat*)&m_clippingPlane[5], 4, 1);
 
   prog->setUniform1f("sorted", 2.0);
 
