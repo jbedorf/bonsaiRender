@@ -846,13 +846,45 @@ STRINGIFY(
       vpos = gl_Position;
       vpos = wpos;                                                           
       vcol = gl_FrontColor;
-      vsize = gl_PointSize;
       vsize = pointSize; //max(spriteSizeMax, pointSize / dist );   \n
+      vsize = gl_PointSize;
       vdist = dist;
     }                                                         \n
 );
 
 const char *splotchGS = 
+"#version 150\n"
+STRINGIFY(
+    in vec4 vpos[];
+    in vec4 vcol[];
+    in float vsize[];
+    in mat4 vmodel[];
+    in mat4 vproj[];
+    in mat4 vmvp[];
+    in float vdist[];
+    void main ()
+    {
+      gl_FrontColor = vcol[0];
+      float s = vsize[0];
+      s = min(s,0.3);
+      vec4 pos = vmvp[0] * vpos[0];
+      gl_Position   = (pos + vec4(+s,+s,0,0));
+      EmitVertex();
+
+      gl_Position   = (pos + vec4(+s,-s,0,0));
+      EmitVertex();
+
+      gl_Position   = (pos + vec4(-s,+s,0,0));
+      EmitVertex();
+
+      gl_Position   = (pos + vec4(-s,-s,0,0));
+      EmitVertex();
+      
+      EndPrimitive();
+    }
+  );
+
+const char *splotchGSX = 
 "#version 150\n"
 STRINGIFY(
     in vec4 vpos[];
@@ -911,22 +943,32 @@ STRINGIFY(
       xymax = max(xymax, pos011.xy);
       xymax = max(xymax, pos111.xy);
 
+      vec2 s2 = xymax - xymin;
+
+
+      float l = max(s2.x, s2.y);;
+      l = min(l,0.3);
+
       float z = posP.z;
       
 //      gl_Position   = vproj[0]*(pos + vec4(+s,+s,0,0));
       gl_Position = vec4(xymax.x, xymax.y, z,1.0);
+      gl_Position = vec4(posP.x+l,posP.y+l, z,1.0);
       EmitVertex();
 
 //      gl_Position   = vproj[0]*(pos + vec4(+s,-s,0,0));
       gl_Position = vec4(xymax.x, xymin.y, z,1.0);
+      gl_Position = vec4(posP.x+l,posP.y-l, z,1.0);
       EmitVertex();
 
  //     gl_Position   = vproj[0]*(pos + vec4(-s,+s,0,0));
       gl_Position = vec4(xymin.x, xymax.y, z,1.0);
+      gl_Position = vec4(posP.x-l,posP.y+l, z,1.0);
       EmitVertex();
 
 //      gl_Position   = vproj[0]*(pos + vec4(-s,-s,0,0));
       gl_Position = vec4(xymin.x, xymin.y, z,1.0);
+      gl_Position = vec4(posP.x-l,posP.y-l, z,1.0);
       EmitVertex();
       
       EndPrimitive();
