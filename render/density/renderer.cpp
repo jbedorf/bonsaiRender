@@ -1353,6 +1353,9 @@ void SmokeRenderer::render()
     case SPLOTCH_SORTED:
       splotchDrawSort();
       break;
+    case SPLOTCH_SORTED_ICET:
+      splotchDrawSortIceT();
+      break;
 
     case NUM_MODES:
       break;
@@ -1974,6 +1977,27 @@ void SmokeRenderer::splotchDrawSort()
   drawQuad();
   m_splotch2texProg->disable();
 }
+
+
+void SmokeRenderer::splotchDrawSortIceT()
+{
+// m_domainView ? m_domainViewIdx
+//
+
+      glDepthMask(GL_TRUE);  // write depth we need this for IceT
+      glPointSize(2.0f);
+      glEnable(GL_DEPTH_TEST);
+      glColor4f(1.0, 1.0, 1.0, 1.0f);
+      m_simpleProg->enable();
+      drawPoints(0, mNumParticles, false);
+      m_simpleProg->disable();
+      glPointSize(1.0f);
+
+//      fprintf(stderr,"Rendering \n");
+
+}
+
+
 
 // render scene depth to texture
 // (this is to ensure that particles are correctly occluded in the low-resolution render buffer)

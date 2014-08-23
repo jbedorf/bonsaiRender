@@ -13,10 +13,12 @@
 #include "RendererData.h"
 
 
+#define USE_ICET
+
 #ifdef USE_ICET
-
-
-
+  #include <IceT.h>
+  #include <IceTGL.h>
+  #include <IceTMPI.h>
 #endif
 
 template<typename T>
@@ -418,11 +420,30 @@ int main(int argc, char * argv[])
 //  rDataPtr->scaleExp(RendererData::VEL);
   
 
+#ifdef USE_ICET
+  //Setup the IceT context and communicators
+  IceTCommunicator icetComm    = icetCreateMPICommunicator(MPI_COMM_WORLD);
+  IceTContext      icetContext = icetCreateContext(icetComm);
+  icetDestroyMPICommunicator(icetComm); //Save since the comm is copied to the icetContext
+#endif
+
+
+
+
 #if 1
   initAppRenderer(argc, argv, 
       rank, nranks, comm,
       *rDataPtr,
       fullScreenMode.c_str(), stereo);
+
+#ifdef USE_ICET
+  icetGLInitialize();
+  
+  //Start the visualization
+  initAppRenderer_start();
+#endif
+
+
 #else
 
   sleep(1);

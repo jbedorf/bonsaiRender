@@ -36,6 +36,7 @@ class SmokeRendererParams
 #endif
       SPLOTCH,
       SPLOTCH_SORTED,
+      SPLOTCH_SORTED_ICET,
       NUM_MODES
     };
   protected:
@@ -270,6 +271,7 @@ class SmokeRenderer : public SmokeRendererParams
 
     void splotchDraw    ();
     void splotchDrawSort();
+    void splotchDrawSortIceT();
 
     GLuint createTexture(GLenum target, int w, int h, GLint internalformat, GLenum format, void *data = 0);
     GLuint createNoiseTexture(int w, int h, int d);

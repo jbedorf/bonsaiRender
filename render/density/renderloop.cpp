@@ -40,6 +40,14 @@
 #include <cassert>
 #include <fstream>
 
+#define USE_ICET
+#ifdef USE_ICET
+  #include <IceT.h>
+  #include <IceTGL.h>
+  #include <IceTMPI.h>
+#endif
+
+
 #include <sys/time.h>
 static inline double rtc(void)
 {
@@ -351,7 +359,7 @@ class Demo
       m_renderer(idata.n(), MAX_PARTICLES, rank, nrank, comm),
       //m_displayMode(ParticleRenderer::PARTICLE_SPRITES_COLOR),
       m_displayMode(SmokeRenderer::SPLOTCH),
-      //	    m_displayMode(SmokeRenderer::POINTS),
+      //m_displayMode(SmokeRenderer::POINTS),
       m_ox(0), m_oy(0), m_buttonState(0), m_inertia(0.2f),
       m_paused(false),
       m_renderingEnabled(true),
@@ -681,7 +689,6 @@ class Demo
         m_cameraRotLag.y   = cameraTemp[4];
         m_cameraRotLag.z   = cameraTemp[5];
         m_cameraRoll       = cameraTemp[6];
-
 
 
 
@@ -1635,7 +1642,11 @@ void display()
   theDemo->display();
 
   //glutReportErrors();
-  glutSwapBuffers();
+  
+  //glutSwapBuffers();
+
+
+
   const double t1 = MPI_Wtime();
   MPI_Barrier(thisComm);
   if (thisRank == 0)
@@ -1900,6 +1911,10 @@ void idle(void)
   glutPostRedisplay();
 }
 
+
+
+
+
 void initGL(int argc, char** argv, 
     const int rank, const int nrank, const MPI_Comm &comm,
     const char *fullScreenMode, const bool stereo)
@@ -1913,7 +1928,8 @@ void initGL(int argc, char** argv,
     glutInitDisplayMode(GLUT_RGBA | GLUT_DEPTH | GLUT_STEREO |GLUT_DOUBLE);
   }
   else
-    glutInitDisplayMode(GLUT_RGBA | GLUT_DEPTH | GLUT_DOUBLE);
+    glutInitDisplayMode(GLUT_RGBA | GLUT_DEPTH | GLUT_DOUBLE | GLUT_ALPHA);
+    //glutInitDisplayMode(GLUT_RGBA | GLUT_DEPTH | GLUT_DOUBLE);
 
   if (fullScreenMode[0]) {
     printf("fullScreenMode: %s\n", fullScreenMode);
@@ -1943,14 +1959,15 @@ void initGL(int argc, char** argv,
     ::exit(-1);
   }
 
-  glutDisplayFunc(display);
   glutReshapeFunc(reshape);
   glutMouseFunc(mouse);
   glutMotionFunc(motion);
   glutKeyboardFunc(key);
   glutKeyboardUpFunc(keyUp);
   glutSpecialFunc(special);
-  glutIdleFunc(idle);
+  
+  //glutIdleFunc(idle);
+  //glutDisplayFunc(display);
 
   glutIgnoreKeyRepeat(GL_TRUE);
 
@@ -1990,7 +2007,85 @@ void initGL(int argc, char** argv,
   //  checkGLErrors("initGL");
 
   atexit(onexit);
+
 }
+
+void initIceT()
+{
+
+  if(theDemo->m_displayMode == 3)
+  //if(1)
+  {
+	  fprintf(stderr,"Setting up IceT \n");
+	  IceTInt rank, nProc;
+	  icetGetIntegerv(ICET_RANK, &rank);
+	  icetGetIntegerv(ICET_NUM_PROCESSES, &nProc);
+
+	  glClearColor(0.0, 0.0, 0.0, 1.0);
+
+	  icetGLDrawCallback(display); //Calls our display func
+
+	  float maxDim = -1;
+	  float minDim = 10e10f;
+	  maxDim = std::max(theDemo->m_idata.xmax(), std::max(theDemo->m_idata.ymax(), std::max(maxDim, theDemo->m_idata.zmax())));
+	  minDim = std::min(theDemo->m_idata.xmin(), std::min(theDemo->m_idata.ymin(), std::min(minDim, theDemo->m_idata.zmin())));
+
+
+	  //Set the bounding box, xmin,xmax,ymin,ymax,zmin,zmax
+	  icetBoundingBoxf(minDim,
+			   maxDim,
+			   minDim,
+			   maxDim,
+			   minDim,
+			   maxDim);
+
+	  //Setup a single tile
+	  icetResetTiles();
+	  icetAddTile(0, 0, WINX, WINY, 0);
+
+	  //icetStrategy(ICET_STRATEGY_REDUCE);
+	  icetStrategy(ICET_STRATEGY_SEQUENTIAL);
+
+#if 0
+	  //Use the below if we use Volume rendering
+	  //TODO figure out why we get artifacts
+	  icetCompositeMode(ICET_COMPOSITE_MODE_BLEND);
+	  icetSetColorFormat(ICET_IMAGE_COLOR_RGBA_UBYTE);
+	  icetSetDepthFormat(ICET_IMAGE_DEPTH_NONE);
+	  
+	   icetEnable(ICET_ORDERED_COMPOSITE);
+	//   int order[] = {1,0};
+	//   icetCompositeOrder(order);
+#endif
+	  //Setup the projection matrix
+  }
+}
+
+void DoFrame()
+{
+  int tempMode = (int) theDemo->m_displayMode;
+  MPI_Bcast(&tempMode, 1, MPI_INT, 0, MPI_COMM_WORLD);
+  theDemo->m_displayMode = (SmokeRendererParams::DisplayMode)tempMode;
+  theDemo->m_renderer.setDisplayMode(theDemo->m_displayMode);
+
+
+if(theDemo->m_displayMode == 3)
+// if(1)
+{
+  initIceT();
+  icetGLDrawFrame();
+}
+else
+{
+  display();
+}
+ 
+  glutSwapBuffers();
+
+  fprintf(stderr,"RenderMode: %d \n", theDemo->m_displayMode);
+
+}
+
 
 
 void initAppRenderer(int argc, char** argv, 
@@ -2007,5 +2102,19 @@ void initAppRenderer(int argc, char** argv,
   theDemo = new Demo(idata, rank, nrank, comm);
   if (stereo)
     theDemo->toggleStereo(); //SV assuming stereo is set to disable by default.
+  //glutMainLoop();
+}
+
+void initAppRenderer_start()
+{
+  glutDisplayFunc(initIceT);
+  glutIdleFunc(DoFrame);
+  
+  //glutIdleFunc(idle);
+  //glutDisplayFunc(display);
+    
   glutMainLoop();
 }
+
+
+
