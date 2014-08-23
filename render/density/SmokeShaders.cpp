@@ -845,7 +845,7 @@ STRINGIFY(
       vpos = wpos;                                                           
       vcol = gl_FrontColor;
       vsize = gl_PointSize;
-      vsize = max(spriteSizeMax, pointSize / dist);   \n
+      vsize = max(spriteSizeMax, pointSize / dist );   \n
       vdist = dist;
     }                                                         \n
 );
