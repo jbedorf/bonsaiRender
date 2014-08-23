@@ -815,9 +815,6 @@ STRINGIFY(
       vec4 wpos = vec4(gl_Vertex.xyz, 1.0);                   \n
       float type = gl_Color.w;                                \n
       gl_Position = gl_ModelViewProjectionMatrix * wpos;      \n
-      vmodel = gl_ModelViewMatrix;
-      vproj = gl_ProjectionMatrix;                   \n
-      vmvp = gl_ModelViewProjectionMatrix;
                                                               \n
       // calculate window-space point size                    \n
       vec4 eyeSpacePos = gl_ModelViewMatrix * wpos;           \n
@@ -843,12 +840,14 @@ STRINGIFY(
       if (sorted == 0.0) col *= 1.0/255;                      \n
       gl_PointSize  = max(spriteSizeMax, pointSize / dist);   \n
       gl_FrontColor = vec4(col, alpha);                       \n
-      vpos = gl_Position;
-      vpos = wpos;                                                           
-      vcol = gl_FrontColor;
-      vsize = pointSize; //max(spriteSizeMax, pointSize / dist );   \n
-      vsize = gl_PointSize;
-      vdist = dist;
+                                                              \n
+      vpos   = wpos;                                          \n
+      vcol   = gl_FrontColor;                                 \n
+      vsize  = gl_PointSize;                                  \n
+      vdist  = dist;                                          \n
+      vmodel = gl_ModelViewMatrix;                            \n
+      vproj  = gl_ProjectionMatrix;                           \n
+      vmvp   = gl_ModelViewProjectionMatrix;                  \n
     }                                                         \n
 );
 
@@ -864,17 +863,22 @@ STRINGIFY(
     in float vdist[];
     uniform float resx;
     uniform float resy;
-    uniform float spriteSizeMax;                              \n
+    uniform vec4 p0;
+    uniform vec4 p1;
+    uniform vec4 p2;
+    uniform vec4 p3;
+    uniform vec4 p4;
+    uniform vec4 p5;
     out vec2 texCrd;
     void main ()
     {
       gl_FrontColor = vcol[0];
       float s = vsize[0];
       s *= vdist[0];
-//     s = min(s,256);
       float sx = s / resx;
       float sy = s / resx;
       s = min(s, 0.2);
+
 
       vec4 pos = vmvp[0] * vpos[0];
       gl_Position   = (pos + vec4(+sx,+sy,0,0));
