@@ -893,6 +893,9 @@ STRINGIFY(
 
       mat4 invm = transpose(inverse(vmvp[0]));
 
+//      vec4 plo = vec4(1,0,0,0);
+ //     vec4 pl = invm * plo;
+
       vec4 p0 = invm*p0o;
       vec4 p1 = invm*p1o;
       vec4 p2 = invm*p2o;
@@ -908,28 +911,52 @@ STRINGIFY(
       vec4 v2 = pos + vec4(+sx,+sy,0,0);
       vec4 v3 = pos + vec4(+sx,-sy,0,0);
 
-      sx *= 2.0f;
-      sy *= 2.0f;
-      float f0 = vtx(v0,vec2(0,+sy), p0,p1,p2,p3,p4,p5);
-      float f1 = vtx(v1,vec2(+sx,0), p0,p1,p2,p3,p4,p5);
-      float f2 = vtx(v2,vec2(0,-sy), p0,p1,p2,p3,p4,p5);
-      float f3 = vtx(v3,vec2(-sx,0), p0,p1,p2,p3,p4,p5);
+//      sx *= 2.0f;
+ //     sy *= 2.0f;
+  //    float f0 = vtx(v0,vec2(0,+sy), p0,p1,p2,p3,p4,p5);
+   //   float f1 = vtx(v1,vec2(+sx,0), p0,p1,p2,p3,p4,p5);
+    //  float f2 = vtx(v2,vec2(0,-sy), p0,p1,p2,p3,p4,p5);
+     // float f3 = vtx(v3,vec2(-sx,0), p0,p1,p2,p3,p4,p5);
 
 
       gl_Position = v0;
       texCrd      = vec2(0,0);
+      gl_ClipDistance[0] = -dot(gl_Position,p0);
+      gl_ClipDistance[1] = -dot(gl_Position,p1);
+      gl_ClipDistance[2] = -dot(gl_Position,p2);
+      gl_ClipDistance[3] = -dot(gl_Position,p3);
+      gl_ClipDistance[4] = -dot(gl_Position,p4);
+      gl_ClipDistance[5] = -dot(gl_Position,p5);
       EmitVertex();
 
       gl_Position = v1;
       texCrd = vec2(0,1);
+      gl_ClipDistance[0] = -dot(gl_Position,p0);
+      gl_ClipDistance[1] = -dot(gl_Position,p1);
+      gl_ClipDistance[2] = -dot(gl_Position,p2);
+      gl_ClipDistance[3] = -dot(gl_Position,p3);
+      gl_ClipDistance[4] = -dot(gl_Position,p4);
+      gl_ClipDistance[5] = -dot(gl_Position,p5);
       EmitVertex();
 
       gl_Position = v3;
       texCrd = vec2(1,0);
+      gl_ClipDistance[0] = -dot(gl_Position,p0);
+      gl_ClipDistance[1] = -dot(gl_Position,p1);
+      gl_ClipDistance[2] = -dot(gl_Position,p2);
+      gl_ClipDistance[3] = -dot(gl_Position,p3);
+      gl_ClipDistance[4] = -dot(gl_Position,p4);
+      gl_ClipDistance[5] = -dot(gl_Position,p5);
       EmitVertex();
 
       gl_Position = v2;
       texCrd = vec2(1,1);
+      gl_ClipDistance[0] = -dot(gl_Position,p0);
+      gl_ClipDistance[1] = -dot(gl_Position,p1);
+      gl_ClipDistance[2] = -dot(gl_Position,p2);
+      gl_ClipDistance[3] = -dot(gl_Position,p3);
+      gl_ClipDistance[4] = -dot(gl_Position,p4);
+      gl_ClipDistance[5] = -dot(gl_Position,p5);
       EmitVertex();
       
       EndPrimitive();

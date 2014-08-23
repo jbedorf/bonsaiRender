@@ -333,14 +333,14 @@ void glPrintf(float x, float y, const char* format, ...)
   va_end(args);
 }
   
-float4 lPlaneEquation(float3 v1, float3 v2, float3 v3)
+float4 lPlaneEquation(float3 v0, float3 v1, float3 v2)
 {
-  float4 eq;
-  eq.x = (v1.y*(v2.z - v3.z)) + (v2.y*(v3.z - v1.z)) + (v3.y*(v1.z - v2.z));
-  eq.y = (v1.z*(v2.x - v3.x)) + (v2.z*(v3.x - v1.x)) + (v3.z*(v1.x - v2.x));
-  eq.z = (v1.x*(v2.y - v3.y)) + (v2.x*(v3.y - v1.y)) + (v3.x*(v1.y - v2.y));
-  eq.w = -((v1.x*((v2.y*v3.z) - (v3.y*v2.z))) + (v2.x*((v3.y*v1.z) - (v1.y*v3.z))) + (v3.x*((v1.y*v2.z) - (v2.y*v1.z))));
-  return eq;
+  const float3 v01 = make_float3(v2.x-v1.x, v2.y-v1.y, v2.z-v1.z);
+  const float3 v02 = make_float3(v0.x-v1.x, v0.y-v1.y, v0.z-v1.z);
+  const float3 n   =  normalize(cross(v01,v02));
+  const float  p   = -dot(n,v1);
+
+  return make_float4(n.x, n.y, n.z, p);
 }
 
 // reducing to improve perf
