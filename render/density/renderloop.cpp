@@ -742,7 +742,7 @@ class Demo
         //getBodyDataTime = GetTimer();
 
         moveCamera();
-#if 0
+#if 1
         m_cameraTransLag += (m_cameraTrans - m_cameraTransLag) * m_inertia;
         m_cameraRotLag += (m_cameraRot - m_cameraRotLag) * m_inertia;
 #else
