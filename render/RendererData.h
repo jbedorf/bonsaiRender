@@ -791,7 +791,7 @@ class RendererDataDistribute : public RendererData
       for(int i=0; i<nbody; i++)
       {
         boxes.clear();
-        which_boxes(vector3{{data[i].posx,data[i].posy,data[i].posz}}, 2.0*data[i].attribute[Attribute_t::H], xlow, xhigh, boxes);
+        which_boxes(vector3{{data[i].posx,data[i].posy,data[i].posz}}, 1.1*data[i].attribute[Attribute_t::H], xlow, xhigh, boxes);
 //        which_boxes(vector3{{data[i].posx,data[i].posy,data[i].posz}}, 0, xlow, xhigh, boxes);
         assert(!boxes.empty());
         for (auto ibox : boxes)
