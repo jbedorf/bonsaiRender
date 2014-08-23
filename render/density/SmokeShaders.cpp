@@ -865,6 +865,7 @@ STRINGIFY(
     uniform float resx;
     uniform float resy;
     uniform float spriteSizeMax;                              \n
+    out vec2 texCrd;
     void main ()
     {
       gl_FrontColor = vcol[0];
@@ -877,15 +878,19 @@ STRINGIFY(
 
       vec4 pos = vmvp[0] * vpos[0];
       gl_Position   = (pos + vec4(+sx,+sy,0,0));
+      texCrd = vec2(1,1);
       EmitVertex();
 
       gl_Position   = (pos + vec4(+sx,-sy,0,0));
+      texCrd = vec2(1,-1);
       EmitVertex();
 
       gl_Position   = (pos + vec4(-sx,+sy,0,0));
+      texCrd = vec2(-1,+1);
       EmitVertex();
 
       gl_Position   = (pos + vec4(-sx,-sy,0,0));
+      texCrd = vec2(-1,-1);
       EmitVertex();
       
       EndPrimitive();
@@ -992,11 +997,13 @@ STRINGIFY(
     uniform float alphaScale;                                          \n
     uniform float transmission;                                        \n
     uniform float sorted;                                              \n
+    in varying vec2 texCrd;
     void main()                                                        \n
     {                                                                  \n
       float type = gl_TexCoord[1].w;                                   \n
       float alpha = texture2D(spriteTex, gl_TexCoord[0].xy).x;         \n
-      alpha = 0.5f;
+      alpha = texture2D(spriteTex, texCrd).x;         \n
+//      alpha = 0.5f;
 //      if (alpha == 0.0f) discard;                                    \n
       if (sorted != 0.0)                                               \n
       {                                                                \n
