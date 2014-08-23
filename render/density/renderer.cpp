@@ -1819,12 +1819,12 @@ void SmokeRenderer::splotchDrawSort()
   prog->setUniform1f("resx", m_imageW);
   prog->setUniform1f("resy", m_imageH);
 
-  prog->setUniformfv("p0", (GLfloat*)&m_clippingPlane[0], 4, 1);
-  prog->setUniformfv("p1", (GLfloat*)&m_clippingPlane[1], 4, 1);
-  prog->setUniformfv("p2", (GLfloat*)&m_clippingPlane[2], 4, 1);
-  prog->setUniformfv("p3", (GLfloat*)&m_clippingPlane[3], 4, 1);
-  prog->setUniformfv("p4", (GLfloat*)&m_clippingPlane[4], 4, 1);
-  prog->setUniformfv("p5", (GLfloat*)&m_clippingPlane[5], 4, 1);
+  prog->setUniformfv("p0o", (GLfloat*)&m_clippingPlane[0], 4, 1);
+  prog->setUniformfv("p1o", (GLfloat*)&m_clippingPlane[1], 4, 1);
+  prog->setUniformfv("p2o", (GLfloat*)&m_clippingPlane[2], 4, 1);
+  prog->setUniformfv("p3o", (GLfloat*)&m_clippingPlane[3], 4, 1);
+  prog->setUniformfv("p4o", (GLfloat*)&m_clippingPlane[4], 4, 1);
+  prog->setUniformfv("p5o", (GLfloat*)&m_clippingPlane[5], 4, 1);
 
   prog->setUniform1f("sorted", 2.0);
 

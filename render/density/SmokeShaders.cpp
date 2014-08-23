@@ -863,13 +863,25 @@ STRINGIFY(
     in float vdist[];
     uniform float resx;
     uniform float resy;
-    uniform vec4 p0;
-    uniform vec4 p1;
-    uniform vec4 p2;
-    uniform vec4 p3;
-    uniform vec4 p4;
-    uniform vec4 p5;
+    uniform vec4 p0o;
+    uniform vec4 p1o;
+    uniform vec4 p2o;
+    uniform vec4 p3o;
+    uniform vec4 p4o;
+    uniform vec4 p5o;
     out vec2 texCrd;
+
+    float vtx(vec4 v, vec2 dv,
+      vec4 p0,
+      vec4 p1,
+      vec4 p2,
+      vec4 p3,
+      vec4 p4,
+      vec4 p5)
+    {
+      return 1.0f;
+    }
+
     void main ()
     {
       gl_FrontColor = vcol[0];
@@ -879,22 +891,45 @@ STRINGIFY(
       float sy = s / resx;
       s = min(s, 0.2);
 
+      mat4 invm = transpose(inverse(vmvp[0]));
+
+      vec4 p0 = invm*p0o;
+      vec4 p1 = invm*p1o;
+      vec4 p2 = invm*p2o;
+      vec4 p3 = invm*p3o;
+      vec4 p4 = invm*p4o;
+      vec4 p5 = invm*p5o;
+
 
       vec4 pos = vmvp[0] * vpos[0];
-      gl_Position   = (pos + vec4(+sx,+sy,0,0));
-      texCrd = vec2(1,1);
+
+      vec4 v0 = pos + vec4(-sx,-sy,0,0);
+      vec4 v1 = pos + vec4(-sx,+sy,0,0);
+      vec4 v2 = pos + vec4(+sx,+sy,0,0);
+      vec4 v3 = pos + vec4(+sx,-sy,0,0);
+
+      sx *= 2.0f;
+      sy *= 2.0f;
+      float f0 = vtx(v0,vec2(0,+sy), p0,p1,p2,p3,p4,p5);
+      float f1 = vtx(v1,vec2(+sx,0), p0,p1,p2,p3,p4,p5);
+      float f2 = vtx(v2,vec2(0,-sy), p0,p1,p2,p3,p4,p5);
+      float f3 = vtx(v3,vec2(-sx,0), p0,p1,p2,p3,p4,p5);
+
+
+      gl_Position = v0;
+      texCrd      = vec2(0,0);
       EmitVertex();
 
-      gl_Position   = (pos + vec4(+sx,-sy,0,0));
-      texCrd = vec2(1,0);
-      EmitVertex();
-
-      gl_Position   = (pos + vec4(-sx,+sy,0,0));
+      gl_Position = v1;
       texCrd = vec2(0,1);
       EmitVertex();
 
-      gl_Position   = (pos + vec4(-sx,-sy,0,0));
-      texCrd = vec2(0,0);
+      gl_Position = v3;
+      texCrd = vec2(1,0);
+      EmitVertex();
+
+      gl_Position = v2;
+      texCrd = vec2(1,1);
       EmitVertex();
       
       EndPrimitive();
