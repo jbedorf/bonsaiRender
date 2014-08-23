@@ -647,6 +647,23 @@ class RendererDataDistribute : public RendererData
 
       return p;
     }
+    
+    inline void which_boxes(
+        const vector3 &pos,
+        const float h,
+        const vector3 xlow[],
+        const vector3 xhigh[],
+        std::vector<int> &boxes)
+    {
+      for (int p = 0; p < nrank; p++)
+      {
+        if (
+            pos[0]+h >= xlow[p][0]  && pos[0]-h <= xhigh[p][0] &&
+            pos[1]+h >= xlow[p][1]  && pos[1]-h <= xhigh[p][1] &&
+            pos[2]+h >= xlow[p][2]  && pos[2]-h <= xhigh[p][2])
+          boxes.push_back(p);
+      }
+    }
 
     void alltoallv(std::vector<particle_t> psend[], std::vector<particle_t> precv[])
     {
@@ -740,6 +757,7 @@ class RendererDataDistribute : public RendererData
         precv[p].clear();
       }
 
+#if 0
       for(int i=0; i<nbody; i++)
       {
         int ibox = which_box(vector3{{data[i].posx,data[i].posy,data[i].posz}}, xlow, xhigh);
@@ -767,6 +785,19 @@ class RendererDataDistribute : public RendererData
           psend[ibox].push_back(data[i]);
         }
       }
+#else
+      std::vector<int> boxes;
+      boxes.reserve(nrank);
+      for(int i=0; i<nbody; i++)
+      {
+        boxes.clear();
+        which_boxes(vector3{{data[i].posx,data[i].posy,data[i].posz}}, 2.0*data[i].attribute[Attribute_t::H], xlow, xhigh, boxes);
+//        which_boxes(vector3{{data[i].posx,data[i].posy,data[i].posz}}, 0, xlow, xhigh, boxes);
+        assert(!boxes.empty());
+        for (auto ibox : boxes)
+          psend[ibox].push_back(data[i]);
+      }
+#endif
 
       double dtime = 1.e9;
       {
@@ -777,13 +808,15 @@ class RendererDataDistribute : public RendererData
         if (isMaster())
           fprintf(stderr, "alltoallv= %g sec \n", t1-t0);
       }
-      
+     
+#if 0 
       {
         assert(precv[rank].size() == precv[rank].size());
         for(int p=0; p<nrank; p++)
           for (int i = 0; i < (int)precv[p].size(); i++)
             assert(boundary.isinbox(vector3{{precv[p][i].posx, precv[p][i].posy, precv[p][i].posz}}));
       }
+#endif
 
 
       assert(precv[rank].size() == psend[rank].size());
@@ -873,7 +906,7 @@ class RendererDataDistribute : public RendererData
       }
 
 
-#if 1
+#if 0
       {
         const int nbody = data.size();
         Boundary boundary(xlow[rank], xhigh[rank]);
