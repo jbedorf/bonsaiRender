@@ -214,11 +214,14 @@ SmokeRenderer::SmokeRenderer(int numParticles, int maxParticles, const int _rank
 
   m_skyboxProg = new GLSLProgram(skyboxVS, skyboxPS);
 
-//  m_splotchProg = new GLSLProgram(splotchVS, splotchPS);
+#if 0
+  m_splotchProg = new GLSLProgram(splotchVS, splotchPS);
+#else
   m_splotchProg = new GLSLProgram(splotchVS, splotchGS, splotchPS,
 //      GL_POINTS, GL_POINTS
       GL_POINTS, GL_TRIANGLE_STRIP
       );
+#endif
   m_splotch2texProg = new GLSLProgram(passThruVS, splotch2texPS);
 
   glClampColorARB(GL_CLAMP_VERTEX_COLOR_ARB, GL_FALSE);

@@ -814,7 +814,8 @@ STRINGIFY(
       vec4 wpos = vec4(gl_Vertex.xyz, 1.0);                   \n
       float type = gl_Color.w;                                \n
       gl_Position = gl_ModelViewProjectionMatrix * wpos;      \n
-      vproj = gl_ModelViewProjectionMatrix;                   \n
+      vmodel = gl_ModelViewMatrix;
+      vproj = gl_ProjectionMatrix;                   \n
                                                               \n
       // calculate window-space point size                    \n
       vec4 eyeSpacePos = gl_ModelViewMatrix * wpos;           \n
@@ -841,9 +842,10 @@ STRINGIFY(
       gl_PointSize  = max(spriteSizeMax, pointSize / dist);   \n
       gl_FrontColor = vec4(col, alpha);                       \n
       vpos = gl_Position;
-//      vpos = wpos;                                                           
+      vpos = wpos;                                                           
       vcol = gl_FrontColor;
       vsize = gl_PointSize;
+      vsize = max(spriteSizeMax, pointSize / dist);   \n
       vdist = dist;
     }                                                         \n
 );
@@ -854,23 +856,25 @@ STRINGIFY(
     in vec4 vpos[];
     in vec4 vcol[];
     in float vsize[];
+    in mat4 vmodel[];
     in mat4 vproj[];
     in float vdist[];
     void main ()
     {
       gl_FrontColor = vcol[0];
       float s = vsize[0] * 0.003;
+      vec4 pos = vmodel[0] * vpos[0];
       
-      gl_Position   = vpos[0] + vec4(+s,+s,0,0);
+      gl_Position   = vproj[0]*(pos + vec4(+s,+s,0,0));
       EmitVertex();
 
-      gl_Position   = vpos[0] + vec4(+s,-s,0,0);
+      gl_Position   = vproj[0]*(pos + vec4(+s,-s,0,0));
       EmitVertex();
 
-      gl_Position   = vpos[0] + vec4(-s,+s,0,0);
+      gl_Position   = vproj[0]*(pos + vec4(-s,+s,0,0));
       EmitVertex();
 
-      gl_Position   = vpos[0] + vec4(-s,-s,0,0);
+      gl_Position   = vproj[0]*(pos + vec4(-s,-s,0,0));
       EmitVertex();
       
       EndPrimitive();
