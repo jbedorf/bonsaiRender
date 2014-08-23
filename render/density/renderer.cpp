@@ -214,7 +214,9 @@ SmokeRenderer::SmokeRenderer(int numParticles, int maxParticles, const int _rank
 
   m_skyboxProg = new GLSLProgram(skyboxVS, skyboxPS);
 
-  m_splotchProg = new GLSLProgram(splotchVS, splotchPS);
+//  m_splotchProg = new GLSLProgram(splotchVS, splotchPS);
+  m_splotchProg = new GLSLProgram(splotchVS, splotchGS, splotchPS,
+      GL_POINTS, GL_POINTS);
   m_splotch2texProg = new GLSLProgram(passThruVS, splotch2texPS);
 
   glClampColorARB(GL_CLAMP_VERTEX_COLOR_ARB, GL_FALSE);
@@ -1729,6 +1731,17 @@ void SmokeRenderer::splotchDraw()
 #endif
 }
 
+#if 0
+float4 lPlaneEquation(float x1, float y1, float z1, float x2, float y2, float z2, float x3, float y3, float z3)
+{
+  float4 eq;
+  eq.x = (y1*(z2 – z3)) + (y2*(z3 – z1)) + (y3*(z1 – z2));
+  eq.x = (z1*(x2 – x3)) + (z2*(x3 – x1)) + (z3*(x1 – x2));
+  eq.z = (x1*(y2 – y3)) + (x2*(y3 – y1)) + (x3*(y1 – y2));
+  eq.w = -((x1*((y2*z3) – (y3*z2))) + (x2*((y3*z1) – (y1*z3))) + (x3*((y1*z2) – (y2*z1))));
+  return eq;
+}
+#endif
 void SmokeRenderer::splotchDrawSort()
 {
   m_fbo->Bind();
@@ -1761,6 +1774,15 @@ void SmokeRenderer::splotchDrawSort()
     glEnableVertexAttribArray(vertexLoc);
     glVertexAttribPointer(vertexLoc , 1, GL_FLOAT, 0, 0, 0);
   }
+
+  //GLdouble eq0[] = {0.0, 0.0, 1.0, 0.0};
+ // glClipPlane(GL_CLIP_PLANE0, eq0);
+//  glEnable(GL_CLIP_PLANE0);
+//  glEnable(GL_CLIP_DISTANCE0);
+
+
+
+
 
   /******   depth buffer pass *****/
   
