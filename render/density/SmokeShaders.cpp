@@ -803,13 +803,10 @@ STRINGIFY(
     uniform float dmAlpha;                                    \n
     uniform float spriteSizeMax;                              \n
     uniform float sorted;                                     \n
-    out varying vec4 vpos;                 \n
-    out varying vec4 vcol;                  \n
-    out varying float vsize;        \n
-    out varying mat4 vmodel;
-    out varying mat4 vproj;
-    out varying mat4 vmvp;
-    out varying float vdist;
+    out varying vec4 vpos;                                    \n
+    out varying vec4 vcol;                                    \n
+    out varying mat4 vmvp;                                    \n
+    out varying float vsize;                                  \n
     void main()                                               \n
     {                                                         \n
       vec4 wpos = vec4(gl_Vertex.xyz, 1.0);                   \n
@@ -843,10 +840,7 @@ STRINGIFY(
                                                               \n
       vpos   = wpos;                                          \n
       vcol   = gl_FrontColor;                                 \n
-      vsize  = gl_PointSize;                                  \n
-      vdist  = dist;                                          \n
-      vmodel = gl_ModelViewMatrix;                            \n
-      vproj  = gl_ProjectionMatrix;                           \n
+      vsize  = gl_PointSize*dist;                             \n
       vmvp   = gl_ModelViewProjectionMatrix;                  \n
     }                                                         \n
 );
@@ -857,10 +851,7 @@ STRINGIFY(
     in vec4 vpos[];
     in vec4 vcol[];
     in float vsize[];
-    in mat4 vmodel[];
-    in mat4 vproj[];
     in mat4 vmvp[];
-    in float vdist[];
     uniform float resx;
     uniform float resy;
     uniform vec4 p0o;
@@ -871,30 +862,15 @@ STRINGIFY(
     uniform vec4 p5o;
     out vec2 texCrd;
 
-    float vtx(vec4 v, vec2 dv,
-      vec4 p0,
-      vec4 p1,
-      vec4 p2,
-      vec4 p3,
-      vec4 p4,
-      vec4 p5)
-    {
-      return 1.0f;
-    }
-
     void main ()
     {
       gl_FrontColor = vcol[0];
       float s = vsize[0];
-      s *= vdist[0];
       float sx = s / resx;
       float sy = s / resx;
       s = min(s, 0.2);
 
       mat4 invm = transpose(inverse(vmvp[0]));
-
-//      vec4 plo = vec4(1,0,0,0);
- //     vec4 pl = invm * plo;
 
       vec4 p0 = invm*p0o;
       vec4 p1 = invm*p1o;
@@ -910,13 +886,6 @@ STRINGIFY(
       vec4 v1 = pos + vec4(-sx,+sy,0,0);
       vec4 v2 = pos + vec4(+sx,+sy,0,0);
       vec4 v3 = pos + vec4(+sx,-sy,0,0);
-
-//      sx *= 2.0f;
- //     sy *= 2.0f;
-  //    float f0 = vtx(v0,vec2(0,+sy), p0,p1,p2,p3,p4,p5);
-   //   float f1 = vtx(v1,vec2(+sx,0), p0,p1,p2,p3,p4,p5);
-    //  float f2 = vtx(v2,vec2(0,-sy), p0,p1,p2,p3,p4,p5);
-     // float f3 = vtx(v3,vec2(-sx,0), p0,p1,p2,p3,p4,p5);
 
 
       gl_Position = v0;
@@ -977,9 +946,9 @@ STRINGIFY(
     {                                                                  \n
       float type = gl_TexCoord[1].w;                                   \n
       float alpha = texture2D(spriteTex, gl_TexCoord[0].xy).x;         \n
-      alpha = texture2D(spriteTex, texCrd).x;         \n
-//      alpha = 0.75f;
-      if (alpha == 0.0f) discard;                                    \n
+      alpha = texture2D(spriteTex, texCrd).x;                          \n
+//      alpha = 0.75f;                                                 \n
+      if (alpha == 0.0f) discard;                                      \n
       if (sorted != 0.0)                                               \n
       {                                                                \n
         alpha *= gl_Color.w*alphaScale;                                \n

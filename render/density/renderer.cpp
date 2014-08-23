@@ -1535,6 +1535,15 @@ void SmokeRenderer::splotchDraw()
     glVertexAttribPointer(vertexLoc , 1, GL_FLOAT, 0, 0, 0);
   }
 
+#if 1
+  glEnable(GL_CLIP_DISTANCE0);
+  glEnable(GL_CLIP_DISTANCE1);
+  glEnable(GL_CLIP_DISTANCE2);
+  glEnable(GL_CLIP_DISTANCE3);
+  glEnable(GL_CLIP_DISTANCE4);
+  glEnable(GL_CLIP_DISTANCE5);
+#endif
+
   prog->enable();
   glBindVertexArray(mSizeVao);
 
@@ -1553,6 +1562,13 @@ void SmokeRenderer::splotchDraw()
   prog->setUniform1f("transmission", m_transmission);
   prog->setUniform1f("resx", m_imageW);
   prog->setUniform1f("resy", m_imageH);
+
+  prog->setUniformfv("p0o", (GLfloat*)&m_clippingPlane[0], 4, 1);
+  prog->setUniformfv("p1o", (GLfloat*)&m_clippingPlane[1], 4, 1);
+  prog->setUniformfv("p2o", (GLfloat*)&m_clippingPlane[2], 4, 1);
+  prog->setUniformfv("p3o", (GLfloat*)&m_clippingPlane[3], 4, 1);
+  prog->setUniformfv("p4o", (GLfloat*)&m_clippingPlane[4], 4, 1);
+  prog->setUniformfv("p5o", (GLfloat*)&m_clippingPlane[5], 4, 1);
 
   prog->setUniform1f("sorted", 0);
 
