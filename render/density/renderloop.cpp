@@ -442,7 +442,7 @@ class Demo
     assert(dr.y > 0.0);
     assert(dr.z > 0.0);
 
-    const float f = 0.01;
+    const float f = 0.0;
     r0.x -= f*dr.x;
     r0.y -= f*dr.y;
     r0.z -= f*dr.z;
