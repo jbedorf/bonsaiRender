@@ -861,9 +861,9 @@ STRINGIFY(
     {
       gl_FrontColor = vcol[0];
       float s = vsize[0];
+//      s = min(s, 512);  
       float sx = s / resx;
       float sy = s / resx;
-      s = min(s, 0.2);
 
       mat4 invm = transpose(inverse(gl_ModelViewProjectionMatrix));
 
@@ -934,7 +934,6 @@ STRINGIFY(
     {                                                                  \n
       float type = gl_TexCoord[1].w;                                   \n
       float alpha = texture2D(spriteTex, gl_TexCoord[0].xy).x;         \n
-      if (alpha == 0.0f) discard;                                      \n
       if (sorted != 0.0)                                               \n
       {                                                                \n
         alpha *= gl_Color.w*alphaScale;                                \n
