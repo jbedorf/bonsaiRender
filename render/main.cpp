@@ -439,6 +439,8 @@ int main(int argc, char * argv[])
 #ifdef USE_ICET
   icetGLInitialize();
   
+  icetDiagnostics(ICET_DIAG_FULL);
+  
   //Start the visualization
   initAppRenderer_start();
 #endif

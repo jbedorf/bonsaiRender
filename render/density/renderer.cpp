@@ -31,6 +31,15 @@
 #include <GL/freeglut.h>
 #endif
 
+#define USE_ICET
+#ifdef USE_ICET
+  #include <IceT.h>
+  #include <IceTGL.h>
+  #include <IceTMPI.h>
+#endif
+
+
+
 #define COLOR_ATTENUATION 0
 #define USE_MRT 0
 #define USE_HALF_ANGLE 0
@@ -1984,6 +1993,7 @@ void SmokeRenderer::splotchDrawSortIceT()
 // m_domainView ? m_domainViewIdx
 //
 
+	#if 0
       glDepthMask(GL_TRUE);  // write depth we need this for IceT
       glPointSize(2.0f);
       glEnable(GL_DEPTH_TEST);
@@ -1994,6 +2004,133 @@ void SmokeRenderer::splotchDrawSortIceT()
       glPointSize(1.0f);
 
 //      fprintf(stderr,"Rendering \n");
+	#else
+
+ 
+	 GLenum error = icetGetError();
+	 
+	 fprintf(stderr, "IceT running error: %d  ( ok: %d ) \n",  error, error == ICET_NO_ERROR);
+	 
+	 
+  #if 0
+  m_fbo->Bind();
+  #endif
+  m_fbo->AttachTexture(GL_TEXTURE_2D, m_imageTex[0], GL_COLOR_ATTACHMENT0_EXT);
+  m_fbo->AttachTexture(GL_TEXTURE_2D, m_depthTex, GL_DEPTH_ATTACHMENT_EXT);
+  	
+
+  
+  glViewport(0, 0, m_imageW, m_imageH);
+  glClearColor(0.0, 0.0, 0.0, 0.0); 
+  glClearDepth(1.0f);
+  glDepthMask(GL_TRUE);
+  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+  glDisable(GL_BLEND);
+
+
+  const int start = 0;
+  const int count = mNumParticles;
+
+  calcVectors();
+  depthSortCopy();
+  glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);   
+
+  auto &prog = m_splotchProg;
+
+  GLuint vertexLoc = -1;
+  if (!mSizeVao && mSizeVbo)
+  {
+    glGenVertexArrays(1, &mSizeVao);
+    glBindVertexArray(mSizeVao);
+    glBindBufferARB(GL_ARRAY_BUFFER_ARB, mSizeVbo);
+    vertexLoc = prog->getAttribLoc("particleSize");
+    glEnableVertexAttribArray(vertexLoc);
+    glVertexAttribPointer(vertexLoc , 1, GL_FLOAT, 0, 0, 0);
+  }
+
+  
+  /******   depth buffer pass *****/
+  
+  glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);
+  glDepthFunc(GL_LEQUAL);
+  glDisable(GL_BLEND);
+  glEnable(GL_DEPTH_TEST);
+  glDepthMask(GL_TRUE);  // don't write depth
+
+  prog->enable();
+  glBindVertexArray(mSizeVao);
+
+  GLint viewport[4];
+  glGetIntegerv(GL_VIEWPORT, viewport);
+  // VS
+  prog->setUniform1f("spriteScale", viewport[3] / mInvFocalLen);
+  prog->setUniform1f("starScale", powf(10.0f, m_starScaleLog));
+  prog->setUniform1f("starAlpha", m_starAlpha);
+  prog->setUniform1f("dmScale",  powf(10.0f, m_dmScaleLog));
+  prog->setUniform1f("dmAlpha",  m_dmAlpha);
+  prog->setUniform1f("spriteSizeMax", powf(10.0f, m_spriteSizeMaxLog));
+  // PS
+  prog->bindTexture("spriteTex",  m_sphTex, GL_TEXTURE_2D, 1);
+  prog->setUniform1f("alphaScale", m_spriteAlpha);
+  prog->setUniform1f("transmission", m_transmission);
+
+  prog->setUniform1f("sorted", 2.0);
+
+  //glClientActiveTexture(GL_TEXTURE0);
+  glActiveTexture(GL_TEXTURE0);
+  glTexEnvi(GL_POINT_SPRITE_ARB, GL_COORD_REPLACE_ARB, GL_TRUE);
+  glEnable(GL_VERTEX_PROGRAM_POINT_SIZE_ARB);
+  glEnable(GL_POINT_SPRITE_ARB);
+
+  drawPoints(start,count,true);
+
+  prog->disable();
+
+  /***** generate image pass *****/
+ 
+  glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+  glDisable(GL_DEPTH_TEST);
+  glDepthMask(GL_FALSE);  // don't write depth
+  glEnable(GL_BLEND);
+  m_fbo->AttachTexture(GL_TEXTURE_2D, 0, GL_DEPTH_ATTACHMENT_EXT);
+
+  prog->enable();
+
+  // VS
+  prog->setUniform1f("spriteScale", viewport[3] / mInvFocalLen);
+  prog->setUniform1f("starScale", powf(10.0f, m_starScaleLog));
+  prog->setUniform1f("starAlpha", m_starAlpha);
+  prog->setUniform1f("dmScale",  powf(10.0f, m_dmScaleLog));
+  prog->setUniform1f("dmAlpha",  m_dmAlpha);
+  prog->setUniform1f("spriteSizeMax", powf(10.0f, m_spriteSizeMaxLog));
+  // PS
+  prog->bindTexture("spriteTex",  m_sphTex, GL_TEXTURE_2D, 1);
+  prog->setUniform1f("alphaScale", m_spriteAlpha);
+  prog->setUniform1f("transmission", m_transmission);
+
+  prog->setUniform1f("sorted", 1.0);
+
+  //glClientActiveTexture(GL_TEXTURE0);
+  glActiveTexture(GL_TEXTURE0);
+  glTexEnvi(GL_POINT_SPRITE_ARB, GL_COORD_REPLACE_ARB, GL_TRUE);
+  glEnable(GL_VERTEX_PROGRAM_POINT_SIZE_ARB);
+  glEnable(GL_POINT_SPRITE_ARB);
+
+  drawPoints(start,count,true);
+
+  prog->disable();
+
+
+  /********* compose ********/
+
+#if 1
+  glFlush();
+  glFinish();
+#endif
+
+#endif
+
+      glEnable(GL_DEPTH_TEST);
 
 }
 
@@ -2174,7 +2311,7 @@ void SmokeRenderer::createBuffers(int w, int h)
 
   // create texture for image buffer
   GLint format = GL_RGBA32F;
-// format = GL_RGBA16F;
+  //format = GL_RGBA16F;
   //GLint format = GL_LUMINANCE16F_ARB;
   //GLint format = GL_RGBA8;
   m_imageTex[0] = createTexture(GL_TEXTURE_2D, m_imageW, m_imageH, format, GL_RGBA);

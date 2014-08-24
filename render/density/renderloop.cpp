@@ -2024,6 +2024,9 @@ void initIceT()
 	  glClearColor(0.0, 0.0, 0.0, 1.0);
 
 	  icetGLDrawCallback(display); //Calls our display func
+	  
+	  icetSetColorFormat(ICET_IMAGE_COLOR_RGBA_FLOAT);
+	  icetSetDepthFormat(ICET_IMAGE_DEPTH_FLOAT);
 
 	  float maxDim = -1;
 	  float minDim = 10e10f;
@@ -2031,6 +2034,7 @@ void initIceT()
 	  minDim = std::min(theDemo->m_idata.xmin(), std::min(theDemo->m_idata.ymin(), std::min(minDim, theDemo->m_idata.zmin())));
 
 
+	  //TODO we have to convert this based on projection/model view matrix. Check manual, do math
 	  //Set the bounding box, xmin,xmax,ymin,ymax,zmin,zmax
 	  icetBoundingBoxf(minDim,
 			   maxDim,
@@ -2043,16 +2047,23 @@ void initIceT()
 	  icetResetTiles();
 	  icetAddTile(0, 0, WINX, WINY, 0);
 
-	  //icetStrategy(ICET_STRATEGY_REDUCE);
+	  //cetStrategy(ICET_STRATEGY_REDUCE);
 	  icetStrategy(ICET_STRATEGY_SEQUENTIAL);
 
-#if 0
+
+
+	 GLenum error = icetGetError();
+	 
+	 fprintf(stderr, "IceT setup error: %d  ( ok: %d ) \n",  error, error == ICET_NO_ERROR);
+	 
+
+#if   0
 	  //Use the below if we use Volume rendering
 	  //TODO figure out why we get artifacts
 	  icetCompositeMode(ICET_COMPOSITE_MODE_BLEND);
 	  icetSetColorFormat(ICET_IMAGE_COLOR_RGBA_UBYTE);
 	  icetSetDepthFormat(ICET_IMAGE_DEPTH_NONE);
-	  
+	//  
 	   icetEnable(ICET_ORDERED_COMPOSITE);
 	//   int order[] = {1,0};
 	//   icetCompositeOrder(order);
@@ -2074,6 +2085,7 @@ if(theDemo->m_displayMode == 3)
 {
   initIceT();
   icetGLDrawFrame();
+//	display();
 }
 else
 {
