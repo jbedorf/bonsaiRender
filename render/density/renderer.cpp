@@ -13,7 +13,7 @@
    This class renders particles using OpenGL and GLSL shaders
    */
 
-#if 1
+#if 0
 #define _SPLOTCHSPRITES
 #endif
 
