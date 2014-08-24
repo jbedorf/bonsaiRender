@@ -135,10 +135,13 @@ class SmokeRendererParams
     float m_volumeWidth;
 
     bool m_cullDarkMatter;
+    bool   m_doClipping;
     SmokeRendererParams();
   public:
     void setDomainView(const bool m) {  m_domainView = m;}
     void setDomainViewIdx(const int idx) { m_domainViewIdx = idx; }
+    void enableClipping() {m_doClipping = true;}
+    void disableClipping() {m_doClipping = false;}
 };
 
 class SmokeRenderer : public SmokeRendererParams

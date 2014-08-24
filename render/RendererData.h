@@ -63,7 +63,8 @@ class RendererData
     float _attributeMax[NPROP];
     float _attributeMinL[NPROP];
     float _attributeMaxL[NPROP];
-    
+  
+    bool  distributed; 
     float xlow[3], xhigh[3];
 
 
@@ -80,7 +81,7 @@ class RendererData
 
   public:
     RendererData(const int rank, const int nrank, const MPI_Comm &comm) : 
-      rank(rank), nrank(nrank), comm(comm)
+      rank(rank), nrank(nrank), comm(comm), distributed(false)
   {
     assert(rank < nrank);
   }
@@ -96,6 +97,7 @@ class RendererData
 
     float getBoundBoxLow (const int i) const {return  xlow[i];}
     float getBoundBoxHigh(const int i) const {return xhigh[i];}
+    bool isDistributed() const { return distributed; }
 
     int n() const { return data.size(); }
 
@@ -914,5 +916,6 @@ class RendererDataDistribute : public RendererData
           assert(boundary.isinbox(vector3{{data[i].posx,data[i].posy,data[i].posz}}));
       }
 #endif
+      distributed = true;
     }
 };

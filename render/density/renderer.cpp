@@ -113,7 +113,8 @@ SmokeRendererParams::SmokeRendererParams() :
   m_sourceIntensity(0.5f),
   m_flareRadius(50.0f),
   m_skyboxBrightness(0.5f),
-  m_cullDarkMatter(true)
+  m_cullDarkMatter(true),
+  m_doClipping(false)
 {}
 
 
@@ -1535,14 +1536,15 @@ void SmokeRenderer::splotchDraw()
     glVertexAttribPointer(vertexLoc , 1, GL_FLOAT, 0, 0, 0);
   }
 
-#if 1
-  glEnable(GL_CLIP_DISTANCE0);
-  glEnable(GL_CLIP_DISTANCE1);
-  glEnable(GL_CLIP_DISTANCE2);
-  glEnable(GL_CLIP_DISTANCE3);
-  glEnable(GL_CLIP_DISTANCE4);
-  glEnable(GL_CLIP_DISTANCE5);
-#endif
+  if (m_doClipping)
+  {
+    glEnable(GL_CLIP_DISTANCE0);
+    glEnable(GL_CLIP_DISTANCE1);
+    glEnable(GL_CLIP_DISTANCE2);
+    glEnable(GL_CLIP_DISTANCE3);
+    glEnable(GL_CLIP_DISTANCE4);
+    glEnable(GL_CLIP_DISTANCE5);
+  }
 
   prog->enable();
   glBindVertexArray(mSizeVao);
@@ -1581,6 +1583,13 @@ void SmokeRenderer::splotchDraw()
   drawPoints(start,count,false);
 
   prog->disable();
+    
+  glDisable(GL_CLIP_DISTANCE0);
+  glDisable(GL_CLIP_DISTANCE1);
+  glDisable(GL_CLIP_DISTANCE2);
+  glDisable(GL_CLIP_DISTANCE3);
+  glDisable(GL_CLIP_DISTANCE4);
+  glDisable(GL_CLIP_DISTANCE5);
 #if 1
   glFlush();
   glFinish();
@@ -1799,14 +1808,15 @@ void SmokeRenderer::splotchDrawSort()
     glVertexAttribPointer(vertexLoc , 1, GL_FLOAT, 0, 0, 0);
   }
 
-#if 1
-  glEnable(GL_CLIP_DISTANCE0);
-  glEnable(GL_CLIP_DISTANCE1);
-  glEnable(GL_CLIP_DISTANCE2);
-  glEnable(GL_CLIP_DISTANCE3);
-  glEnable(GL_CLIP_DISTANCE4);
-  glEnable(GL_CLIP_DISTANCE5);
-#endif
+  if (m_doClipping)
+  {
+    glEnable(GL_CLIP_DISTANCE0);
+    glEnable(GL_CLIP_DISTANCE1);
+    glEnable(GL_CLIP_DISTANCE2);
+    glEnable(GL_CLIP_DISTANCE3);
+    glEnable(GL_CLIP_DISTANCE4);
+    glEnable(GL_CLIP_DISTANCE5);
+  }
 
 
 
@@ -1893,6 +1903,12 @@ void SmokeRenderer::splotchDrawSort()
   prog->disable();
 
 
+  glDisable(GL_CLIP_DISTANCE0);
+  glDisable(GL_CLIP_DISTANCE1);
+  glDisable(GL_CLIP_DISTANCE2);
+  glDisable(GL_CLIP_DISTANCE3);
+  glDisable(GL_CLIP_DISTANCE4);
+  glDisable(GL_CLIP_DISTANCE5);
   /********* compose ********/
 
 #if 1

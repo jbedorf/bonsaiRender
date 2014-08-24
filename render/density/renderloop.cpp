@@ -422,70 +422,79 @@ class Demo
     m_renderer.setWindowSize(m_windowDims.x, m_windowDims.y);
     m_renderer.setDisplayMode(m_displayMode);
 
-    float3 r0 = make_float3(
-        m_idata.getBoundBoxLow(0),
-        m_idata.getBoundBoxLow(1),
-        m_idata.getBoundBoxLow(2)
-        );
-    float3 r1 = make_float3(
-        m_idata.getBoundBoxHigh(0),
-        m_idata.getBoundBoxHigh(1),
-        m_idata.getBoundBoxHigh(2)
-        );
 
-    float3 dr = make_float3(
-        r1.x-r0.x,
-        r1.y-r0.y,
-        r1.z-r0.z);
+    m_clippingEnabled = false;
+    m_renderer.disableClipping();
 
-    assert(dr.x > 0.0);
-    assert(dr.y > 0.0);
-    assert(dr.z > 0.0);
+    if (m_idata.isDistributed())
+    {
+      float3 r0 = make_float3(
+          m_idata.getBoundBoxLow(0),
+          m_idata.getBoundBoxLow(1),
+          m_idata.getBoundBoxLow(2)
+          );
+      float3 r1 = make_float3(
+          m_idata.getBoundBoxHigh(0),
+          m_idata.getBoundBoxHigh(1),
+          m_idata.getBoundBoxHigh(2)
+          );
 
-    const float f = 0.0;
-    r0.x -= f*dr.x;
-    r0.y -= f*dr.y;
-    r0.z -= f*dr.z;
-    
-    r1.x += f*dr.x;
-    r1.y += f*dr.y;
-    r1.z += f*dr.z;
+      float3 dr = make_float3(
+          r1.x-r0.x,
+          r1.y-r0.y,
+          r1.z-r0.z);
 
-    m_renderer.setClippingPlane(0, lPlaneEquation(
-          make_float3(r0.x,r0.y,r0.z),
-          make_float3(r0.x,r1.y,r0.z),
-          make_float3(r1.x,r1.y,r0.z)
-          ));
+      assert(dr.x > 0.0);
+      assert(dr.y > 0.0);
+      assert(dr.z > 0.0);
 
-    m_renderer.setClippingPlane(1, lPlaneEquation(
-          make_float3(r1.x,r0.y,r0.z),
-          make_float3(r1.x,r1.y,r0.z),
-          make_float3(r1.x,r1.y,r1.z)
-          ));
-    
-    m_renderer.setClippingPlane(2, lPlaneEquation(
-          make_float3(r1.x,r0.y,r1.z),
-          make_float3(r1.x,r1.y,r1.z),
-          make_float3(r0.x,r1.y,r1.z)
-          ));
-    
-    m_renderer.setClippingPlane(3, lPlaneEquation(
-          make_float3(r0.x,r0.y,r1.z),
-          make_float3(r0.x,r1.y,r1.z),
-          make_float3(r0.x,r1.y,r0.z)
-          ));
-    
-    m_renderer.setClippingPlane(4, lPlaneEquation(
-          make_float3(r1.x,r1.y,r0.z),
-          make_float3(r0.x,r1.y,r0.z),
-          make_float3(r0.x,r1.y,r1.z)
-          ));
-    
-    m_renderer.setClippingPlane(5, lPlaneEquation(
-          make_float3(r0.x,r0.y,r0.z),
-          make_float3(r1.x,r0.y,r0.z),
-          make_float3(r1.x,r0.y,r1.z)
-          ));
+      const float f = 0.0;
+      r0.x -= f*dr.x;
+      r0.y -= f*dr.y;
+      r0.z -= f*dr.z;
+
+      r1.x += f*dr.x;
+      r1.y += f*dr.y;
+      r1.z += f*dr.z;
+
+      m_renderer.setClippingPlane(0, lPlaneEquation(
+            make_float3(r0.x,r0.y,r0.z),
+            make_float3(r0.x,r1.y,r0.z),
+            make_float3(r1.x,r1.y,r0.z)
+            ));
+
+      m_renderer.setClippingPlane(1, lPlaneEquation(
+            make_float3(r1.x,r0.y,r0.z),
+            make_float3(r1.x,r1.y,r0.z),
+            make_float3(r1.x,r1.y,r1.z)
+            ));
+
+      m_renderer.setClippingPlane(2, lPlaneEquation(
+            make_float3(r1.x,r0.y,r1.z),
+            make_float3(r1.x,r1.y,r1.z),
+            make_float3(r0.x,r1.y,r1.z)
+            ));
+
+      m_renderer.setClippingPlane(3, lPlaneEquation(
+            make_float3(r0.x,r0.y,r1.z),
+            make_float3(r0.x,r1.y,r1.z),
+            make_float3(r0.x,r1.y,r0.z)
+            ));
+
+      m_renderer.setClippingPlane(4, lPlaneEquation(
+            make_float3(r1.x,r1.y,r0.z),
+            make_float3(r0.x,r1.y,r0.z),
+            make_float3(r0.x,r1.y,r1.z)
+            ));
+
+      m_renderer.setClippingPlane(5, lPlaneEquation(
+            make_float3(r0.x,r0.y,r0.z),
+            make_float3(r1.x,r0.y,r0.z),
+            make_float3(r1.x,r0.y,r1.z)
+            ));
+      m_renderer.enableClipping();
+      m_clippingEnabled = true;
+    }
 
 
 
@@ -532,6 +541,16 @@ class Demo
     }
 
     void toggleRendering() { m_renderingEnabled = !m_renderingEnabled; }
+    void toggleClipping()  {
+      m_clippingEnabled = !m_clippingEnabled; 
+      m_clippingEnabled &=m_idata.isDistributed();
+
+      if (m_clippingEnabled)
+        m_renderer.enableClipping();
+      else
+        m_renderer.disableClipping();
+    }
+
     void toggleStereo() {
       m_stereoEnabled = !m_stereoEnabled;
     }
@@ -1113,10 +1132,11 @@ class Demo
           m_supernova = true;
           m_overBright = 20.0f;
           break;
-#if 0
+#if 1
         case '1':
-          m_directGravitation = !m_directGravitation;
-          m_tree->setUseDirectGravity(m_directGravitation);
+          toggleClipping();
+//          m_directGravitation = !m_directGravitation;
+ //         m_tree->setUseDirectGravity(m_directGravitation);
           break;
 #endif
         case '0':
@@ -1606,6 +1626,7 @@ class Demo
     bool m_enableGlow;
     bool m_displayLightBuffer;
     bool m_renderingEnabled;
+    bool m_clippingEnabled;
     bool m_flyMode;
     bool m_directGravitation;
     bool m_displayBodiesSec;
