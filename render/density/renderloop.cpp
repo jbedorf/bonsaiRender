@@ -1368,6 +1368,14 @@ class Demo
       m_renderer.setColors((float*)colors);
       m_renderer.setSizes((float*)sizes);
       m_renderer.depthSort(pos);
+      
+      float3 boxMin = make_float3(m_idata.xminLoc(), m_idata.yminLoc(), m_idata.zminLoc());
+      float3 boxMax = make_float3(m_idata.xmaxLoc(), m_idata.ymaxLoc(), m_idata.zmaxLoc());
+      
+      m_renderer.setLocalMinMax(boxMin, boxMax);
+      
+      fprintf(stderr,"Dimensions: %f %f %f \n", boxMin.x, boxMin.y, boxMin.z);
+       fprintf(stderr,"Dimensions: %f %f %f \n", boxMax.x, boxMax.y, boxMax.z);
     }
 
 
@@ -2013,10 +2021,9 @@ void initGL(int argc, char** argv,
 void initIceT()
 {
 
-  if(theDemo->m_displayMode == 3)
-  //if(1)
+  if(theDemo->m_displayMode == 3)  
   {
-	  fprintf(stderr,"Setting up IceT \n");
+	//  fprintf(stderr,"Setting up IceT \n");
 	  IceTInt rank, nProc;
 	  icetGetIntegerv(ICET_RANK, &rank);
 	  icetGetIntegerv(ICET_NUM_PROCESSES, &nProc);
@@ -2054,10 +2061,10 @@ void initIceT()
 
 	 GLenum error = icetGetError();
 	 
-	 fprintf(stderr, "IceT setup error: %d  ( ok: %d ) \n",  error, error == ICET_NO_ERROR);
+	 //fprintf(stderr, "IceT setup error: %d  ( ok: %d ) \n",  error, error == ICET_NO_ERROR);//
 	 
 
-#if   0
+#if   1
 	  //Use the below if we use Volume rendering
 	  //TODO figure out why we get artifacts
 	  icetCompositeMode(ICET_COMPOSITE_MODE_BLEND);
@@ -2081,10 +2088,9 @@ void DoFrame()
 
 
 if(theDemo->m_displayMode == 3)
-// if(1)
 {
-  initIceT();
-  icetGLDrawFrame();
+   initIceT(); 
+   icetGLDrawFrame();
 //	display();
 }
 else
@@ -2094,7 +2100,10 @@ else
  
   glutSwapBuffers();
 
-  fprintf(stderr,"RenderMode: %d \n", theDemo->m_displayMode);
+
+  IceTInt rank, nProc;
+  icetGetIntegerv(ICET_RANK, &rank);
+//  fprintf(stderr,"RenderMode: %d  Proc: %d \n", theDemo->m_displayMode, rank);
 
 }
 
@@ -2119,11 +2128,14 @@ void initAppRenderer(int argc, char** argv,
 
 void initAppRenderer_start()
 {
-  glutDisplayFunc(initIceT);
+ // glutDisplayFunc(initIceT);
   glutIdleFunc(DoFrame);
   
   //glutIdleFunc(idle);
   //glutDisplayFunc(display);
+	
+	
+  initIceT();
     
   glutMainLoop();
 }

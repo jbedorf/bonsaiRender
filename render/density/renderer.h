@@ -84,6 +84,8 @@ class SmokeRendererParams
     bool                m_enableAA;
     bool				m_enableVolume;
     bool				m_enableFilters;
+    
+    float3 boxMin, boxMax;
 
     /****************/
     float m_starScaleLog;
@@ -177,6 +179,7 @@ class SmokeRenderer : public SmokeRendererParams
     void setColors(float *color);
     void setSizes(float *sizes);
     void setColorsDevice(float *colorD);
+    void setLocalMinMax(const float3 &min, const float3 &max);
 
     void setWindowSize(int w, int h);
     void setFOV(float fov) { mFov = fov; }

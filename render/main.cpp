@@ -394,6 +394,7 @@ int main(int argc, char * argv[])
     const double t0 = MPI_Wtime();
     rDataPtr->setNMAXSAMPLE(nmaxsample);
     rDataPtr->distribute();
+    rDataPtr->computeMinMax();
 //    rDataPtr->distribute();
     MPI_Barrier(comm);
     const double t1 = MPI_Wtime();

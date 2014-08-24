@@ -520,6 +520,13 @@ void SmokeRenderer::setColors(float *color)
   glBindBuffer( GL_ARRAY_BUFFER_ARB, 0);
 }
 
+void SmokeRenderer::setLocalMinMax(const float3 &min, const float3 &max)
+{
+	boxMin = min;
+	boxMax = max;	
+}
+
+
 #if 0
 void SmokeRenderer::setColorsDevice(float *colorD)
 {
@@ -1515,6 +1522,87 @@ void SmokeRenderer::splotchDraw()
   glClear(GL_COLOR_BUFFER_BIT);
   glClear(GL_DEPTH_BUFFER_BIT);
   glDisable(GL_BLEND);
+	
+
+ 
+   //Draw bounding box
+  glColor4f(0.0f, 1.0f, 0.0f, 1.0f);   
+	glBegin(GL_LINE_LOOP);
+	glVertex3f(boxMin.x, boxMin.y, boxMin.z);
+	glVertex3f(boxMax.x, boxMin.y, boxMin.z);
+	glVertex3f(boxMax.x, boxMax.y, boxMin.z);
+	glVertex3f(boxMin.x, boxMax.y, boxMin.z);
+	glEnd();
+	glBegin(GL_LINE_LOOP);
+	glVertex3f(boxMin.x, boxMin.y, boxMax.z);
+	glVertex3f(boxMax.x, boxMin.y, boxMax.z);
+	glVertex3f(boxMax.x, boxMax.y, boxMax.z);
+	glVertex3f(boxMin.x, boxMax.y, boxMax.z);
+	glEnd();
+	glBegin(GL_LINES);
+	glVertex3f(boxMin.x, boxMin.y, boxMin.z);
+	glVertex3f(boxMin.x, boxMin.y, boxMax.z);
+	glVertex3f(boxMax.x, boxMin.y, boxMin.z);
+	glVertex3f(boxMax.x, boxMin.y, boxMax.z);
+	glVertex3f(boxMax.x, boxMax.y, boxMin.z);
+	glVertex3f(boxMax.x, boxMax.y, boxMax.z);
+	glVertex3f(boxMin.x, boxMax.y, boxMin.z);
+	glVertex3f(boxMin.x, boxMax.y, boxMax.z);
+	glEnd();
+
+
+    //Convert the boundaries to screenspace
+    double mProjection[16];
+    double mModelView[16];
+    GLint    mView [4];
+     
+    glGetDoublev(GL_PROJECTION_MATRIX, mProjection);
+    glGetDoublev(GL_MODELVIEW_MATRIX,  mModelView);
+    glGetIntegerv(GL_VIEWPORT, mView);
+                
+    
+    double winxMin = 10e10f, winxMax = -10e10f, winyMin = 10e10f, winyMax = -10e10f;
+    double winx[8], winy[8], winz;  //All corners
+    
+    gluProject(boxMin.x, boxMin.y, boxMin.z,mModelView,mProjection,mView,&winx[0],&winy[0],&winz);    //Bottom left front
+    gluProject(boxMax.x, boxMin.y, boxMin.z,mModelView,mProjection,mView,&winx[1],&winy[1],&winz);   //Bottom right front
+    gluProject(boxMin.x, boxMax.y, boxMin.z,mModelView,mProjection,mView,&winx[2],&winy[2],&winz);   //Top left front
+    gluProject(boxMax.x, boxMax.y, boxMin.z,mModelView,mProjection,mView,&winx[3],&winy[3],&winz);   //Top right front
+    gluProject(boxMin.x, boxMin.y, boxMax.z,mModelView,mProjection,mView,&winx[4],&winy[4],&winz);    //Bottom left back
+    gluProject(boxMax.x, boxMin.y, boxMax.z,mModelView,mProjection,mView,&winx[5],&winy[5],&winz);   //Bottom right back
+    gluProject(boxMin.x, boxMax.y, boxMax.z,mModelView,mProjection,mView,&winx[6],&winy[6],&winz);   //Top left back
+    gluProject(boxMax.x, boxMax.y, boxMax.z,mModelView,mProjection,mView,&winx[7],&winy[7],&winz);   //Top right back
+    
+    for(int i=0; i < 8; i++)
+    {
+	    winxMin = std::min(winx[i], winxMin);
+	    winyMin = std::min(winy[i], winyMin);
+	    winxMax = std::max(winx[i], winxMax);
+	    winyMax = std::max(winy[i], winyMax);
+    }
+    
+    
+    fprintf(stderr,"Location min: %f %f   max: %f %f \n", winxMin, winyMin, winxMax, winyMax);
+    
+    
+    //eye = modelview * coor
+    //screen = projection * eye
+    //normalize screen
+    //x / w
+    //y / w
+    
+    //gluProject((GLdouble)objX,(GLdouble)objY,(GLdouble)objZ,mvmatrix,projmatrix,viewport,&win_x,&win_y,&win_z);
+    //Vector3 v = <some 3d world position>
+//Matrix4 view, projection;
+//glGetFloatv(GL_MODELVIEW_MATRIX, view.m);
+//glGetFloatv(GL_PROJECTION_MATRIX, projection.m);
+
+//Vector3 screen = v * (view * projection);
+//v.x = v.x * 0.5 / v.w + 0.5;
+//v.y = v.y * 0.5 / v.w + 0.5;
+    
+    
+		
 
 
   const int start = 0;
@@ -1618,6 +1706,24 @@ void SmokeRenderer::splotchDraw()
 #pragma omp parallel for schedule(static)
     for (int i = 0; i < w*h; i++)
       imgLoc[i] = reinterpret_cast<float4*>(rptr)[i];
+      
+    
+    
+    for(int i=0; i < h; i++)
+    {
+	    for(int j=0; j < w; j++)
+	    {
+		   if(i< winyMin)  imgLoc[i*w+j] = make_float4(1,0,0,0);  //This blanks out the bottom part
+		   if(j< winxMin)  imgLoc[i*w+j] = make_float4(0,0,1,0);  //This blanks out the left part	
+		   if(i > winyMax)  imgLoc[i*w+j] = make_float4(1,0,1,0);  //This blanks out the top part
+		   if(j > winxMax)  imgLoc[i*w+j] = make_float4(0,1,1,0);  //This blanks out the right part	
+		    
+	    }
+    }
+
+    
+    
+    
 
     //      memcpy(&imgLoc[0], rptr, imgSize);
     glUnmapBuffer(GL_PIXEL_PACK_BUFFER);
@@ -2008,13 +2114,10 @@ void SmokeRenderer::splotchDrawSortIceT()
 
  
 	 GLenum error = icetGetError();
+	// fprintf(stderr, "IceT running error: %d  ( ok: %d ) \n",  error, error == ICET_NO_ERROR);
 	 
-	 fprintf(stderr, "IceT running error: %d  ( ok: %d ) \n",  error, error == ICET_NO_ERROR);
 	 
-	 
-  #if 0
   m_fbo->Bind();
-  #endif
   m_fbo->AttachTexture(GL_TEXTURE_2D, m_imageTex[0], GL_COLOR_ATTACHMENT0_EXT);
   m_fbo->AttachTexture(GL_TEXTURE_2D, m_depthTex, GL_DEPTH_ATTACHMENT_EXT);
   	
@@ -2081,6 +2184,9 @@ void SmokeRenderer::splotchDrawSortIceT()
   glTexEnvi(GL_POINT_SPRITE_ARB, GL_COORD_REPLACE_ARB, GL_TRUE);
   glEnable(GL_VERTEX_PROGRAM_POINT_SIZE_ARB);
   glEnable(GL_POINT_SPRITE_ARB);
+  
+
+        m_fbo->Disable();
 
   drawPoints(start,count,true);
 
