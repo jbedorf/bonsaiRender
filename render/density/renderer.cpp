@@ -1512,6 +1512,23 @@ static void lCompose(
 #endif
 }
 
+
+float4 multiplyMatrixVector(double *matrix, float4 vec)
+{
+	//NOte, matrix is column major
+	
+	float4 res;
+	
+	
+	res.x = matrix[0]*vec.x + matrix[4]*vec.y + matrix[8]*vec.z + matrix[12]*vec.w;
+	res.y = matrix[1]*vec.x + matrix[5]*vec.y + matrix[9]*vec.z + matrix[13]*vec.w;
+	res.z = matrix[2]*vec.x + matrix[6]*vec.y + matrix[10]*vec.z + matrix[14]*vec.w;
+	res.w = matrix[3]*vec.x + matrix[7]*vec.y + matrix[11]*vec.z + matrix[15]*vec.w;
+	
+	return res;
+	
+}
+
 void SmokeRenderer::splotchDraw()
 {
   m_fbo->Bind();
@@ -1581,8 +1598,13 @@ void SmokeRenderer::splotchDraw()
 	    winyMax = std::max(winy[i], winyMax);
     }
     
-    
     fprintf(stderr,"Location min: %f %f   max: %f %f \n", winxMin, winyMin, winxMax, winyMax);
+    
+   
+   float4 worldBounds[8];    
+   worldBounds[0] =  multiplyMatrixVector( mModelView, make_float4(boxMin.x, boxMin.y, boxMin.z, 1));
+    
+    
     
     
     //eye = modelview * coor
