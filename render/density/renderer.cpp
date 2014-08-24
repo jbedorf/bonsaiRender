@@ -13,6 +13,10 @@
    This class renders particles using OpenGL and GLSL shaders
    */
 
+#if 1
+#define _SPLOTCHSPRITES
+#endif
+
 #include <math.h>
 #include <stdlib.h>
 #include <string.h>
@@ -215,7 +219,7 @@ SmokeRenderer::SmokeRenderer(int numParticles, int maxParticles, const int _rank
 
   m_skyboxProg = new GLSLProgram(skyboxVS, skyboxPS);
 
-#if 0
+#ifdef _SPLOTCHSPRITES  /* set to 1 if you want to use point sprites */
   m_splotchProg = new GLSLProgram(splotchVS, splotchPS);
 #else
   m_splotchProg = new GLSLProgram(splotchVS, splotchGS, splotchPS,
@@ -1379,6 +1383,12 @@ void SmokeRenderer::render()
 
   glutReportErrors();
 }
+    
+static void lSetClippingPlane(const GLenum planeid, const float4 &plane)
+{
+  double eq[] = {plane.x, plane.y, plane.z, plane.w};
+  glClipPlane(planeid, eq);
+}
 
 static void lCompose(
     float4 *src, float4 *dst, float *depth,
@@ -1538,12 +1548,21 @@ void SmokeRenderer::splotchDraw()
 
   if (m_doClipping)
   {
+#ifdef _SPLOTCHSPRITES 
+    lSetClippingPlane(GL_CLIP_PLANE0, m_clippingPlane[0]);
+    lSetClippingPlane(GL_CLIP_PLANE1, m_clippingPlane[1]);
+    lSetClippingPlane(GL_CLIP_PLANE2, m_clippingPlane[2]);
+    lSetClippingPlane(GL_CLIP_PLANE3, m_clippingPlane[3]);
+    lSetClippingPlane(GL_CLIP_PLANE4, m_clippingPlane[4]);
+    lSetClippingPlane(GL_CLIP_PLANE5, m_clippingPlane[5]);
+#else
     glEnable(GL_CLIP_DISTANCE0);
     glEnable(GL_CLIP_DISTANCE1);
     glEnable(GL_CLIP_DISTANCE2);
     glEnable(GL_CLIP_DISTANCE3);
     glEnable(GL_CLIP_DISTANCE4);
     glEnable(GL_CLIP_DISTANCE5);
+#endif
   }
 
   prog->enable();
@@ -1584,12 +1603,22 @@ void SmokeRenderer::splotchDraw()
 
   prog->disable();
     
+#ifdef _SPLOTCHSPRITES 
+  glDisable(GL_CLIP_PLANE0);
+  glDisable(GL_CLIP_PLANE1);
+  glDisable(GL_CLIP_PLANE2);
+  glDisable(GL_CLIP_PLANE3);
+  glDisable(GL_CLIP_PLANE4);
+  glDisable(GL_CLIP_PLANE5);
+#else
   glDisable(GL_CLIP_DISTANCE0);
   glDisable(GL_CLIP_DISTANCE1);
   glDisable(GL_CLIP_DISTANCE2);
   glDisable(GL_CLIP_DISTANCE3);
   glDisable(GL_CLIP_DISTANCE4);
   glDisable(GL_CLIP_DISTANCE5);
+#endif
+
 #if 1
   glFlush();
   glFinish();
@@ -1810,12 +1839,21 @@ void SmokeRenderer::splotchDrawSort()
 
   if (m_doClipping)
   {
+#ifdef _SPLOTCHSPRITES 
+    lSetClippingPlane(GL_CLIP_PLANE0, m_clippingPlane[0]);
+    lSetClippingPlane(GL_CLIP_PLANE1, m_clippingPlane[1]);
+    lSetClippingPlane(GL_CLIP_PLANE2, m_clippingPlane[2]);
+    lSetClippingPlane(GL_CLIP_PLANE3, m_clippingPlane[3]);
+    lSetClippingPlane(GL_CLIP_PLANE4, m_clippingPlane[4]);
+    lSetClippingPlane(GL_CLIP_PLANE5, m_clippingPlane[5]);
+#else
     glEnable(GL_CLIP_DISTANCE0);
     glEnable(GL_CLIP_DISTANCE1);
     glEnable(GL_CLIP_DISTANCE2);
     glEnable(GL_CLIP_DISTANCE3);
     glEnable(GL_CLIP_DISTANCE4);
     glEnable(GL_CLIP_DISTANCE5);
+#endif
   }
 
 
@@ -1903,12 +1941,21 @@ void SmokeRenderer::splotchDrawSort()
   prog->disable();
 
 
+#ifdef _SPLOTCHSPRITES 
+  glDisable(GL_CLIP_PLANE0);
+  glDisable(GL_CLIP_PLANE1);
+  glDisable(GL_CLIP_PLANE2);
+  glDisable(GL_CLIP_PLANE3);
+  glDisable(GL_CLIP_PLANE4);
+  glDisable(GL_CLIP_PLANE5);
+#else
   glDisable(GL_CLIP_DISTANCE0);
   glDisable(GL_CLIP_DISTANCE1);
   glDisable(GL_CLIP_DISTANCE2);
   glDisable(GL_CLIP_DISTANCE3);
   glDisable(GL_CLIP_DISTANCE4);
   glDisable(GL_CLIP_DISTANCE5);
+#endif
   /********* compose ********/
 
 #if 1

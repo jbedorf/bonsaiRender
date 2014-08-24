@@ -805,7 +805,6 @@ STRINGIFY(
     uniform float sorted;                                     \n
     out varying vec4 vpos;                                    \n
     out varying vec4 vcol;                                    \n
-    out varying mat4 vmvp;                                    \n
     out varying float vsize;                                  \n
     void main()                                               \n
     {                                                         \n
@@ -841,17 +840,15 @@ STRINGIFY(
       vpos   = wpos;                                          \n
       vcol   = gl_FrontColor;                                 \n
       vsize  = gl_PointSize*dist;                             \n
-      vmvp   = gl_ModelViewProjectionMatrix;                  \n
     }                                                         \n
 );
 
 const char *splotchGS = 
-"#version 150\n"
+//"#version 150\n"
 STRINGIFY(
     in vec4 vpos[];
     in vec4 vcol[];
     in float vsize[];
-    in mat4 vmvp[];
     uniform float resx;
     uniform float resy;
     uniform vec4 p0o;
@@ -860,8 +857,6 @@ STRINGIFY(
     uniform vec4 p3o;
     uniform vec4 p4o;
     uniform vec4 p5o;
-    out vec2 texCrd;
-
     void main ()
     {
       gl_FrontColor = vcol[0];
@@ -870,7 +865,7 @@ STRINGIFY(
       float sy = s / resx;
       s = min(s, 0.2);
 
-      mat4 invm = transpose(inverse(vmvp[0]));
+      mat4 invm = transpose(inverse(gl_ModelViewProjectionMatrix));
 
       vec4 p0 = invm*p0o;
       vec4 p1 = invm*p1o;
@@ -879,17 +874,10 @@ STRINGIFY(
       vec4 p4 = invm*p4o;
       vec4 p5 = invm*p5o;
 
+      vec4 pos = gl_ModelViewProjectionMatrix * vpos[0];
 
-      vec4 pos = vmvp[0] * vpos[0];
-
-      vec4 v0 = pos + vec4(-sx,-sy,0,0);
-      vec4 v1 = pos + vec4(-sx,+sy,0,0);
-      vec4 v2 = pos + vec4(+sx,+sy,0,0);
-      vec4 v3 = pos + vec4(+sx,-sy,0,0);
-
-
-      gl_Position = v0;
-      texCrd      = vec2(0,0);
+      gl_Position        = pos + vec4(-sx,-sy,0,0);
+      gl_TexCoord[0].xy  = vec2(0,0);
       gl_ClipDistance[0] = -dot(gl_Position,p0);
       gl_ClipDistance[1] = -dot(gl_Position,p1);
       gl_ClipDistance[2] = -dot(gl_Position,p2);
@@ -898,8 +886,8 @@ STRINGIFY(
       gl_ClipDistance[5] = -dot(gl_Position,p5);
       EmitVertex();
 
-      gl_Position = v1;
-      texCrd = vec2(0,1);
+      gl_Position        = pos + vec4(-sx,+sy,0,0);
+      gl_TexCoord[0].xy  = vec2(0,1);
       gl_ClipDistance[0] = -dot(gl_Position,p0);
       gl_ClipDistance[1] = -dot(gl_Position,p1);
       gl_ClipDistance[2] = -dot(gl_Position,p2);
@@ -908,8 +896,8 @@ STRINGIFY(
       gl_ClipDistance[5] = -dot(gl_Position,p5);
       EmitVertex();
 
-      gl_Position = v3;
-      texCrd = vec2(1,0);
+      gl_Position        = pos + vec4(+sx,-sy,0,0);
+      gl_TexCoord[0].xy  = vec2(1,0);
       gl_ClipDistance[0] = -dot(gl_Position,p0);
       gl_ClipDistance[1] = -dot(gl_Position,p1);
       gl_ClipDistance[2] = -dot(gl_Position,p2);
@@ -918,8 +906,8 @@ STRINGIFY(
       gl_ClipDistance[5] = -dot(gl_Position,p5);
       EmitVertex();
 
-      gl_Position = v2;
-      texCrd = vec2(1,1);
+      gl_Position        = pos + vec4(+sx,+sy,0,0);
+      gl_TexCoord[0].xy  = vec2(1,1);
       gl_ClipDistance[0] = -dot(gl_Position,p0);
       gl_ClipDistance[1] = -dot(gl_Position,p1);
       gl_ClipDistance[2] = -dot(gl_Position,p2);
@@ -946,8 +934,6 @@ STRINGIFY(
     {                                                                  \n
       float type = gl_TexCoord[1].w;                                   \n
       float alpha = texture2D(spriteTex, gl_TexCoord[0].xy).x;         \n
-      alpha = texture2D(spriteTex, texCrd).x;                          \n
-//      alpha = 0.75f;                                                 \n
       if (alpha == 0.0f) discard;                                      \n
       if (sorted != 0.0)                                               \n
       {                                                                \n
