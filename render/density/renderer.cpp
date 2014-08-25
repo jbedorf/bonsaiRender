@@ -2058,6 +2058,40 @@ void SmokeRenderer::splotchDrawSort()
     const double t3 = MPI_Wtime();
 
     /***** compose image *****/
+     
+#if 0
+#define __GLOBAL_COMPOSITING_ORDER
+#endif
+
+#ifdef __GLOBAL_COMPOSITING_ORDER
+    {
+      /*** gather depth from each rank ***/
+      std::vector<float> depth(nrank);
+      MPI_Allgather(&dmin, 1, MPI_FLOAT, &depth[0], 1, MPI_FLOAT, comm);
+
+      float dmin = +HUGE;
+      float dmax = -HUGE;
+      for (int p = 0; p < nrank; p++)
+      {
+        dmin = std::min(dmin, depth[p]);
+        dmax = std::max(dmax, depth[p]);
+      }
+
+
+      /*** sort ranks by depth ***/
+      using pair = std::pair<float,int>;
+      std::vector<pair> depthMap(nrank);
+      for (int p = 0; p < nrank; p++)
+        depthMap[p] = std::make_pair(depth[p]-dmin,p);
+      std::sort(depthMap.begin(), depthMap.end(), 
+          [](const pair &a, const pair &b) { return a.first < b.first;});
+
+      /*** extract compositing order ***/
+      compositingOrder.clear();
+      for (auto p : depthMap)
+        compositingOrder.push_back(p.second);
+    }
+#endif
 
     lCompose(&imgLoc[0], &imgGlb[0], &depth[0], w*h, rank, nrank, comm,
         m_domainView ? m_domainViewIdx : -1, 
