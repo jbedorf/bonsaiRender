@@ -1617,6 +1617,7 @@ void SmokeRenderer::splotchDraw()
     
     
     
+    
     //eye = modelview * coor
     //screen = projection * eye
     //normalize screen
@@ -1741,6 +1742,18 @@ void SmokeRenderer::splotchDraw()
       
     
     
+
+    
+    //Note the +1 and -1, we need that to get the boundaries just right otherwise roundof can cause pixel leakage    
+    const int startIdxH = std::max(0, (int)winyMin-1);
+    const int endIdxH   = std::min(h, (int)winyMax+1);
+    const int startIdxW = std::max(0, (int)winxMin-1);
+    const int endIdxW   = std::min(w, (int)winxMax+1);
+
+    //fprintf(stderr,"From: ( %d , %d ) to ( %d , %d ) \n", startIdxH, startIdxW, endIdxH, endIdxW);
+    
+    #if 1
+    //Blank out non needed parts
     for(int i=0; i < h; i++)
     {
 	    for(int j=0; j < w; j++)
@@ -1751,11 +1764,20 @@ void SmokeRenderer::splotchDraw()
 		   if(j > winxMax)  imgLoc[i*w+j] = make_float4(0,1,1,0);  //This blanks out the right part	
 		    
 	    }
-    }
-
+    }    
+    #endif
+    #if 0
+    //Blank out the visible part
+    for(int j=startIdxH; j < endIdxH; j++)
+	for(int i=startIdxW; i < endIdxW; i++)
+		imgLoc[j*w+i] = make_float4(0,0,0,0);  //This  colors the middle
+    #endif			
     
+    const int totalReduce = (endIdxH-startIdxH) * (endIdxW-startIdxW);
+    const int totalFull       = w*h;
     
-    
+    fprintf(stderr,"From %d to %d pixels, reduction of factor: %f \n" , totalFull, totalReduce, (totalFull/(float)totalReduce));
+		    
 
     //      memcpy(&imgLoc[0], rptr, imgSize);
     glUnmapBuffer(GL_PIXEL_PACK_BUFFER);
@@ -2144,6 +2166,82 @@ void SmokeRenderer::splotchDrawSortIceT()
 //      fprintf(stderr,"Rendering \n");
 	#else
 
+ //Draw bounding box
+  glColor4f(0.0f, 1.0f, 0.0f, 1.0f);   
+	glBegin(GL_LINE_LOOP);
+	glVertex3f(boxMin.x, boxMin.y, boxMin.z);
+	glVertex3f(boxMax.x, boxMin.y, boxMin.z);
+	glVertex3f(boxMax.x, boxMax.y, boxMin.z);
+	glVertex3f(boxMin.x, boxMax.y, boxMin.z);
+	glEnd();
+	glBegin(GL_LINE_LOOP);
+	glVertex3f(boxMin.x, boxMin.y, boxMax.z);
+	glVertex3f(boxMax.x, boxMin.y, boxMax.z);
+	glVertex3f(boxMax.x, boxMax.y, boxMax.z);
+	glVertex3f(boxMin.x, boxMax.y, boxMax.z);
+	glEnd();
+	glBegin(GL_LINES);
+	glVertex3f(boxMin.x, boxMin.y, boxMin.z);
+	glVertex3f(boxMin.x, boxMin.y, boxMax.z);
+	glVertex3f(boxMax.x, boxMin.y, boxMin.z);
+	glVertex3f(boxMax.x, boxMin.y, boxMax.z);
+	glVertex3f(boxMax.x, boxMax.y, boxMin.z);
+	glVertex3f(boxMax.x, boxMax.y, boxMax.z);
+	glVertex3f(boxMin.x, boxMax.y, boxMin.z);
+	glVertex3f(boxMin.x, boxMax.y, boxMax.z);
+	glEnd();
+
+
+    //Convert the boundaries to screenspace
+    double mProjection[16];
+    double mModelView[16];
+    GLint    mView [4];
+     
+    glGetDoublev(GL_PROJECTION_MATRIX, mProjection);
+    glGetDoublev(GL_MODELVIEW_MATRIX,  mModelView);
+    glGetIntegerv(GL_VIEWPORT, mView);
+                
+    
+    double winxMin = 10e10f, winxMax = -10e10f, winyMin = 10e10f, winyMax = -10e10f;
+    double winx[8], winy[8], winz;  //All corners
+    
+    gluProject(boxMin.x, boxMin.y, boxMin.z,mModelView,mProjection,mView,&winx[0],&winy[0],&winz);    //Bottom left front
+    gluProject(boxMax.x, boxMin.y, boxMin.z,mModelView,mProjection,mView,&winx[1],&winy[1],&winz);   //Bottom right front
+    gluProject(boxMin.x, boxMax.y, boxMin.z,mModelView,mProjection,mView,&winx[2],&winy[2],&winz);   //Top left front
+    gluProject(boxMax.x, boxMax.y, boxMin.z,mModelView,mProjection,mView,&winx[3],&winy[3],&winz);   //Top right front
+    gluProject(boxMin.x, boxMin.y, boxMax.z,mModelView,mProjection,mView,&winx[4],&winy[4],&winz);    //Bottom left back
+    gluProject(boxMax.x, boxMin.y, boxMax.z,mModelView,mProjection,mView,&winx[5],&winy[5],&winz);   //Bottom right back
+    gluProject(boxMin.x, boxMax.y, boxMax.z,mModelView,mProjection,mView,&winx[6],&winy[6],&winz);   //Top left back
+    gluProject(boxMax.x, boxMax.y, boxMax.z,mModelView,mProjection,mView,&winx[7],&winy[7],&winz);   //Top right back
+    
+
+   
+   float4 worldBounds[8];    
+   worldBounds[0] =  multiplyMatrixVector( mModelView, make_float4(boxMin.x, boxMin.y, boxMin.z, 1));
+   worldBounds[1] =  multiplyMatrixVector( mModelView, make_float4(boxMax.x, boxMin.y, boxMin.z, 1));
+   worldBounds[2] =  multiplyMatrixVector( mModelView, make_float4(boxMin.x, boxMax.y, boxMin.z, 1));
+   worldBounds[3] =  multiplyMatrixVector( mModelView, make_float4(boxMax.x, boxMax.y, boxMin.z, 1));
+   worldBounds[4] =  multiplyMatrixVector( mModelView, make_float4(boxMin.x, boxMin.y, boxMax.z, 1));
+   worldBounds[5] =  multiplyMatrixVector( mModelView, make_float4(boxMax.x, boxMin.y, boxMax.z, 1));
+   worldBounds[6] =  multiplyMatrixVector( mModelView, make_float4(boxMin.x, boxMax.y, boxMax.z, 1));    
+   worldBounds[7] =  multiplyMatrixVector( mModelView, make_float4(boxMax.x, boxMax.y, boxMax.z, 1));  
+    
+    //Compute our min Z coordinate and the winxy coordinates
+    float minZ = 10e10f;
+    for(int i=0; i < 8; i++)
+    {
+	    winxMin = std::min(winx[i], winxMin);
+	    winyMin = std::min(winy[i], winyMin);
+	    winxMax = std::max(winx[i], winxMax);
+	    winyMax = std::max(winy[i], winyMax);
+	    
+	    minZ = std::min(worldBounds[i].z / worldBounds[i].w, minZ);
+    }
+    
+    //fprintf(stderr,"Location min: %f %f   max: %f %f  \t minZ: %f\n", winxMin, winyMin, winxMax, winyMax, minZ);
+    
+    	
+	
  
 	 GLenum error = icetGetError();
 	// fprintf(stderr, "IceT running error: %d  ( ok: %d ) \n",  error, error == ICET_NO_ERROR);

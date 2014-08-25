@@ -243,6 +243,9 @@ class SmokeRenderer : public SmokeRendererParams
     //By JB to modify particle count while running
     void setNumberOfParticles(uint n_particles); 
     int  getNumberOfParticles() {return this->mNumParticles; }
+    
+    float getMinZValue(){return minZValue;}
+    
 
   private:
     //GLuint loadTexture(char *filename);
@@ -305,6 +308,7 @@ class SmokeRenderer : public SmokeRendererParams
     GLuint              mPosBufferTexture;
     
     float3 boxMin, boxMax;
+    float minZValue;
 
     //	GpuArray<float4>    mParticlePos;
     //	GpuArray<float>     mParticleDepths;
