@@ -118,6 +118,17 @@ static inline double4 lMatVec(const T _m[16], const double4 pos)
       m[0][3]*pos.x + m[1][3]*pos.y + m[2][3]*pos.z + m[3][3]*pos.w);
 }
 
+  template<typename T>
+static inline double4 lVecMat(const double4 pos, const T _m[16])
+{
+  const T (*m)[4] = (T (*)[4])_m;
+  return make_double4(
+      m[0][0]*pos.x + m[0][1]*pos.y + m[0][2]*pos.z + m[0][3]*pos.w,
+      m[1][0]*pos.x + m[1][1]*pos.y + m[1][2]*pos.z + m[1][3]*pos.w,
+      m[2][0]*pos.x + m[2][1]*pos.y + m[2][2]*pos.z + m[2][3]*pos.w,
+      m[3][0]*pos.x + m[3][1]*pos.y + m[3][2]*pos.z + m[3][3]*pos.w);
+}
+
 
 namespace StarSamplerData
 {
@@ -695,7 +706,183 @@ class Demo
         m_cursorPos[2] = pos[2];
       }
     }
+
+    static void lMatrixInverseTranspose(double OpenGLmatIn[16], double matOutP[16])
+    {
+      double (*matOut)[4] = (double (*)[4])matOutP;
+      double matIn[4][4];
+      // OpenGL matrix is column major matrix in 1x16 array. Convert it to row major 4x4 matrix
+      for(int m=0, k=0; m<=3; m++)
+        for(int n=0;n<=3;n++)
+        {
+          matIn[m][n] = OpenGLmatIn[k];
+          k++;
+        }
+      // 3x3 rotation Matrix Transpose ( it is equal to invering rotations) . Since rotation matrix is anti-symmetric matrix, transpose is equal to Inverse.
+      for(int i=0 ; i<3; i++){
+        for(int j=0; j<3; j++){
+          matOut[j][i] = matIn[i][j];
+        }
+      }
+      // Negate the translations ( equal to inversing translations)
+      double vTmp[3];
+
+      vTmp[0] = -matIn[3][0];
+      vTmp[1] = -matIn[3][1];
+      vTmp[2] = -matIn[3][2];
+      // Roatate this vector using the above newly constructed rotation matrix
+      matOut[3][0] = vTmp[0]*matOut[0][0] + vTmp[1]*matOut[1][0] + vTmp[2]*matOut[2][0];
+      matOut[3][1] = vTmp[0]*matOut[0][1] + vTmp[1]*matOut[1][1] + vTmp[2]*matOut[2][1];
+      matOut[3][2] = vTmp[0]*matOut[0][2] + vTmp[1]*matOut[1][2] + vTmp[2]*matOut[2][2];
+
+      // Take care of the unused part of the OpenGL 4x4 matrix
+      matOut[0][3] = matOut[1][3] = matOut[2][3] = 0.0f;
+      matOut[3][3] = 1.0f;
+
+      for (int m = 0; m < 4; m++)
+        for (int n = 0; n < 4; n++)
+          matIn[m][n] = matOut[m][n];
+      
+      for (int m = 0; m < 4; m++)
+        for (int n = 0; n < 4; n++)
+          matOut[n][m] = matIn[m][n];
+    }
+
+    bool gluInvertMatrix(const double m[16], double invOut[16])
+    {
+      double inv[16], det;
+      int i;
+
+      inv[0] = m[5]  * m[10] * m[15] - 
+        m[5]  * m[11] * m[14] - 
+        m[9]  * m[6]  * m[15] + 
+        m[9]  * m[7]  * m[14] +
+        m[13] * m[6]  * m[11] - 
+        m[13] * m[7]  * m[10];
+
+      inv[4] = -m[4]  * m[10] * m[15] + 
+        m[4]  * m[11] * m[14] + 
+        m[8]  * m[6]  * m[15] - 
+        m[8]  * m[7]  * m[14] - 
+        m[12] * m[6]  * m[11] + 
+        m[12] * m[7]  * m[10];
+
+      inv[8] = m[4]  * m[9] * m[15] - 
+        m[4]  * m[11] * m[13] - 
+        m[8]  * m[5] * m[15] + 
+        m[8]  * m[7] * m[13] + 
+        m[12] * m[5] * m[11] - 
+        m[12] * m[7] * m[9];
+
+      inv[12] = -m[4]  * m[9] * m[14] + 
+        m[4]  * m[10] * m[13] +
+        m[8]  * m[5] * m[14] - 
+        m[8]  * m[6] * m[13] - 
+        m[12] * m[5] * m[10] + 
+        m[12] * m[6] * m[9];
+
+      inv[1] = -m[1]  * m[10] * m[15] + 
+        m[1]  * m[11] * m[14] + 
+        m[9]  * m[2] * m[15] - 
+        m[9]  * m[3] * m[14] - 
+        m[13] * m[2] * m[11] + 
+        m[13] * m[3] * m[10];
+
+      inv[5] = m[0]  * m[10] * m[15] - 
+        m[0]  * m[11] * m[14] - 
+        m[8]  * m[2] * m[15] + 
+        m[8]  * m[3] * m[14] + 
+        m[12] * m[2] * m[11] - 
+        m[12] * m[3] * m[10];
+
+      inv[9] = -m[0]  * m[9] * m[15] + 
+        m[0]  * m[11] * m[13] + 
+        m[8]  * m[1] * m[15] - 
+        m[8]  * m[3] * m[13] - 
+        m[12] * m[1] * m[11] + 
+        m[12] * m[3] * m[9];
+
+      inv[13] = m[0]  * m[9] * m[14] - 
+        m[0]  * m[10] * m[13] - 
+        m[8]  * m[1] * m[14] + 
+        m[8]  * m[2] * m[13] + 
+        m[12] * m[1] * m[10] - 
+        m[12] * m[2] * m[9];
+
+      inv[2] = m[1]  * m[6] * m[15] - 
+        m[1]  * m[7] * m[14] - 
+        m[5]  * m[2] * m[15] + 
+        m[5]  * m[3] * m[14] + 
+        m[13] * m[2] * m[7] - 
+        m[13] * m[3] * m[6];
+
+      inv[6] = -m[0]  * m[6] * m[15] + 
+        m[0]  * m[7] * m[14] + 
+        m[4]  * m[2] * m[15] - 
+        m[4]  * m[3] * m[14] - 
+        m[12] * m[2] * m[7] + 
+        m[12] * m[3] * m[6];
+
+      inv[10] = m[0]  * m[5] * m[15] - 
+        m[0]  * m[7] * m[13] - 
+        m[4]  * m[1] * m[15] + 
+        m[4]  * m[3] * m[13] + 
+        m[12] * m[1] * m[7] - 
+        m[12] * m[3] * m[5];
+
+      inv[14] = -m[0]  * m[5] * m[14] + 
+        m[0]  * m[6] * m[13] + 
+        m[4]  * m[1] * m[14] - 
+        m[4]  * m[2] * m[13] - 
+        m[12] * m[1] * m[6] + 
+        m[12] * m[2] * m[5];
+
+      inv[3] = -m[1] * m[6] * m[11] + 
+        m[1] * m[7] * m[10] + 
+        m[5] * m[2] * m[11] - 
+        m[5] * m[3] * m[10] - 
+        m[9] * m[2] * m[7] + 
+        m[9] * m[3] * m[6];
+
+      inv[7] = m[0] * m[6] * m[11] - 
+        m[0] * m[7] * m[10] - 
+        m[4] * m[2] * m[11] + 
+        m[4] * m[3] * m[10] + 
+        m[8] * m[2] * m[7] - 
+        m[8] * m[3] * m[6];
+
+      inv[11] = -m[0] * m[5] * m[11] + 
+        m[0] * m[7] * m[9] + 
+        m[4] * m[1] * m[11] - 
+        m[4] * m[3] * m[9] - 
+        m[8] * m[1] * m[7] + 
+        m[8] * m[3] * m[5];
+
+      inv[15] = m[0] * m[5] * m[10] - 
+        m[0] * m[6] * m[9] - 
+        m[4] * m[1] * m[10] + 
+        m[4] * m[2] * m[9] + 
+        m[8] * m[1] * m[6] - 
+        m[8] * m[2] * m[5];
+
+      det = m[0] * inv[0] + m[1] * inv[4] + m[2] * inv[8] + m[3] * inv[12];
+
+      if (det == 0)
+        return false;
+
+      det = 1.0 / det;
+
+      for (i = 0; i < 16; i++)
+        invOut[i] = inv[i] * det;
+
+      return true;
+    }
+    
+    
     //This is the main render routine that is called by display for each eye (in stereo case), assumes mview and proj are already setup
+    //
+
+
     void mainRender(EYE whichEye)
     {
       /*** determine global composing order ***/
@@ -722,18 +909,46 @@ class Demo
         make_double4(r1.x,r1.y,r1.z, 1.0)
       };
 
-      double modelView[16];
-      double projection[16];
+      double modelView[16], modelViewInverse[16];
+      double projection[16], projectionInverse[16];
       glGetDoublev(GL_MODELVIEW_MATRIX,   modelView);
       glGetDoublev(GL_PROJECTION_MATRIX, projection);
+      gluInvertMatrix(modelView, modelViewInverse);
+      gluInvertMatrix(projection, projectionInverse);
 
-      double zmin = HUGE;
+      double zminB = +HUGE;
+      double zmaxB = -HUGE;
       for (auto v : bBoxVtx)
       {
         v = lMatVec(modelView,  v);
         v = lMatVec(projection, v);
-        zmin = std::min(zmin, v.z);
+
+        zminB = std::min(zminB, v.z);
+        zmaxB = std::max(zmaxB, v.z);
       }
+
+      zminB += 100.0;
+      zmaxB += 100.0;
+      assert(zminB >= 0.0);
+      assert(zmaxB >= 0.0);
+    
+#if 1
+      double zmin = HUGE;
+      for (int p = 0; p < 6; p++)
+      {
+        float4 pl0 = m_renderer.getClippingPlane(p);
+        double4 pl = make_double4(pl0.x, pl0.y, pl0.z, pl0.w);
+        pl = lVecMat(pl,projectionInverse);
+        pl = lVecMat(pl,modelViewInverse);
+        double z = -pl.w/pl.z;
+        z += 100.0;
+        if (z >= zminB && z <= zmaxB)
+          zmin = std::min(zmin,z);
+      }
+#endif
+
+
+
 
       /*** gather depth from each rank ***/
       std::vector<double> depth(nrank);

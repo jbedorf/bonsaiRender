@@ -470,6 +470,10 @@ class SmokeRenderer : public SmokeRendererParams
       assert(i>=0 && i<6);
       m_clippingPlane[i] = plane;
     }
+    float4 getClippingPlane(const int i) const
+    {
+      return m_clippingPlane[i];
+    }
 };
 
 #endif
