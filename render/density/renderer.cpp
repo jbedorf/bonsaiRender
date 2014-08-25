@@ -1541,7 +1541,6 @@ void SmokeRenderer::splotchDraw()
   glDisable(GL_BLEND);
 	
 
- 
    //Draw bounding box
   glColor4f(0.0f, 1.0f, 0.0f, 1.0f);   
 	glBegin(GL_LINE_LOOP);
@@ -1590,20 +1589,31 @@ void SmokeRenderer::splotchDraw()
     gluProject(boxMin.x, boxMax.y, boxMax.z,mModelView,mProjection,mView,&winx[6],&winy[6],&winz);   //Top left back
     gluProject(boxMax.x, boxMax.y, boxMax.z,mModelView,mProjection,mView,&winx[7],&winy[7],&winz);   //Top right back
     
+
+   
+   float4 worldBounds[8];    
+   worldBounds[0] =  multiplyMatrixVector( mModelView, make_float4(boxMin.x, boxMin.y, boxMin.z, 1));
+   worldBounds[1] =  multiplyMatrixVector( mModelView, make_float4(boxMax.x, boxMin.y, boxMin.z, 1));
+   worldBounds[2] =  multiplyMatrixVector( mModelView, make_float4(boxMin.x, boxMax.y, boxMin.z, 1));
+   worldBounds[3] =  multiplyMatrixVector( mModelView, make_float4(boxMax.x, boxMax.y, boxMin.z, 1));
+   worldBounds[4] =  multiplyMatrixVector( mModelView, make_float4(boxMin.x, boxMin.y, boxMax.z, 1));
+   worldBounds[5] =  multiplyMatrixVector( mModelView, make_float4(boxMax.x, boxMin.y, boxMax.z, 1));
+   worldBounds[6] =  multiplyMatrixVector( mModelView, make_float4(boxMin.x, boxMax.y, boxMax.z, 1));    
+   worldBounds[7] =  multiplyMatrixVector( mModelView, make_float4(boxMax.x, boxMax.y, boxMax.z, 1));  
+    
+    //Compute our min Z coordinate and the winxy coordinates
+    float minZ = 10e10f;
     for(int i=0; i < 8; i++)
     {
 	    winxMin = std::min(winx[i], winxMin);
 	    winyMin = std::min(winy[i], winyMin);
 	    winxMax = std::max(winx[i], winxMax);
 	    winyMax = std::max(winy[i], winyMax);
+	    
+	    minZ = std::min(worldBounds[i].z / worldBounds[i].w, minZ);
     }
     
-    fprintf(stderr,"Location min: %f %f   max: %f %f \n", winxMin, winyMin, winxMax, winyMax);
-    
-   
-   float4 worldBounds[8];    
-   worldBounds[0] =  multiplyMatrixVector( mModelView, make_float4(boxMin.x, boxMin.y, boxMin.z, 1));
-    
+    fprintf(stderr,"Location min: %f %f   max: %f %f  \t minZ: %f\n", winxMin, winyMin, winxMax, winyMax, minZ);
     
     
     

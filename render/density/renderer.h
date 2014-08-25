@@ -85,7 +85,7 @@ class SmokeRendererParams
     bool				m_enableVolume;
     bool				m_enableFilters;
     
-    float3 boxMin, boxMax;
+    
 
     /****************/
     float m_starScaleLog;
@@ -303,6 +303,8 @@ class SmokeRenderer : public SmokeRendererParams
     GLuint              mSizeVao;
     GLuint              mIndexBuffer;
     GLuint              mPosBufferTexture;
+    
+    float3 boxMin, boxMax;
 
     //	GpuArray<float4>    mParticlePos;
     //	GpuArray<float>     mParticleDepths;
