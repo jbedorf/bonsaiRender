@@ -1393,7 +1393,8 @@ static void lSetClippingPlane(const GLenum planeid, const float4 &plane)
 static void lCompose(
     float4 *src, float4 *dst, float *depth,
     const int n, const int rank, const int nrank, const MPI_Comm &comm,
-    const int showDomain)
+    const int showDomain,
+    std::vector<int> compositingOrder)
 {
   const int master = 0;
 #if 0
@@ -1449,6 +1450,16 @@ static void lCompose(
 
     using vec5 = std::array<float,5>;
     std::vector<vec5> colorArrayDepth(nsend*nrank);
+
+    const bool doPixelLevel = compositingOrder.empty();
+
+    if (doPixelLevel)
+    {
+      compositingOrder.resize(nrank);
+      std::iota(compositingOrder.begin(), compositingOrder.end(), 0);
+    }
+
+
 #pragma omp parallel for schedule(static)
     for (int i = 0; i < nsend; i++)
       for (int p = 0; p < nrank; p++)
@@ -1469,14 +1480,17 @@ static void lCompose(
      for (int i = 0; i < nsend; i++)
      {
        const int stride = i*nrank;
-       std::sort(
-           colorArrayDepth.begin() + stride, 
-           colorArrayDepth.begin() + stride + nrank,
-           [](const vec5 &a, const vec5 &b){ return a[4] < b[4]; }
-           );
+       if (doPixelLevel)
+       {
+         std::sort(
+             colorArrayDepth.begin() + stride, 
+             colorArrayDepth.begin() + stride + nrank,
+             [](const vec5 &a, const vec5 &b){ return a[4] < b[4]; }
+             );
+       }
 
        float4 _dst = make_float4(0.0);
-       for (int p = 0; p < nrank; p++)
+       for (auto p : compositingOrder)
        {
          float4 _src = make_float4(
              colorArrayDepth[stride+p][0],
@@ -1680,7 +1694,8 @@ void SmokeRenderer::splotchDraw()
     const double t3 = MPI_Wtime();
 
     lCompose(&imgLoc[0], &imgGlb[0], NULL, w*h, rank, nrank, comm,
-        m_domainView ? m_domainViewIdx : -1);
+        m_domainView ? m_domainViewIdx : -1,
+        compositingOrder);
     glFinish();
     const double t4 = MPI_Wtime();
 
@@ -2044,7 +2059,8 @@ void SmokeRenderer::splotchDrawSort()
     /***** compose image *****/
 
     lCompose(&imgLoc[0], &imgGlb[0], &depth[0], w*h, rank, nrank, comm,
-        m_domainView ? m_domainViewIdx : -1);
+        m_domainView ? m_domainViewIdx : -1, 
+        compositingOrder);
     glFinish();
     const double t4 = MPI_Wtime();
 

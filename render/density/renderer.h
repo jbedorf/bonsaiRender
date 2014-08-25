@@ -457,7 +457,14 @@ class SmokeRenderer : public SmokeRendererParams
 
     float4 m_clippingPlane[6];  
 
+    std::vector<int> compositingOrder;
+
   public:
+
+    void setCompositingOrder(const std::vector<int> &order)
+    {
+      compositingOrder = order;
+    }
     void setClippingPlane(const int i, const float4 &plane)
     {
       assert(i>=0 && i<6);

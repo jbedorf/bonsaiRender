@@ -107,6 +107,18 @@ struct Rand48
   }
 };
 
+  template<typename T>
+static inline double4 lMatVec(const T _m[16], const double4 pos)
+{
+  const T (*m)[4] = (T (*)[4])_m;
+  return make_double4(
+      m[0][0]*pos.x + m[1][0]*pos.y + m[2][0]*pos.z + m[3][0]*pos.w,
+      m[0][1]*pos.x + m[1][1]*pos.y + m[2][1]*pos.z + m[3][1]*pos.w,
+      m[0][2]*pos.x + m[1][2]*pos.y + m[2][2]*pos.z + m[3][2]*pos.w,
+      m[0][3]*pos.x + m[1][3]*pos.y + m[2][3]*pos.z + m[3][3]*pos.w);
+}
+
+
 namespace StarSamplerData
 {
 #if 0
@@ -865,7 +877,7 @@ class Demo
           glRotatef(90.0f, 1.0f, 0.0f, 0.0f); // rotate galaxies into XZ plane
         }
 
-        glGetFloatv(GL_MODELVIEW_MATRIX, m_modelView);
+        glGetDoublev(GL_MODELVIEW_MATRIX, m_modelView);
 
 #if 0
         if (m_supernova) {
@@ -889,7 +901,7 @@ class Demo
           glMatrixMode(GL_PROJECTION);
           glLoadMatrixd(m_projectionLeft);
           glMatrixMode(GL_MODELVIEW);
-          glLoadMatrixf(m_modelView);
+          glLoadMatrixd(m_modelView);
           mainRender(LEFT_EYE);
 
           //draw right
@@ -898,7 +910,7 @@ class Demo
           glMatrixMode(GL_PROJECTION);
           glLoadMatrixd(m_projectionRight);
           glMatrixMode(GL_MODELVIEW);
-          glLoadMatrixf(m_modelView);
+          glLoadMatrixd(m_modelView);
           mainRender(RIGHT_EYE);
         } //end of draw back right
         else 
@@ -909,7 +921,75 @@ class Demo
           glMatrixMode(GL_PROJECTION);
           glLoadMatrixd(m_projection);
           glMatrixMode(GL_MODELVIEW);
-          glLoadMatrixf(m_modelView);
+          glLoadMatrixd(m_modelView);
+
+          /*** determine global composing order ***/
+      
+          const float3 r0 = make_float3(
+              m_idata.getBoundBoxLow(0),
+              m_idata.getBoundBoxLow(1),
+              m_idata.getBoundBoxLow(2)
+              );
+          const float3 r1 = make_float3(
+              m_idata.getBoundBoxHigh(0),
+              m_idata.getBoundBoxHigh(1),
+              m_idata.getBoundBoxHigh(2)
+              );
+
+          const double4 bBoxVtx[] = {
+            make_double4(r0.x,r0.y,r0.z, 1.0),
+            make_double4(r1.x,r0.y,r0.z, 1.0),
+            make_double4(r0.x,r1.y,r0.z, 1.0),
+            make_double4(r1.x,r1.y,r0.z, 1.0),
+            make_double4(r0.x,r0.y,r1.z, 1.0),
+            make_double4(r1.x,r0.y,r1.z, 1.0),
+            make_double4(r0.x,r1.y,r1.z, 1.0),
+            make_double4(r1.x,r1.y,r1.z, 1.0)
+          };
+
+          double zmin = HUGE;
+          for (auto v : bBoxVtx)
+          {
+#if 0
+            double px = v.x;
+            double py = v.y;
+            double pz = v.z;
+            double wx,wy,wz;
+            gluProject(px,py,pz, m_modelView, m_projection, m_viewport,
+                &wx, &wy, &wz);
+            zmin = std::min(zmin, wz);
+#else
+            v = lMatVec(m_modelView, v);
+            v = lMatVec(m_projection, v);
+            zmin = std::min(zmin, v.z);
+#endif
+          }
+
+          /*** gather depth from each rank ***/
+          std::vector<double> depth(nrank);
+          MPI_Allgather(&zmin, 1, MPI_DOUBLE, &depth[0], 1, MPI_DOUBLE, comm);
+
+          /*** sort ranks by depth ***/
+          using pair = std::pair<double,int>;
+          std::vector<pair> depthMap(nrank);
+          for (int p = 0; p < nrank; p++)
+            depthMap[p] = std::make_pair(depth[p],p);
+          std::sort(depthMap.begin(), depthMap.end(), 
+              [](const pair &a, const pair &b) { return a.first < b.first;});
+
+          /*** extract compositing order ***/
+          std::vector<int> compositingOrder;
+          for (auto p : depthMap)
+            compositingOrder.push_back(p.second);
+
+#if 0
+#define __GLOBAL_ORDER_COMPOSING
+#endif
+
+#ifdef __GLOBAL_ORDER_COMPOSING
+          m_renderer.setCompositingOrder(compositingOrder);
+#endif
+
           mainRender(LEFT_EYE);
         }
       }
@@ -1049,7 +1129,7 @@ class Demo
     }
 
     // transform vector by inverse of matrix (assuming orthonormal)
-    float3 ixform(float3 &v, float *m)
+    float3 ixform(float3 &v, double *m)
     {
       float3 r;
       r.x = v.x*m[0] + v.y*m[1] + v.z*m[2];
@@ -1600,7 +1680,7 @@ class Demo
     float3 m_cameraRotLag;
     float m_cameraRollHome;
     float m_cameraRoll;
-    float m_modelView[16];
+    double m_modelView[16];
 
     //SV TODO combine left and mono later
     double m_projection[16]; //mono projection
