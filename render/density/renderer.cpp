@@ -2059,7 +2059,7 @@ void SmokeRenderer::splotchDrawSort()
 
     /***** compose image *****/
      
-#if 1
+#if 0
 #define __GLOBAL_COMPOSITING_ORDER
 #endif
 
