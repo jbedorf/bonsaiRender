@@ -2059,7 +2059,7 @@ void SmokeRenderer::splotchDrawSort()
 
     /***** compose image *****/
      
-#if 0
+#if 1
 #define __GLOBAL_COMPOSITING_ORDER
 #endif
 
@@ -2069,20 +2069,11 @@ void SmokeRenderer::splotchDrawSort()
       std::vector<float> depth(nrank);
       MPI_Allgather(&dmin, 1, MPI_FLOAT, &depth[0], 1, MPI_FLOAT, comm);
 
-      float dmin = +HUGE;
-      float dmax = -HUGE;
-      for (int p = 0; p < nrank; p++)
-      {
-        dmin = std::min(dmin, depth[p]);
-        dmax = std::max(dmax, depth[p]);
-      }
-
-
       /*** sort ranks by depth ***/
       using pair = std::pair<float,int>;
       std::vector<pair> depthMap(nrank);
       for (int p = 0; p < nrank; p++)
-        depthMap[p] = std::make_pair(depth[p]-dmin,p);
+        depthMap[p] = std::make_pair(depth[p],p);
       std::sort(depthMap.begin(), depthMap.end(), 
           [](const pair &a, const pair &b) { return a.first < b.first;});
 
