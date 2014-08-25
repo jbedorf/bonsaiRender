@@ -925,16 +925,47 @@ class Demo
 
           /*** determine global composing order ***/
       
-          const float3 r0 = make_float3(
+          double3 r0 = make_double3(
               m_idata.getBoundBoxLow(0),
               m_idata.getBoundBoxLow(1),
               m_idata.getBoundBoxLow(2)
               );
-          const float3 r1 = make_float3(
+          double3 r1 = make_double3(
               m_idata.getBoundBoxHigh(0),
               m_idata.getBoundBoxHigh(1),
               m_idata.getBoundBoxHigh(2)
               );
+      
+    
+#if 0    /* doesn't help either */
+          const double3 dr = make_double3(
+              r1.x-r0.x,
+              r1.y-r0.y,
+              r1.z-r0.z);
+
+          const double f = 1.0e-7;
+          r0.x += f*dr.x;
+          r0.y += f*dr.y;
+          r0.z += f*dr.z;
+
+          r1.x -= f*dr.x;
+          r1.y -= f*dr.y;
+          r1.z -= f*dr.z;
+#endif
+         
+#if 0  /* doesn't help either */
+          r0 = make_double3(
+              m_idata.xminLoc(),
+              m_idata.yminLoc(),
+              m_idata.zminLoc()
+              );
+          
+          r1 = make_double3(
+              m_idata.xmaxLoc(),
+              m_idata.ymaxLoc(),
+              m_idata.zmaxLoc()
+              );
+#endif
 
           const double4 bBoxVtx[] = {
             make_double4(r0.x,r0.y,r0.z, 1.0),
