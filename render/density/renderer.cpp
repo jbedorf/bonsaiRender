@@ -118,7 +118,8 @@ SmokeRendererParams::SmokeRendererParams() :
   m_flareRadius(50.0f),
   m_skyboxBrightness(0.5f),
   m_cullDarkMatter(true),
-  m_doClipping(false)
+  m_doClipping(false),
+  m_domainView(false)
 {}
 
 
