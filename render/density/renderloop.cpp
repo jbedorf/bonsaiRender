@@ -698,8 +698,68 @@ class Demo
     //This is the main render routine that is called by display for each eye (in stereo case), assumes mview and proj are already setup
     void mainRender(EYE whichEye)
     {
-      //m_renderer.display(m_displayMode);
-//      MPI_Bcast(&m_renderer, sizeof(SmokeRenderer),  MPI_BYTE, 0, MPI_COMM_WORLD);
+      /*** determine global composing order ***/
+
+      const double3 r0 = make_double3(
+          m_idata.getBoundBoxLow(0),
+          m_idata.getBoundBoxLow(1),
+          m_idata.getBoundBoxLow(2)
+          );
+      const double3 r1 = make_double3(
+          m_idata.getBoundBoxHigh(0),
+          m_idata.getBoundBoxHigh(1),
+          m_idata.getBoundBoxHigh(2)
+          );
+
+      const double4 bBoxVtx[] = {
+        make_double4(r0.x,r0.y,r0.z, 1.0),
+        make_double4(r1.x,r0.y,r0.z, 1.0),
+        make_double4(r0.x,r1.y,r0.z, 1.0),
+        make_double4(r1.x,r1.y,r0.z, 1.0),
+        make_double4(r0.x,r0.y,r1.z, 1.0),
+        make_double4(r1.x,r0.y,r1.z, 1.0),
+        make_double4(r0.x,r1.y,r1.z, 1.0),
+        make_double4(r1.x,r1.y,r1.z, 1.0)
+      };
+
+      double modelView[16];
+      double projection[16];
+      glGetDoublev(GL_MODELVIEW_MATRIX,   modelView);
+      glGetDoublev(GL_PROJECTION_MATRIX, projection);
+
+      double zmin = HUGE;
+      for (auto v : bBoxVtx)
+      {
+        v = lMatVec(modelView,  v);
+        v = lMatVec(projection, v);
+        zmin = std::min(zmin, v.z);
+      }
+
+      /*** gather depth from each rank ***/
+      std::vector<double> depth(nrank);
+      MPI_Allgather(&zmin, 1, MPI_DOUBLE, &depth[0], 1, MPI_DOUBLE, comm);
+
+      /*** sort ranks by depth ***/
+      using pair = std::pair<double,int>;
+      std::vector<pair> depthMap(nrank);
+      for (int p = 0; p < nrank; p++)
+        depthMap[p] = std::make_pair(depth[p],p);
+      std::sort(depthMap.begin(), depthMap.end(), 
+          [](const pair &a, const pair &b) { return a.first < b.first;});
+
+      /*** extract compositing order ***/
+      std::vector<int> compositingOrder;
+      for (auto p : depthMap)
+        compositingOrder.push_back(p.second);
+
+#if 0
+#define __GLOBAL_ORDER_COMPOSING
+#endif
+
+#ifdef __GLOBAL_ORDER_COMPOSING
+      m_renderer.setCompositingOrder(compositingOrder);
+#endif
+
       m_renderer.render();
 
 #if 0
@@ -922,105 +982,6 @@ class Demo
           glLoadMatrixd(m_projection);
           glMatrixMode(GL_MODELVIEW);
           glLoadMatrixd(m_modelView);
-
-          /*** determine global composing order ***/
-      
-          double3 r0 = make_double3(
-              m_idata.getBoundBoxLow(0),
-              m_idata.getBoundBoxLow(1),
-              m_idata.getBoundBoxLow(2)
-              );
-          double3 r1 = make_double3(
-              m_idata.getBoundBoxHigh(0),
-              m_idata.getBoundBoxHigh(1),
-              m_idata.getBoundBoxHigh(2)
-              );
-      
-    
-#if 0    /* doesn't help either */
-          const double3 dr = make_double3(
-              r1.x-r0.x,
-              r1.y-r0.y,
-              r1.z-r0.z);
-
-          const double f = 1.0e-7;
-          r0.x += f*dr.x;
-          r0.y += f*dr.y;
-          r0.z += f*dr.z;
-
-          r1.x -= f*dr.x;
-          r1.y -= f*dr.y;
-          r1.z -= f*dr.z;
-#endif
-         
-#if 0  /* doesn't help either */
-          r0 = make_double3(
-              m_idata.xminLoc(),
-              m_idata.yminLoc(),
-              m_idata.zminLoc()
-              );
-          
-          r1 = make_double3(
-              m_idata.xmaxLoc(),
-              m_idata.ymaxLoc(),
-              m_idata.zmaxLoc()
-              );
-#endif
-
-          const double4 bBoxVtx[] = {
-            make_double4(r0.x,r0.y,r0.z, 1.0),
-            make_double4(r1.x,r0.y,r0.z, 1.0),
-            make_double4(r0.x,r1.y,r0.z, 1.0),
-            make_double4(r1.x,r1.y,r0.z, 1.0),
-            make_double4(r0.x,r0.y,r1.z, 1.0),
-            make_double4(r1.x,r0.y,r1.z, 1.0),
-            make_double4(r0.x,r1.y,r1.z, 1.0),
-            make_double4(r1.x,r1.y,r1.z, 1.0)
-          };
-
-          double zmin = HUGE;
-          for (auto v : bBoxVtx)
-          {
-#if 0
-            double px = v.x;
-            double py = v.y;
-            double pz = v.z;
-            double wx,wy,wz;
-            gluProject(px,py,pz, m_modelView, m_projection, m_viewport,
-                &wx, &wy, &wz);
-            zmin = std::min(zmin, wz);
-#else
-            v = lMatVec(m_modelView, v);
-            v = lMatVec(m_projection, v);
-            zmin = std::min(zmin, v.z);
-#endif
-          }
-
-          /*** gather depth from each rank ***/
-          std::vector<double> depth(nrank);
-          MPI_Allgather(&zmin, 1, MPI_DOUBLE, &depth[0], 1, MPI_DOUBLE, comm);
-
-          /*** sort ranks by depth ***/
-          using pair = std::pair<double,int>;
-          std::vector<pair> depthMap(nrank);
-          for (int p = 0; p < nrank; p++)
-            depthMap[p] = std::make_pair(depth[p],p);
-          std::sort(depthMap.begin(), depthMap.end(), 
-              [](const pair &a, const pair &b) { return a.first < b.first;});
-
-          /*** extract compositing order ***/
-          std::vector<int> compositingOrder;
-          for (auto p : depthMap)
-            compositingOrder.push_back(p.second);
-
-#if 0
-#define __GLOBAL_ORDER_COMPOSING
-#endif
-
-#ifdef __GLOBAL_ORDER_COMPOSING
-          m_renderer.setCompositingOrder(compositingOrder);
-#endif
-
           mainRender(LEFT_EYE);
         }
       }
