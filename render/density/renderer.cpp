@@ -1557,23 +1557,23 @@ static void lComposeJB(
                   procId, nx, ny, nxID, nyID, xCount, xStart, yCount, yStart);  
 #endif  
   
-#if 1  
+#if 1 
   //Or use a simpeler 1D decompositionx
   
   //Convert each of our pixels back to the global-screen ID
-  for(int y=0; y < (endH-startH); y++)
+  #pragma omp parallel for schedule(static)
+  for(int idx = 0; idx < (endH-startH)*(endW-startW); idx++)
   {
-    for(int x = 0; x < (endW-startW); x++)
-    {      
-      //In global ordering this would be pixel:
-      int globalY       = y + startH;
-      int globalX       = x + startW;
-      int globalIdx     = globalY * w + globalX;
-      src[globalIdx]    = srcSub[y* (endW-startW)+x]; //make_float4(0,0,0,0);    
-      
-      depthSub[y* (endW-startW)+x] = depth[globalIdx]; //Fill our sub depth-buffer
-      //depth[globalIdx]  =  rank;
-    }
+    int y = idx / (endW-startW);
+    int x = idx % (endW-startW);
+    
+    //In global ordering this would be pixel:
+    int globalY       = y + startH;
+    int globalX       = x + startW;
+    int globalIdx     = globalY * w + globalX;
+    src[globalIdx]    = srcSub[y* (endW-startW)+x]; //make_float4(0,0,0,0);    
+    
+    depthSub[y* (endW-startW)+x] = depth[globalIdx]; //Fill our sub depth-buffer    
   }
   
 #endif
