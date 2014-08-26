@@ -1372,7 +1372,9 @@ void SmokeRenderer::render()
     case SPLOTCH_SORTED_ICET:
       splotchDrawSortIceT();
       break;
-
+    case SPLOTCH_SORTED_OPT:
+      splotchDrawSortOpt();
+      break;
     case NUM_MODES:
       break;
   }
@@ -1397,6 +1399,186 @@ static void lCompose(
     const int showDomain)
 {
   const int master = 0;
+#if 0
+  MPI_Reduce(src, dst, 4*n, MPI_FLOAT, MPI_SUM, master, comm);
+#else
+  const int nsend = (n+nrank-1)/nrank;
+  static std::vector<float4> colorArray;
+  colorArray.resize(nsend*nrank);
+
+  if (!depth)
+  {
+#pragma omp parallel for schedule(static)
+    for (int i = n; i < nsend*nrank; i++)
+      src[i] = make_float4(0.0f);
+
+    MPI_Alltoall(src, nsend*4, MPI_FLOAT, &colorArray[0], nsend*4, MPI_FLOAT, comm);
+
+    assert(showDomain >= -1 && showDomain < nrank);
+    if (showDomain == -1)
+    {
+#pragma omp parallel for schedule(static)
+      for (int i = 0; i < nsend; i++)
+        for (int p = 1; p < nrank; p++)
+        {
+          float4 dst = colorArray[i];
+          float4 src = colorArray[i + p*nsend];
+          dst.x += src.x;
+          dst.y += src.y;
+          dst.z += src.z;
+          dst.w += src.w;
+          colorArray[i] = dst;
+        }
+    }
+    else
+      std::copy(
+          colorArray.begin() + showDomain*nsend,
+          colorArray.begin() + showDomain*nsend + nsend,
+          colorArray.begin());
+  }
+  else
+  {
+    static std::vector<float > depthArray;
+    depthArray.resize(nsend*nrank);
+#pragma omp parallel for schedule(static)
+    for (int i = n; i < nsend*nrank; i++)
+    {
+      src[i] = make_float4(0.0f);
+      depth[i] = 1.0f;
+    }
+
+    MPI_Alltoall(src, nsend*4, MPI_FLOAT, &colorArray[0], nsend*4, MPI_FLOAT, comm);
+    MPI_Alltoall(depth, nsend, MPI_FLOAT, &depthArray[0], nsend, MPI_FLOAT, comm);
+
+    using vec5 = std::array<float,5>;
+    std::vector<vec5> colorArrayDepth(nsend*nrank);
+#pragma omp parallel for schedule(static)
+    for (int i = 0; i < nsend; i++)
+      for (int p = 0; p < nrank; p++)
+      {
+        const int dst = i*nrank+p;
+        const int src = p*nsend+i;
+        colorArrayDepth[dst] = 
+          vec5{{
+            colorArray[src].x,colorArray[src].y,colorArray[src].z,colorArray[src].w,
+            depthArray[src]
+          }};
+      }
+
+   
+   if (showDomain == -1)
+   { 
+#pragma omp parallel for schedule(static)
+     for (int i = 0; i < nsend; i++)
+     {
+       const int stride = i*nrank;
+       std::sort(
+           colorArrayDepth.begin() + stride, 
+           colorArrayDepth.begin() + stride + nrank,
+           [](const vec5 &a, const vec5 &b){ return a[4] < b[4]; }
+           );
+
+       float4 _dst = make_float4(0.0);
+       for (int p = 0; p < nrank; p++)
+       {
+         float4 _src = make_float4(
+             colorArrayDepth[stride+p][0],
+             colorArrayDepth[stride+p][1],
+             colorArrayDepth[stride+p][2],
+             colorArrayDepth[stride+p][3]
+             );
+
+         _src.x *= 1.0f - _dst.w;
+         _src.y *= 1.0f - _dst.w;
+         _src.z *= 1.0f - _dst.w;
+         _src.w *= 1.0f - _dst.w;
+
+         _dst.x += _src.x;
+         _dst.y += _src.y;
+         _dst.z += _src.z;
+         _dst.w += _src.w;
+         _dst.w = std::min(1.0f, _dst.w);
+         assert(_dst.w >= 0.0f);
+       }
+       colorArray[i] = _dst;
+     }
+   }
+   else
+     std::copy(
+         colorArray.begin() + showDomain*nsend,
+         colorArray.begin() + showDomain*nsend + nsend,
+         colorArray.begin());
+  }
+
+  MPI_Gather(&colorArray[0], nsend*4, MPI_FLOAT, dst, 4*nsend, MPI_FLOAT, master, comm);
+#endif
+}
+
+static void lComposeJB(
+    float4 *src, float4 *srcSub, float4 *dst, float *depth, float *depthSub,
+    const int n, const int w, const int h,
+    const int startW, const int endW,
+    const int startH, const int endH,
+    const int rank, const int nrank, const MPI_Comm &comm,
+    const int showDomain)
+{
+  const int master = 0;
+  
+  
+#if 0  
+  //Create a 2D decomposition of the main screen
+   int n_tmp = (int)sqrt(nrank+0.1);
+   while(nrank%n_tmp){
+    n_tmp--;
+   }   
+  int nx = n_tmp;       // number of pe in i-comm
+  int ny = nrank/nx; 
+  
+  const int procId = rank;
+  int nxID = procId%ny; // = rank in i-comm
+  int nyID = procId/ny; // = rank in j-comm
+
+
+  //Determine the location in the x split 
+
+  int temp = w / nx;                 //Equal distribution
+  int rest = w % nx;                 //Check if we divide integers evenly
+  int xCount = temp  + (nyID < rest);   //The even distribution + anything remaining
+  int xStart = temp*nyID + (nyID < rest ? procId : rest); 
+
+
+        temp = h / ny;                       //Equal distribution
+        rest = h % ny;                       //Check if we divide integers evenly
+  int yCount = temp  + (nxID < rest);   //The even distribution + anything remaining
+  int yStart = temp*nxID + (nxID < rest ? procId : rest); 
+
+
+  fprintf(stderr,"[ %d ] Dimension: %d %d \t %d %d x: %d %d\t y: %d %d \n", 
+                  procId, nx, ny, nxID, nyID, xCount, xStart, yCount, yStart);  
+#endif  
+  
+#if 1  
+  //Or use a simpeler 1D decompositionx
+  
+  //Convert each of our pixels back to the global-screen ID
+  for(int y=0; y < (endH-startH); y++)
+  {
+    for(int x = 0; x < (endW-startW); x++)
+    {      
+      //In global ordering this would be pixel:
+      int globalY       = y + startH;
+      int globalX       = x + startW;
+      int globalIdx     = globalY * w + globalX;
+      src[globalIdx]    = srcSub[y* (endW-startW)+x]; //make_float4(0,0,0,0);    
+      
+      depthSub[y* (endW-startW)+x] = depth[globalIdx]; //Fill our sub depth-buffer
+      //depth[globalIdx]  =  rank;
+    }
+  }
+  
+#endif
+  
+  
 #if 0
   MPI_Reduce(src, dst, 4*n, MPI_FLOAT, MPI_SUM, master, comm);
 #else
@@ -1771,7 +1953,31 @@ void SmokeRenderer::splotchDraw()
     for(int j=startIdxH; j < endIdxH; j++)
 	for(int i=startIdxW; i < endIdxW; i++)
 		imgLoc[j*w+i] = make_float4(0,0,0,0);  //This  colors the middle
-    #endif			
+    #endif	
+    
+#if 1
+
+  const int startH = startIdxH;
+  const int endH   = endIdxH;
+  const int startW = startIdxW;
+  const int endW   = endIdxW;
+  for(int y=0; y < (endH-startH); y++)
+  {
+    for(int x = 0; x < (endW-startW); x++)
+    {
+      // imgLoc[y* (endW-startW)+x]
+      
+      //In global ordering this would be pixel:
+      int globalY       = y + startH;
+      int globalX       = x + startW;
+      int globalIdx     = globalY * w + globalX;
+      imgLoc[globalIdx] = make_float4(0,0,0,0);
+    }
+  }
+  
+
+
+#endif
     
     const int totalReduce = (endIdxH-startIdxH) * (endIdxW-startIdxW);
     const int totalFull       = w*h;
@@ -2147,9 +2353,376 @@ void SmokeRenderer::splotchDrawSort()
   m_splotch2texProg->disable();
 }
 
+void SmokeRenderer::splotchDrawSortOpt()
+{
+  m_fbo->Bind();
+  m_fbo->AttachTexture(GL_TEXTURE_2D, m_imageTex[0], GL_COLOR_ATTACHMENT0_EXT);
+  m_fbo->AttachTexture(GL_TEXTURE_2D, m_depthTex, GL_DEPTH_ATTACHMENT_EXT);
+  glViewport(0, 0, m_imageW, m_imageH);
+  glClearColor(0.0, 0.0, 0.0, 0.0); 
+  glClearDepth(1.0f);
+  glDepthMask(GL_TRUE);
+  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+  glDisable(GL_BLEND);
+  
+  
+  
+
+    //Draw bounding box
+  glColor4f(0.0f, 1.0f, 0.0f, 1.0f);   
+  glBegin(GL_LINE_LOOP);
+  glVertex3f(boxMin.x, boxMin.y, boxMin.z);
+  glVertex3f(boxMax.x, boxMin.y, boxMin.z);
+  glVertex3f(boxMax.x, boxMax.y, boxMin.z);
+  glVertex3f(boxMin.x, boxMax.y, boxMin.z);
+  glEnd();
+  glBegin(GL_LINE_LOOP);
+  glVertex3f(boxMin.x, boxMin.y, boxMax.z);
+  glVertex3f(boxMax.x, boxMin.y, boxMax.z);
+  glVertex3f(boxMax.x, boxMax.y, boxMax.z);
+  glVertex3f(boxMin.x, boxMax.y, boxMax.z);
+  glEnd();
+  glBegin(GL_LINES);
+  glVertex3f(boxMin.x, boxMin.y, boxMin.z);
+  glVertex3f(boxMin.x, boxMin.y, boxMax.z);
+  glVertex3f(boxMax.x, boxMin.y, boxMin.z);
+  glVertex3f(boxMax.x, boxMin.y, boxMax.z);
+  glVertex3f(boxMax.x, boxMax.y, boxMin.z);
+  glVertex3f(boxMax.x, boxMax.y, boxMax.z);
+  glVertex3f(boxMin.x, boxMax.y, boxMin.z);
+  glVertex3f(boxMin.x, boxMax.y, boxMax.z);
+  glEnd();
+
+
+  //Convert the boundaries to screenspace
+  double mProjection[16];
+  double mModelView[16];
+  GLint    mView [4];
+    
+  glGetDoublev(GL_PROJECTION_MATRIX, mProjection);
+  glGetDoublev(GL_MODELVIEW_MATRIX,  mModelView);
+  glGetIntegerv(GL_VIEWPORT, mView);
+              
+  
+  double winxMin = 10e10f, winxMax = -10e10f, winyMin = 10e10f, winyMax = -10e10f;
+  double winx[8], winy[8], winz;  //All corners
+  
+  gluProject(boxMin.x, boxMin.y, boxMin.z,mModelView,mProjection,mView,&winx[0],&winy[0],&winz);    //Bottom left front
+  gluProject(boxMax.x, boxMin.y, boxMin.z,mModelView,mProjection,mView,&winx[1],&winy[1],&winz);   //Bottom right front
+  gluProject(boxMin.x, boxMax.y, boxMin.z,mModelView,mProjection,mView,&winx[2],&winy[2],&winz);   //Top left front
+  gluProject(boxMax.x, boxMax.y, boxMin.z,mModelView,mProjection,mView,&winx[3],&winy[3],&winz);   //Top right front
+  gluProject(boxMin.x, boxMin.y, boxMax.z,mModelView,mProjection,mView,&winx[4],&winy[4],&winz);    //Bottom left back
+  gluProject(boxMax.x, boxMin.y, boxMax.z,mModelView,mProjection,mView,&winx[5],&winy[5],&winz);   //Bottom right back
+  gluProject(boxMin.x, boxMax.y, boxMax.z,mModelView,mProjection,mView,&winx[6],&winy[6],&winz);   //Top left back
+  gluProject(boxMax.x, boxMax.y, boxMax.z,mModelView,mProjection,mView,&winx[7],&winy[7],&winz);   //Top right back
+  
+  //Compute our min Z coordinate and the winxy coordinates
+    
+  for(int i=0; i < 8; i++)
+  {
+    winxMin = std::min(winx[i], winxMin);
+    winyMin = std::min(winy[i], winyMin);
+    winxMax = std::max(winx[i], winxMax);
+    winyMax = std::max(winy[i], winyMax);
+  }  
+    
+
+  const int start = 0;
+  const int count = mNumParticles;
+
+  calcVectors();
+  depthSortCopy();
+  glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);   
+
+  auto &prog = m_splotchProg;
+
+  GLuint vertexLoc = -1;
+  if (!mSizeVao && mSizeVbo)
+  {
+    glGenVertexArrays(1, &mSizeVao);
+    glBindVertexArray(mSizeVao);
+    glBindBufferARB(GL_ARRAY_BUFFER_ARB, mSizeVbo);
+    vertexLoc = prog->getAttribLoc("particleSize");
+    glEnableVertexAttribArray(vertexLoc);
+    glVertexAttribPointer(vertexLoc , 1, GL_FLOAT, 0, 0, 0);
+  }
+
+  /******   depth buffer pass *****/
+  
+  glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);
+  glDepthFunc(GL_LEQUAL);
+  glDisable(GL_BLEND);
+  glEnable(GL_DEPTH_TEST);
+  glDepthMask(GL_TRUE);  // write depth
+  
+    GLint dbits = 0;
+    glGetIntegerv(GL_DEPTH_BITS, &dbits);
+   // std::cerr <<  "z-buffer bits: " << dbits << std::endl;      
+  assert(dbits == 24);    //for glReadPixels further down
+
+  prog->enable();
+  glBindVertexArray(mSizeVao);
+
+  GLint viewport[4];
+  glGetIntegerv(GL_VIEWPORT, viewport);
+  // VS
+  prog->setUniform1f("spriteScale", viewport[3] / mInvFocalLen);
+  prog->setUniform1f("starScale", powf(10.0f, m_starScaleLog));
+  prog->setUniform1f("starAlpha", m_starAlpha);
+  prog->setUniform1f("dmScale",  powf(10.0f, m_dmScaleLog));
+  prog->setUniform1f("dmAlpha",  m_dmAlpha);
+  prog->setUniform1f("spriteSizeMax", powf(10.0f, m_spriteSizeMaxLog));
+  // PS
+  prog->bindTexture("spriteTex",  m_sphTex, GL_TEXTURE_2D, 1);
+  prog->setUniform1f("alphaScale", m_spriteAlpha);
+  prog->setUniform1f("transmission", m_transmission);
+
+  prog->setUniform1f("sorted", 2.0);
+
+  //glClientActiveTexture(GL_TEXTURE0);
+  glActiveTexture(GL_TEXTURE0);
+  glTexEnvi(GL_POINT_SPRITE_ARB, GL_COORD_REPLACE_ARB, GL_TRUE);
+  glEnable(GL_VERTEX_PROGRAM_POINT_SIZE_ARB);
+  glEnable(GL_POINT_SPRITE_ARB);
+
+  drawPoints(start,count,true);
+
+  prog->disable();
+
+  /***** generate image pass *****/
+ 
+  glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+  glDisable(GL_DEPTH_TEST);
+  glDepthMask(GL_FALSE);  // don't write depth
+  glEnable(GL_BLEND);
+  m_fbo->AttachTexture(GL_TEXTURE_2D, 0, GL_DEPTH_ATTACHMENT_EXT);
+
+  prog->enable();
+
+  // VS
+  prog->setUniform1f("spriteScale", viewport[3] / mInvFocalLen);
+  prog->setUniform1f("starScale", powf(10.0f, m_starScaleLog));
+  prog->setUniform1f("starAlpha", m_starAlpha);
+  prog->setUniform1f("dmScale",  powf(10.0f, m_dmScaleLog));
+  prog->setUniform1f("dmAlpha",  m_dmAlpha);
+  prog->setUniform1f("spriteSizeMax", powf(10.0f, m_spriteSizeMaxLog));
+  // PS
+  prog->bindTexture("spriteTex",  m_sphTex, GL_TEXTURE_2D, 1);
+  prog->setUniform1f("alphaScale", m_spriteAlpha);
+  prog->setUniform1f("transmission", m_transmission);
+
+  prog->setUniform1f("sorted", 1.0);
+
+  //glClientActiveTexture(GL_TEXTURE0);
+  glActiveTexture(GL_TEXTURE0);
+  glTexEnvi(GL_POINT_SPRITE_ARB, GL_COORD_REPLACE_ARB, GL_TRUE);
+  glEnable(GL_VERTEX_PROGRAM_POINT_SIZE_ARB);
+  glEnable(GL_POINT_SPRITE_ARB);
+
+  drawPoints(start,count,true);
+
+  prog->disable();
+
+
+  /********* compose ********/
+
+#if 1
+  glFlush();
+  glFinish();
+#endif
+
+
+#if 1
+  {
+    const double t0 = MPI_Wtime();
+    GLint w, h, internalformat;
+
+    glBindTexture(GL_TEXTURE_2D, m_imageTex[0]);
+    glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_WIDTH,  &w);
+    glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_HEIGHT, &h);
+    glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_INTERNAL_FORMAT, &internalformat);
+    glBindTexture(GL_TEXTURE_2D,0);
+    
+  
+    //Note the +1 and -1, we need that to get the boundaries just right otherwise roundof can cause pixel leakage    
+    const int startIdxH = std::max(0, (int)winyMin-1);
+    const int endIdxH   = std::min(h, (int)winyMax+1);
+    const int startIdxW = std::max(0, (int)winxMin-1);
+    const int endIdxW   = std::min(w, (int)winxMax+1);
+    
+    const int subH = endIdxH-startIdxH;
+    const int subW = endIdxW-startIdxW;
+
+
+    static std::vector<float4> imgLoc, imgGlb, imgSub;
+    static std::vector<float > depth, depthSub;
+    imgLoc.resize(2*w*h);
+    imgGlb.resize(2*w*h);
+    depth.resize(2*w*h);
+    
+    imgSub.resize(2*subW*subH);
+    depthSub.resize(2*subW*subH);
+    
+    const int imgSize = w*h*4*sizeof(float);
+
+    const double t1 = MPI_Wtime();
+
+    static GLuint pbo_id[2];
+    if (!pbo_id[0])
+    {
+      const int pbo_size = 8*1920*1080*4*sizeof(float);
+      glGenBuffers(2, pbo_id);
+      glBindBuffer(GL_PIXEL_PACK_BUFFER, pbo_id[0]);
+      glBufferData(GL_PIXEL_PACK_BUFFER, pbo_size, 0, GL_STATIC_READ);
+      glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
+      glBindBuffer(GL_PIXEL_UNPACK_BUFFER, pbo_id[1]);
+      glBufferData(GL_PIXEL_UNPACK_BUFFER, pbo_size, 0, GL_STATIC_DRAW);
+      glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
+    }
+    assert(pbo_id[0] && pbo_id[1]);
+
+    /***** fetch image *****/
+
+    glBindTexture(GL_TEXTURE_2D, m_imageTex[0]);
+    glBindBuffer(GL_PIXEL_PACK_BUFFER, pbo_id[0]);
+    //glGetTexImage(GL_TEXTURE_2D, 0, GL_RGBA, GL_FLOAT, 0);
+    //glReadPixels(0, 0, w, h, GL_RGBA, GL_FLOAT, 0);
+    glReadPixels(startIdxW, startIdxH, subW, subH, GL_RGBA, GL_FLOAT, 0);
+    glFinish();
+    const double t2 = MPI_Wtime();
+
+    GLvoid *rptr = glMapBufferRange(GL_PIXEL_PACK_BUFFER, 0, imgSize, GL_MAP_READ_BIT);
+
+#if 0
+#pragma omp parallel for schedule(static)
+    for (int i = 0; i < w*h; i++)
+      imgLoc[i] = reinterpret_cast<float4*>(rptr)[i];
+#else
+#pragma omp parallel for schedule(static)
+    for (int i = 0; i < subW*subH; i++)
+      imgSub[i] = reinterpret_cast<float4*>(rptr)[i];
+
+#endif    
+
+    glUnmapBuffer(GL_PIXEL_PACK_BUFFER);
+    glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
+    glBindTexture(GL_TEXTURE_2D,0);
+
+    /***** fetch depth buffer *****/
+
+    glBindTexture(GL_TEXTURE_2D, m_depthTex);
+    glBindBuffer(GL_PIXEL_PACK_BUFFER, pbo_id[0]);
+    glGetTexImage(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT, GL_FLOAT, 0);
+    //glReadPixels(0, 0, w, h, GL_DEPTH_COMPONENT, GL_UNSIGNED_INT_24_8, 0); 
+    //glReadPixels(0, 0, w, h, GL_DEPTH_COMPONENT, GL_FLOAT, 0);
+    
+    rptr = glMapBufferRange(GL_PIXEL_PACK_BUFFER, 0, imgSize, GL_MAP_READ_BIT);
+
+#if 1    
+    float dmin = +HUGE, dmax = -HUGE;
+#pragma omp parallel for schedule(static) reduction(min:dmin) reduction(max:dmax)
+    for (int i = 0; i < w*h; i++)
+    {
+      depth[i] = reinterpret_cast<float*>(rptr)[i];
+      dmin = std::min(dmin, depth[i]);
+      dmax = std::max(dmax, depth[i]);
+    }
+#else
+    float dmin = +HUGE, dmax = -HUGE;
+#pragma omp parallel for schedule(static) reduction(min:dmin) reduction(max:dmax)
+    for (int i = 0; i < subW*subH; i++)
+    {
+      depthSub[i] = reinterpret_cast<float*>(rptr)[i];
+      dmin = std::min(dmin, depth[i]);
+      dmax = std::max(dmax, depth[i]);
+    }    
+#endif    
+//    fprintf(stderr, "rank= %d: dmin= %g  dmax= %g\n", rank, dmin,dmax);
+
+    glUnmapBuffer(GL_PIXEL_PACK_BUFFER);
+    glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
+    glBindTexture(GL_TEXTURE_2D,0);
+
+    glFinish();
+    const double t3 = MPI_Wtime();
+
+    /***** compose image *****/
+
+#if 0
+lCompose(&imgLoc[0], &imgGlb[0], &depth[0], w*h, rank, nrank, comm, m_domainView ? m_domainViewIdx : -1);
+#else    
+    fprintf(stderr,"Before lComposeJB \n");
+    lComposeJB(&imgLoc[0], &imgSub[0], &imgGlb[0], &depth[0], &depthSub[0],
+               w*h, w, h, 
+               startIdxW, endIdxW, startIdxH, endIdxH,
+               rank, nrank, comm,
+        m_domainView ? m_domainViewIdx : -1);  
+        fprintf(stderr,"After lComposeJB \n");
+#endif        
+    glFinish();
+    const double t4 = MPI_Wtime();
+
+    if (isMaster())
+    {
+
+      /***** place back to fbo *****/
+
+      fprintf(stderr,"Before YYY\n");
+
+      glBindBuffer(GL_PIXEL_UNPACK_BUFFER, pbo_id[1]);
+      GLvoid *wptr = glMapBufferRange(GL_PIXEL_UNPACK_BUFFER, 0, imgSize, GL_MAP_WRITE_BIT);
+            
+      fprintf(stderr,"After YYY\n");
+
+#pragma omp parallel for schedule(static)
+      for (int i = 0; i < w*h; i++)
+        reinterpret_cast<float4*>(wptr)[i] = imgGlb[i];
+      glFinish();
+      const double t5 = MPI_Wtime();
+      
+
+
+      glUnmapBuffer(GL_PIXEL_UNPACK_BUFFER);
+
+      glBindTexture(GL_TEXTURE_2D, m_imageTex[0]);
+      glTexImage2D(GL_TEXTURE_2D, 0, internalformat, w,h,0,GL_RGBA,GL_FLOAT, 0);
+      glFinish();
+      glBindTexture(GL_TEXTURE_2D,0);
+      glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
+      const double t6 = MPI_Wtime();
+
+      if (1)
+        fprintf(stderr, 
+            "total= %g: d2h= %g cpy= %g  mpi= %g  cpy= %g h2d= %g :: bwMPI= %g bwD2H= %g  bwH2D= %g\n", t6-t0,
+            t2-t1,   t3-t2,       t4-t3,   t5-t4,     t6-t5,
+            3.0*imgSize/(t4-t3)/1e6, imgSize/(t2-t1)/1e6, imgSize/(t6-t5)/1e6);
+    }
+
+  }
+#endif
+
+        fprintf(stderr,"After XXX\n");
+
+  m_fbo->Disable();
+
+
+
+  glDisable(GL_BLEND);
+  m_splotch2texProg->enable();
+  m_splotch2texProg->bindTexture("tex", m_imageTex[0], GL_TEXTURE_2D, 0);
+  m_splotch2texProg->setUniform1f("scale_pre", 0.1*m_imageBrightnessPre);
+  m_splotch2texProg->setUniform1f("gamma_pre", m_gammaPre);
+  m_splotch2texProg->setUniform1f("scale_post", m_imageBrightnessPost);
+  m_splotch2texProg->setUniform1f("gamma_post", m_gammaPost);
+  m_splotch2texProg->setUniform1f("sorted", 1.0f);
+  drawQuad();
+  m_splotch2texProg->disable();
+  
+}
 
 void SmokeRenderer::splotchDrawSortIceT()
 {
+  return;
 // m_domainView ? m_domainViewIdx
 //
 
@@ -2316,7 +2889,7 @@ void SmokeRenderer::splotchDrawSortIceT()
   glEnable(GL_POINT_SPRITE_ARB);
   
 
-        m_fbo->Disable();
+  m_fbo->Disable();
 
   drawPoints(start,count,true);
 

@@ -37,6 +37,7 @@ class SmokeRendererParams
       SPLOTCH,
       SPLOTCH_SORTED,
       SPLOTCH_SORTED_ICET,
+      SPLOTCH_SORTED_OPT,
       NUM_MODES
     };
   protected:
@@ -277,6 +278,7 @@ class SmokeRenderer : public SmokeRendererParams
 
     void splotchDraw    ();
     void splotchDrawSort();
+    void splotchDrawSortOpt();
     void splotchDrawSortIceT();
 
     GLuint createTexture(GLenum target, int w, int h, GLint internalformat, GLenum format, void *data = 0);
