@@ -1420,7 +1420,6 @@ static void lCompose(
 
   if (rankMap.empty())
   {
-
     const int winxloc = (viewPort.x + npx - 1) / npx;
     const int winyloc = (viewPort.y + npy - 1) / npy;
     
@@ -1475,20 +1474,22 @@ static void lCompose(
   std::fill(sendcount.begin(), sendcount.end(), 0);
 
   /* count pixels to send to remote ranks */
-  for (int j = wCrd.y; j < wCrd.y + wSize.y; j++)
-    for (int i = wCrd.x; i < wCrd.x + wSize.x; i++)
-    {
-      const int dstRank = rankMap[j*viewPort.x + i];
-      assert(dstRank >= 0 && dstRank < nrank);
-      
-      auto &minmax = tilesBnd[dstRank];
-      minmax.x = std::min(minmax.x, i);
-      minmax.y = std::min(minmax.y, j);
-      minmax.z = std::max(minmax.z, i);
-      minmax.w = std::max(minmax.w, j);
+  {
+    for (int j = wCrd.y; j < wCrd.y + wSize.y; j++)
+      for (int i = wCrd.x; i < wCrd.x + wSize.x; i++)
+      {
+        const int dstRank = rankMap[j*viewPort.x + i];
+        assert(dstRank >= 0 && dstRank < nrank);
 
-      sendcount[dstRank] += mpiDataSize;
-    }
+        auto &minmax = tilesBnd[dstRank];
+        minmax.x = std::min(minmax.x, i);
+        minmax.y = std::min(minmax.y, j);
+        minmax.z = std::max(minmax.z, i);
+        minmax.w = std::max(minmax.w, j);
+
+        sendcount[dstRank] += mpiDataSize;
+      }
+  }
 
   /* count also tile's metadata */
   for (int p = 0; p < nrank; p++)
@@ -1515,17 +1516,19 @@ static void lCompose(
     offset[p] = senddispl[p] / mpiDataSize;
 
   /* pupulate senfbuf with pixels */
-  for (int j = wCrd.y; j < wCrd.y + wSize.y; j++)
-    for (int i = wCrd.x; i < wCrd.x + wSize.x; i++)
-    {
-      const int isrc = (j-wCrd.y)*wSize.x + (i-wCrd.x);
-      const float4 col =   src[isrc];
-      const float  z   = depth[isrc];
+  {
+    for (int j = wCrd.y; j < wCrd.y + wSize.y; j++)
+      for (int i = wCrd.x; i < wCrd.x + wSize.x; i++)
+      {
+        const int isrc = (j-wCrd.y)*wSize.x + (i-wCrd.x);
+        const float4 col =   src[isrc];
+        const float  z   = depth[isrc];
 
-      const int dstRank = rankMap[j*viewPort.x + i];
-      sendbuf[offset[dstRank]] = vec5{{col.x,col.y,col.z,col.w,z}};
-      offset[dstRank]++;
-    }
+        const int dstRank = rankMap[j*viewPort.x + i];
+        sendbuf[offset[dstRank]] = vec5{{col.x,col.y,col.z,col.w,z}};
+        offset[dstRank]++;
+      }
+  }
 
   /* add tile metadata */
   for (int p = 0; p < nrank; p++)
@@ -1672,7 +1675,7 @@ static void lCompose(
       const int rank  = jrank * npx + irank;
       const int iloc  = i - (irank * winxloc);
       const int jloc  = j - (jrank * winyloc);
-      dst[i] = imgGlb[winxloc*winyloc*rank + jloc*winyloc + iloc];
+      dst[j*viewPort.x+i] = imgGlb[winxloc*winyloc*rank + jloc*winyloc + iloc];
     }
 }
 
