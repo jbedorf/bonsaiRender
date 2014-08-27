@@ -1413,7 +1413,6 @@ static void lCompose(
   static std::vector<int> rankMap;  /* map for pixel (x,y) to a compositing rank  */
   static int4 localTile;           /* (xmin,ymin,xmax,ymax) local compositing tile */
   static std::vector<float4> imgLoc, imgGlb;
-
   static int npx, npy, irank, jrank;
 
   if (resize) 
@@ -1421,8 +1420,6 @@ static void lCompose(
 
   if (rankMap.empty())
   {
-    const int nPixels = viewPort.x*viewPort.y;
-    rankMap.resize(nPixels);
 
     const int winxloc = (viewPort.x + npx - 1) / npx;
     const int winyloc = (viewPort.y + npy - 1) / npy;
@@ -1450,6 +1447,8 @@ static void lCompose(
     imgGlb.resize(winxloc*winyloc*nrank);
 
     /* generate rank map */
+    const int nPixels = viewPort.x*viewPort.y;
+    rankMap.resize(nPixels);
 #pragma omp parallel for schedule(static)
     for (int i = 0; i < nPixels; i++)
     {
