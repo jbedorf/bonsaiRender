@@ -1395,6 +1395,292 @@ static void lCompose(
     float4 *src, float4 *dst, float *depth,
     const int n, const int rank, const int nrank, const MPI_Comm &comm,
     const int showDomain,
+    std::vector<int> compositingOrder,
+    const int2 wCrd, const int2 wSize,
+    const int2 viewPort, const bool resize = false)
+{
+  constexpr int master = 0;
+
+  assert(src   != NULL);
+  assert(dst   != NULL);
+  assert(depth != NULL);
+
+  assert(wCrd.x >= 0);
+  assert(wCrd.y >= 0);
+  assert(wCrd.x + wSize.x <= viewPort.x);
+  assert(wCrd.y + wSize.y <= viewPort.y);
+
+  static std::vector<int> rankMap;  /* map for pixel (x,y) to a compositing rank  */
+  static int4 localTile;           /* (xmin,ymin,xmax,ymax) local compositing tile */
+  static std::vector<float4> imgLoc, imgGlb;
+
+  static int npx, npy, irank, jrank;
+
+  if (resize) 
+    rankMap.clear();
+
+  if (rankMap.empty())
+  {
+    const int nPixels = viewPort.x*viewPort.y;
+    rankMap.resize(nPixels);
+
+    const int winxloc = (viewPort.x + npx - 1) / npx;
+    const int winyloc = (viewPort.y + npy - 1) / npy;
+    
+    /* factorize nrank = npx*npy */
+    int n_tmp = static_cast<int>(std::sqrt(nrank+0.1));
+    while(nrank%n_tmp)
+      n_tmp--;
+    npy = n_tmp;  
+    npx = nrank/npy;
+    assert(npx*npy == nrank);
+
+    irank = rank / npx;
+    jrank = rank % npx;
+
+    localTile.x = irank * winxloc;
+    localTile.y = jrank * winyloc;
+    localTile.z = winxloc;
+    localTile.w = winyloc;
+
+
+
+    /* allocate buffers */
+    imgLoc.resize(winxloc*winyloc);
+    imgGlb.resize(winxloc*winyloc*nrank);
+
+    /* generate rank map */
+#pragma omp parallel for schedule(static)
+    for (int i = 0; i < nPixels; i++)
+    {
+      const int icol = (i % viewPort.x) / winxloc;
+      const int jcol = (i / viewPort.x) / winyloc;
+      assert(icol >= 0 && icol < npx);
+      assert(jcol >= 0 && jcol < npy);
+      const int rank = jcol * npx + icol;
+      rankMap[i] = rank;
+    }
+  }
+  
+  using vec5 = std::array<float,5>;  /* rgb, alpha, depth */
+  constexpr int mpiDataSize = sizeof(vec5)/sizeof(float);
+
+  /************************************/
+  /* sort pixels by destination ranks */
+  /************************************/
+
+  static std::vector<int4> tilesBnd(nrank); 
+  std::fill(tilesBnd.begin(), tilesBnd.end(), make_int4(viewPort.x,viewPort.y,0,0));
+
+  static std::vector<int> sendcount(nrank);
+  std::fill(sendcount.begin(), sendcount.end(), 0);
+
+  /* count pixels to send to remote ranks */
+  for (int j = wCrd.y; j < wCrd.y + wSize.y; j++)
+    for (int i = wCrd.x; i < wCrd.x + wSize.x; i++)
+    {
+      const int dstRank = rankMap[j*viewPort.x + i];
+      assert(dstRank >= 0 && dstRank < nrank);
+      
+      auto &minmax = tilesBnd[dstRank];
+      minmax.x = std::min(minmax.x, i);
+      minmax.y = std::min(minmax.y, j);
+      minmax.z = std::max(minmax.z, i);
+      minmax.w = std::max(minmax.w, j);
+
+      sendcount[dstRank] += mpiDataSize;
+    }
+
+  /* count also tile's metadata */
+  for (int p = 0; p < nrank; p++)
+    if (sendcount[p] > 0) 
+      sendcount[p] += mpiDataSize;
+  
+  /* compute displacements */
+  static std::vector<int> senddispl(nrank+1);
+  senddispl[0] = 0;
+  for (int p = 0; p < nrank; p++)
+    senddispl[p+1] = senddispl[p] + sendcount[p];
+
+  static std::vector<vec5> sendbuf;
+  if (senddispl[nrank] > 0)
+    sendbuf.resize(senddispl[nrank] / mpiDataSize);
+
+
+  /************************/
+  /* populate send buffer */
+  /************************/
+
+  static std::vector<int> offset(nrank);
+  for (int p = 0; p < nrank; p++)
+    offset[p] = senddispl[p] / mpiDataSize;
+
+  /* pupulate senfbuf with pixels */
+  for (int j = wCrd.y; j < wCrd.y + wSize.y; j++)
+    for (int i = wCrd.x; i < wCrd.x + wSize.x; i++)
+    {
+      const int isrc = (j-wCrd.y)*wSize.x + (i-wCrd.x);
+      const float4 col =   src[isrc];
+      const float  z   = depth[isrc];
+
+      const int dstRank = rankMap[j*viewPort.x + i];
+      sendbuf[offset[dstRank]] = vec5{{col.x,col.y,col.z,col.w,z}};
+      offset[dstRank]++;
+    }
+
+  /* add tile metadata */
+  for (int p = 0; p < nrank; p++)
+    if (offset[p] > 0)
+      sendbuf[offset[p]] = 
+        vec5{{
+          static_cast<float>(tilesBnd[p].x),
+          static_cast<float>(tilesBnd[p].y),
+          static_cast<float>(tilesBnd[p].z-tilesBnd[p].x),
+          static_cast<float>(tilesBnd[p].w-tilesBnd[p].y),
+          0.0f}};
+
+  /*********************************/
+  /* count number of recv elements */
+  /*********************************/
+
+  static std::vector<int> recvcount(nrank), recvdispl(nrank+1);
+  MPI_Alltoall(&sendcount[0], 1, MPI_INT, &recvcount[0], 1, MPI_INT, comm);
+     
+  recvdispl[0] = 0; 
+  for (int p = 0; p < nrank; p++)
+    recvdispl[p+1] = recvdispl[p] + recvcount[p];
+
+  static std::vector<vec5> recvbuf;
+  if (recvdispl[nrank] > 0)
+    recvbuf.resize(recvdispl[nrank] / mpiDataSize);
+
+  /***********************/
+  /* exchange pixel data */
+  /***********************/
+
+  {
+    MPI_Barrier(comm);
+    const double t0 = MPI_Wtime();
+    MPI_Alltoallv(
+        &sendbuf[0], &sendcount[0], &senddispl[0], MPI_FLOAT,
+        &recvbuf[0], &recvcount[0], &recvdispl[0], MPI_FLOAT,
+        comm);
+    const double t1 = MPI_Wtime();
+    if (rank == master)
+    {
+      const int nsendrecv = recvdispl[nrank] + senddispl[rank];
+      const double bw = sizeof(float)*nsendrecv / (t1-t0);
+      fprintf(stderr, " MPI_Alltoallv BW: %g MB/s\n", bw/1e6);
+    }
+  }
+
+  for (int p = 0; p < nrank; p++)
+  {
+    recvcount[p] /= mpiDataSize;
+    recvdispl[p] /= mpiDataSize;
+  }
+  recvdispl[nrank] /= mpiDataSize;
+
+
+  /********************/
+  /* compositing step */
+  /********************/
+
+  /* extract remote tile coordinates */
+  for (int p = 0; p < rank; p++)
+  {
+    tilesBnd[p].x = recvbuf[recvdispl[p+1]-1][0];
+    tilesBnd[p].y = recvbuf[recvdispl[p+1]-1][1];
+    tilesBnd[p].z = recvbuf[recvdispl[p+1]-1][2];
+    tilesBnd[p].w = recvbuf[recvdispl[p+1]-1][3];
+  }
+
+#pragma omp parallel
+  {
+    const int xmin = localTile.x;
+    const int ymin = localTile.y;
+    const int xmax = localTile.z + xmin;
+    const int ymax = localTile.w + ymin;
+
+    std::vector<vec5> colors;
+    colors.reserve(1024);
+#pragma omp for schedule(static) collapse(2)
+    for (int j = ymin; j < ymax; j++)
+      for (int i = ymin; i < xmax; i++)
+      {
+        colors.clear();
+
+        /* extract non-zero pixels */
+        for (int p = 0; p < nrank; p++)
+        {
+          const int xminr = tilesBnd[p].x;
+          const int yminr = tilesBnd[p].y;
+          const int xmaxr = tilesBnd[p].z + xminr;
+          const int ymaxr = tilesBnd[p].w + yminr;
+          if (xminr >= i && xmaxr <= i && yminr >= j && ymaxr <= j)
+          {
+            const int iloc = i - xminr;
+            const int jloc = j - yminr;
+            colors.push_back(recvbuf[recvdispl[p] + jloc*(xmaxr-xminr) + iloc]);
+          }
+        }
+
+        /* sort by depth */
+        std::sort(
+            colors.begin(), colors.end(),
+            [](const vec5 &a, const vec5 &b){ return a[4] < b[4]; }
+            );
+
+        /* compose */
+        float4 dst = make_float4(0.0f);
+        for (auto &src : colors)
+        {
+          src[0] *= 1.0f - dst.w;
+          src[1] *= 1.0f - dst.w;
+          src[2] *= 1.0f - dst.w;
+          src[3] *= 1.0f - dst.w;
+
+          dst.x += src[0];
+          dst.y += src[1];
+          dst.z += src[2];
+          dst.w += src[3];
+
+          dst.w = std::min(dst.w, 1.0f);
+        }
+        imgLoc[(j-ymin)*(xmax-xmin)+(i-xmin)] = dst;
+      }
+  }
+
+  /******************************************/
+  /* gather local images on the master rank */
+  /******************************************/
+
+  MPI_Gather(
+      &imgLoc[0], imgLoc.size()*4, MPI_FLOAT, 
+      &imgGlb[0], imgLoc.size()*4, MPI_FLOAT, 
+      master, comm);
+
+  /* combine times together */
+  const int winxloc = localTile.z;
+  const int winyloc = localTile.w;
+
+#pragma omp parallel for schedule(static) collapse(2)
+  for (int j = 0; j < viewPort.y; j++)
+    for (int i = 0; i < viewPort.x; i++)
+    {
+      const int irank = i / winxloc;
+      const int jrank = j / winyloc;
+      const int rank  = jrank * npx + irank;
+      const int iloc  = i - (irank * winxloc);
+      const int jloc  = j - (jrank * winyloc);
+      dst[i] = imgGlb[winxloc*winyloc*rank + jloc*winyloc + iloc];
+    }
+}
+
+static void lCompose(
+    float4 *src, float4 *dst, float *depth,
+    const int n, const int rank, const int nrank, const MPI_Comm &comm,
+    const int showDomain,
     std::vector<int> compositingOrder)
 {
   const int master = 0;
