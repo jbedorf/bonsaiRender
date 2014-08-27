@@ -1651,10 +1651,27 @@ static void lComposeJB(
 
 
   fprintf(stderr,"[ %d ] Going to receive %d items \n", rank, nrecvCount);
+  
+  float dataSize = nrecvCount*sizeof(vec6);
+  float globalSize;
+  
+  MPI_Reduce(&dataSize, &globalSize, 1, MPI_FLOAT, MPI_SUM, 0, comm);
+
+  
   std::vector<vec6> importedData(nrecvCount);
+  
+     const double t3 = MPI_Wtime();
   MPI_Alltoallv(&data[0],         &scountByte[0], &sdisplByte[0],     MPI_BYTE,
                 &importedData[0], &nrecvByte[0],  &nrecvDisplByte[0], MPI_BYTE,
                 MPI_COMM_WORLD);
+  const double t4 = MPI_Wtime();
+
+  if(rank == 0)
+  {
+    fprintf(stderr,"MPI_Alltoallv time: %lg data: %f MB Bw: %f MB/s \n", t4-t3, dataSize / (1024*1024), (1.0 / (t4-t3)) * dataSize / (1024*1024));
+  }
+
+  
 #endif
   
   
@@ -1663,6 +1680,8 @@ static void lComposeJB(
 #else
   static std::vector<float4> colorArray;
   colorArray.resize(nsend*nrank);
+  
+  
 
   if (!depth)
   {
@@ -1698,6 +1717,13 @@ static void lComposeJB(
   {
     static std::vector<float > depthArray;
     depthArray.resize(nsend*nrank);
+    
+    //This should not be needed?
+    std::fill(colorArray.begin(), colorArray.end(), make_float4(0,0,0,0));
+    std::fill(depthArray.begin(), depthArray.end(), 1.0f);
+    
+    
+    
 #pragma omp parallel for schedule(static)
     for (int i = n; i < nsend*nrank; i++)
     {
@@ -2658,10 +2684,17 @@ void SmokeRenderer::splotchDrawSortOpt()
     
   
     //Note the +1 and -1, we need that to get the boundaries just right otherwise roundof can cause pixel leakage    
+#if 1  
     const int startIdxH = std::max(0, (int)winyMin-1);
     const int endIdxH   = std::min(h, (int)winyMax+1);
     const int startIdxW = std::max(0, (int)winxMin-1);
     const int endIdxW   = std::min(w, (int)winxMax+1);
+#else
+    const int startIdxH = 0;
+    const int endIdxH   = h;
+    const int startIdxW = 0;
+    const int endIdxW   = w;
+#endif
     
     const int subH = endIdxH-startIdxH;
     const int subW = endIdxW-startIdxW;
