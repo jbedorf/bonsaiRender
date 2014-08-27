@@ -1578,69 +1578,95 @@ static void lComposeJB(
 #if 1 
   //Or use a simpeler 1D decompositionx
   
+  double tStartSetup = MPI_Wtime();
   
    std::vector<int4> boundsPerRank(nrank); //minx, miny, maxx, maxy
+   std::vector<int>  countsPerRank(nrank,0); //minx, miny, maxx, maxy
    std::vector<int4> recvBoundsPerRank(nrank); //minx, miny, maxx, maxy
    for(auto &b : boundsPerRank) b = make_int4(INT_MAX,INT_MAX, INT_MIN, INT_MIN);
   
    const int nSub = (endH-startH)*(endW-startW);
-  
-  //Convert each of our pixels back to the global-screen ID
-  //TODO make a count/prefix sum loop and then a data-copy loop
+   
+  //Convert each of our pixels back to the global-screen ID  
   //#pragma omp parallel for schedule(static)
-  for(int idx = 0; idx < (endH-startH)*(endW-startW); idx++)
-  {
-    int y = idx / (endW-startW);
-    int x = idx % (endW-startW);
+   
+   double tCountS = MPI_Wtime();
+   for(int idx = 0; idx < (endH-startH)*(endW-startW); idx++)
+   {
+      int y = idx / (endW-startW);
+      int x = idx % (endW-startW);     
+      int globalY       = y + startH;
+      int globalX       = x + startW;
+      int globalIdx     = globalY * w + globalX;
+      int rankToSend    = globalIdx / nsend;   
+      countsPerRank[rankToSend]++;
         
-    //In global ordering this would be pixel:
-    int globalY       = y + startH;
-    int globalX       = x + startW;
-    int globalIdx     = globalY * w + globalX;
-    int localIdx      = y*(endW-startW)+x;
-    //src[globalIdx]    = srcSub[localIdx]; //make_float4(0,0,0,0);    
+      //depthSub[y* (endW-startW)+x] = depth[globalIdx]; //Fill our sub depth-buffer   
+        
+      
+      boundsPerRank[rankToSend].x = std::min(globalX, boundsPerRank[rankToSend].x);
+      boundsPerRank[rankToSend].y = std::min(globalY, boundsPerRank[rankToSend].y);
+      boundsPerRank[rankToSend].z = std::max(globalX, boundsPerRank[rankToSend].z);
+      boundsPerRank[rankToSend].w = std::max(globalY, boundsPerRank[rankToSend].w);      
+   }
     
-    depthSub[y* (endW-startW)+x] = depth[globalIdx]; //Fill our sub depth-buffer   
+  //Fix counts/boundaries
+  for(int rankToSend = 0;  rankToSend  < nrank; rankToSend++)
+  {
+    if(countsPerRank[rankToSend] == 0)
+      boundsPerRank[rankToSend] = make_int4(0,0,0,0);      
+    else      
+      boundsPerRank[rankToSend] = make_int4(boundsPerRank[rankToSend].x, boundsPerRank[rankToSend].y, boundsPerRank[rankToSend].z+1, boundsPerRank[rankToSend].w+1); 
+  }
+  
+  //Compute displacements for alltoallv
+  std::vector<int> sdispl(nrank+1,0), scount(nrank);
+  std::vector<int> nrecv(nrank, 0), nrecvDispl(nrank+1,0);
+  for (int i = 0; i < nrank; i++)
+  {
+    scount[i]   = mpiDataSize*countsPerRank[i];
+    sdispl[i+1] = mpiDataSize*countsPerRank[i]+sdispl[i];    
+  }
+  
+   
+   double tCountE = MPI_Wtime();
+   
+   //Exclusive Prefix sum
+   int offset = 0;
+   for(int i=0; i < nrank; i++)
+   {
+     int temp = countsPerRank[i];
+     countsPerRank[i] = offset;
+     offset += temp;
+   }
+   assert(offset == nSub);
+   
+   std::vector<vec5> data(nSub);  data.clear();
+   
+   
+   for(int idx = 0; idx < (endH-startH)*(endW-startW); idx++)
+   {
+      int y = idx / (endW-startW);
+      int x = idx % (endW-startW);     
+      int globalY       = y + startH;
+      int globalX       = x + startW;
+      int globalIdx     = globalY * w + globalX;
+      int rankToSend    = globalIdx / nsend;   
+      int localIdx      = y*(endW-startW)+x;
 
-    //Compute the rank to which one this belongs
-    int rankToSend = globalIdx / nsend;   	
-    assert(rankToSend < nrank);
-    
-    boundsPerRank[rankToSend].x = std::min(globalX, boundsPerRank[rankToSend].x);
-    boundsPerRank[rankToSend].y = std::min(globalY, boundsPerRank[rankToSend].y);
-    boundsPerRank[rankToSend].z = std::max(globalX, boundsPerRank[rankToSend].z);
-    boundsPerRank[rankToSend].w = std::max(globalY, boundsPerRank[rankToSend].w);
-    
-    //Not thread save!!
-    colorPerProc[rankToSend].push_back(vec5{srcSub[localIdx].x,
+          
+      
+      data[countsPerRank[rankToSend]] = vec5{srcSub[localIdx].x,
                                             srcSub[localIdx].y,
                                             srcSub[localIdx].z,
                                             srcSub[localIdx].w,
-                                            depth[globalIdx]});
-  }
+                                            depth[globalIdx]};
+      countsPerRank[rankToSend] = countsPerRank[rankToSend]+1;                                            
+   }   
+   
+     
 
-  //Fix coordinates to be inclusive and/or 0 when nothing is send
-  for(int rankToSend = 0;  rankToSend  < nrank; rankToSend++)
-  {
-    if(colorPerProc[rankToSend].size() == 0)
-      boundsPerRank[rankToSend] = make_int4(0,0,0,0);      
-    else      
-      boundsPerRank[rankToSend] = make_int4(boundsPerRank[rankToSend].x, boundsPerRank[rankToSend].y, boundsPerRank[rankToSend].z+1, boundsPerRank[rankToSend].w+1);      
-  }
-
-  
-  //Compute displacements etc
-  std::vector<int> sdispl(nrank+1,0), scount(nrank);
-  std::vector<int> nrecv(nrank, 0), nrecvDispl(nrank+1,0);  
-  std::vector<vec5> data(nSub);  data.clear();
-  
-  for (int i = 0; i < nrank; i++)
-  {
-    scount[i] = mpiDataSize*colorPerProc[i].size();
-    sdispl[i+1] = mpiDataSize*colorPerProc[i].size()+sdispl[i];    
-    for (auto color : colorPerProc[i]) data.push_back(color);
-  }
-
+  double tEndSetup = MPI_Wtime();
 
   MPI_Alltoall(&boundsPerRank[0], 4, MPI_INT, &recvBoundsPerRank[0], 4, MPI_INT, comm);
 
@@ -1666,7 +1692,9 @@ static void lComposeJB(
 
   if(rank == 0)
   {
-    fprintf(stderr,"MPI_Alltoallv time: %lg data: %f MB Bw: %f MB/s \n", t4-t3, dataSize / (1024.0*1024), (1.0 / (t4-t3)) * dataSize / (1024.0*1024));
+    fprintf(stderr,"MPI_Alltoallv time: %lg data: %f MB Bw: %f MB/s \t tSetup: %lg\ttCount: %lg\n", 
+            t4-t3, dataSize / (1024.0*1024), (1.0 / (t4-t3)) * dataSize / (1024.0*1024),
+            tEndSetup-tStartSetup, tCountE-tCountS);
   }
 
   
