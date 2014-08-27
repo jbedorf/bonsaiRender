@@ -1524,6 +1524,7 @@ static void lComposeJB(
 {
   const int master = 0;
   
+  const int nsend = (n+nrank-1)/nrank;
   
 #if 0  
   //Create a 2D decomposition of the main screen
@@ -1556,12 +1557,24 @@ static void lComposeJB(
   fprintf(stderr,"[ %d ] Dimension: %d %d \t %d %d x: %d %d\t y: %d %d \n", 
                   procId, nx, ny, nxID, nyID, xCount, xStart, yCount, yStart);  
 #endif  
-  
+ 
+
+#define NPROCMAX 1024
+  using vec6 = std::array<float,6>;
+  static std::vector<vec6> colorPerProc[NPROCMAX];
+  for (int i = 0; i < nrank; i++)
+  {
+	colorPerProc[i].reserve(nsend*2);
+	colorPerProc[i].clear();
+  }
+
+
+
 #if 1 
   //Or use a simpeler 1D decompositionx
   
   //Convert each of our pixels back to the global-screen ID
-  #pragma omp parallel for schedule(static)
+  //#pragma omp parallel for schedule(static)
   for(int idx = 0; idx < (endH-startH)*(endW-startW); idx++)
   {
     int y = idx / (endW-startW);
@@ -1571,18 +1584,83 @@ static void lComposeJB(
     int globalY       = y + startH;
     int globalX       = x + startW;
     int globalIdx     = globalY * w + globalX;
-    src[globalIdx]    = srcSub[y* (endW-startW)+x]; //make_float4(0,0,0,0);    
+    int localIdx      = y*(endW-startW)+x;
+    src[globalIdx]    = srcSub[localIdx]; //make_float4(0,0,0,0);    
     
-    depthSub[y* (endW-startW)+x] = depth[globalIdx]; //Fill our sub depth-buffer    
+    depthSub[y* (endW-startW)+x] = depth[globalIdx]; //Fill our sub depth-buffer   
+
+    //Compute the rank to which one this belongs
+    int rankToSend = globalIdx / nsend;   	
+    assert(rankToSend < nrank);
+
+    //Not thread save
+    colorPerProc[rankToSend].push_back(       
+          vec6{{
+            srcSub[localIdx].x,
+            srcSub[localIdx].y,
+            srcSub[localIdx].z,
+            srcSub[localIdx].w,
+            depth[globalIdx], (float)globalIdx}});
   }
   
+  fprintf(stderr,"[ %d ] Sending: %ld %ld %ld %ld \tTotal: %d \n", 
+		  rank,
+		  colorPerProc[0].size(),
+		  colorPerProc[1].size(),
+		  colorPerProc[2].size(),
+		  colorPerProc[3].size(),
+		  (endH-startH)*(endW-startW)	  );
+
+  //Compute displacements etc
+  std::vector<int> sdispl(nrank+1,0), scount(nrank);
+  std::vector<int> sdisplByte(nrank+1,0), scountByte(nrank);
+  int nA2ASend = 0;
+  for (int i = 0; i < nrank; i++)
+  {
+    scount[i]   = colorPerProc[i].size();
+
+    scountByte[i] = sizeof(float)*6*scount[i];
+     
+//     fprintf(stderr,"Proc: %d to: %d \t %d \n", rank, i,  scountByte[i]);
+
+    nA2ASend   += scount[i];
+    sdispl[i+1] = sdispl[i] + scount[i];
+    sdisplByte[i+1] = sizeof(float)*6*sdispl[i+1];
+  }
+  std::vector<vec6> data(nA2ASend);
+  for (int i = 0; i < nrank; i++)
+  {
+     const int displ = sdispl[i];
+     const int nsend = scount[i];
+     for (int j = 0; j < nsend; j++)
+        data[displ + j] = colorPerProc[i][j];
+  }
+
+
+  std::vector<int> nrecvByte(nrank, 0), nrecvDisplByte(nrank+1,0);  
+
+  MPI_Alltoall(&scountByte[0], 1, MPI_INT, &nrecvByte[0], 1, MPI_INT, comm);
+
+  int nrecvCount = 0; 
+  for (int i = 0; i < nrank; i++)
+  { 
+     nrecvCount         += nrecvByte[i] / 6;
+     nrecvDisplByte[i+1] = nrecvByte[i] + nrecvDisplByte[i];
+     //      fprintf(stderr,"Proc: %d from: %d \t %d \n", rank, i,  nrecvByte[i]);
+  }
+
+
+  fprintf(stderr,"[ %d ] Going to receive %d items \n", rank, nrecvCount);
+  std::vector<vec6> importedData(nrecvCount);
+  MPI_Alltoallv(&data[0],         &scountByte[0], &sdisplByte[0],     MPI_BYTE,
+                &importedData[0], &nrecvByte[0],  &nrecvDisplByte[0], MPI_BYTE,
+                MPI_COMM_WORLD);
 #endif
   
   
 #if 0
   MPI_Reduce(src, dst, 4*n, MPI_FLOAT, MPI_SUM, master, comm);
 #else
-  const int nsend = (n+nrank-1)/nrank;
   static std::vector<float4> colorArray;
   colorArray.resize(nsend*nrank);
 
@@ -1627,8 +1705,43 @@ static void lComposeJB(
       depth[i] = 1.0f;
     }
 
-    MPI_Alltoall(src, nsend*4, MPI_FLOAT, &colorArray[0], nsend*4, MPI_FLOAT, comm);
-    MPI_Alltoall(depth, nsend, MPI_FLOAT, &depthArray[0], nsend, MPI_FLOAT, comm);
+ //   MPI_Alltoall(src, nsend*4, MPI_FLOAT, &colorArray[0], nsend*4, MPI_FLOAT, comm);
+ //   MPI_Alltoall(depth, nsend, MPI_FLOAT, &depthArray[0], nsend, MPI_FLOAT, comm);
+    
+#if 1
+    //Put back our alltoall data
+    int start = 0;
+    for(int i=0;  i < nrank; i++)
+    {
+      int nrecv = nrecvByte[i]      / (6*sizeof(float));      
+      for(int idx = 0; idx < nrecv; idx++)
+      {
+        vec6 dataItem = importedData[start+idx];
+        int globalIdx = dataItem[5];
+        
+        //Convert the globalIdx to a localIdx
+        int offset = globalIdx % nsend;
+        
+        colorArray[i*nsend + offset] = make_float4(dataItem[0],dataItem[1],dataItem[2],dataItem[3]);
+        depth     [i*nsend + offset] = dataItem[4];
+      }
+      start += nrecv;
+    }
+#endif    
+    
+#if 0
+    //Put back our alltoall data
+    for(auto item : importedData)
+    {
+      int globalIdx = item[5];
+      //Conver the globalIdx to our localIdx, not needed untill we downsize the buffers
+      colorArray[globalIdx] = make_float4(item[0],item[1],item[2],item[3]);
+      colorArray[depth]     = make_float4(item[0],item[1],item[2],item[3]);
+    }
+    This will only work if we do prefix sums and offsets
+#endif    
+    
+    
 
     using vec5 = std::array<float,5>;
     std::vector<vec5> colorArrayDepth(nsend*nrank);
@@ -2666,13 +2779,8 @@ lCompose(&imgLoc[0], &imgGlb[0], &depth[0], w*h, rank, nrank, comm, m_domainView
     {
 
       /***** place back to fbo *****/
-
-      fprintf(stderr,"Before YYY\n");
-
       glBindBuffer(GL_PIXEL_UNPACK_BUFFER, pbo_id[1]);
       GLvoid *wptr = glMapBufferRange(GL_PIXEL_UNPACK_BUFFER, 0, imgSize, GL_MAP_WRITE_BIT);
-            
-      fprintf(stderr,"After YYY\n");
 
 #pragma omp parallel for schedule(static)
       for (int i = 0; i < w*h; i++)
@@ -2700,9 +2808,6 @@ lCompose(&imgLoc[0], &imgGlb[0], &depth[0], w*h, rank, nrank, comm, m_domainView
 
   }
 #endif
-
-        fprintf(stderr,"After XXX\n");
-
   m_fbo->Disable();
 
 
