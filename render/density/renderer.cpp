@@ -24,6 +24,7 @@
 #include "Cubemap.h"
 #include <array>
 #include <algorithm>
+#include <atomic>
 
 #if defined(__APPLE__) || defined(MACOSX)
 #include <GLUT/glut.h>
@@ -1565,13 +1566,13 @@ static void lComposeJB(
   
   assert(mpiDataSize == 5);
   
-  static std::vector<vec5> colorPerProc[NPROCMAX];
-  
-  for (int i = 0; i < nrank; i++)
-  {
-    colorPerProc[i].reserve(nsend*2);
-    colorPerProc[i].clear();
-  }
+//   static std::vector<vec5> colorPerProc[NPROCMAX];
+//   
+//   for (int i = 0; i < nrank; i++)
+//   {
+//     colorPerProc[i].reserve(nsend*2);
+//     colorPerProc[i].clear();
+//   }
 
 
 
@@ -1581,7 +1582,12 @@ static void lComposeJB(
   double tStartSetup = MPI_Wtime();
   
    std::vector<int4> boundsPerRank(nrank); //minx, miny, maxx, maxy
+   //std::vector<int>  countsPerRank(nrank,0); //minx, miny, maxx, maxy
+   
+   //std::atomic<int> countsPerRank[nrank]; for(auto &x : countsPerRank) x = 0;
    std::vector<int>  countsPerRank(nrank,0); //minx, miny, maxx, maxy
+   
+   
    std::vector<int4> recvBoundsPerRank(nrank); //minx, miny, maxx, maxy
    for(auto &b : boundsPerRank) b = make_int4(INT_MAX,INT_MAX, INT_MIN, INT_MIN);
   
@@ -1611,12 +1617,12 @@ static void lComposeJB(
    }
     
   //Fix counts/boundaries
-  for(int rankToSend = 0;  rankToSend  < nrank; rankToSend++)
+  for(int rank = 0;  rank  < nrank; rank++)
   {
-    if(countsPerRank[rankToSend] == 0)
-      boundsPerRank[rankToSend] = make_int4(0,0,0,0);      
+    if(countsPerRank[rank] == 0)
+      boundsPerRank[rank] = make_int4(0,0,0,0);      
     else      
-      boundsPerRank[rankToSend] = make_int4(boundsPerRank[rankToSend].x, boundsPerRank[rankToSend].y, boundsPerRank[rankToSend].z+1, boundsPerRank[rankToSend].w+1); 
+      boundsPerRank[rank] = make_int4(boundsPerRank[rank].x, boundsPerRank[rank].y, boundsPerRank[rank].z+1, boundsPerRank[rank].w+1); 
   }
   
   //Compute displacements for alltoallv
@@ -1654,13 +1660,11 @@ static void lComposeJB(
       int rankToSend    = globalIdx / nsend;   
       int localIdx      = y*(endW-startW)+x;
 
-          
-      
       data[countsPerRank[rankToSend]] = vec5{srcSub[localIdx].x,
-                                            srcSub[localIdx].y,
-                                            srcSub[localIdx].z,
-                                            srcSub[localIdx].w,
-                                            depth[globalIdx]};
+                                             srcSub[localIdx].y,
+                                             srcSub[localIdx].z,
+                                             srcSub[localIdx].w,
+                                             depth [globalIdx]};
       countsPerRank[rankToSend] = countsPerRank[rankToSend]+1;                                            
    }   
    
@@ -1692,9 +1696,9 @@ static void lComposeJB(
 
   if(rank == 0)
   {
-    fprintf(stderr,"MPI_Alltoallv time: %lg data: %f MB Bw: %f MB/s \t tSetup: %lg\ttCount: %lg\n", 
+    fprintf(stderr,"MPI_Alltoallv time: %lg data: %f MB Bw: %f MB/s \t tSetup: %lg\ttCount: %lg First half: %lg\n", 
             t4-t3, dataSize / (1024.0*1024), (1.0 / (t4-t3)) * dataSize / (1024.0*1024),
-            tEndSetup-tStartSetup, tCountE-tCountS);
+            tEndSetup-tStartSetup, tCountE-tCountS, t4-tStartSetup);
   }
 
   
@@ -2838,7 +2842,7 @@ void SmokeRenderer::splotchDrawSortOpt()
 #if 0
 lCompose(&imgLoc[0], &imgGlb[0], &depth[0], w*h, rank, nrank, comm, m_domainView ? m_domainViewIdx : -1);
 #else    
-    fprintf(stderr,"Before lComposeJB \n");
+//     fprintf(stderr,"Before lComposeJB \n");
     
     bool showDomain = true; 
     if(m_domainView) { showDomain = (m_domainViewIdx == rank);}
@@ -2859,7 +2863,7 @@ lCompose(&imgLoc[0], &imgGlb[0], &depth[0], w*h, rank, nrank, comm, m_domainView
                 rank, nrank, comm,
                 m_domainView ? m_domainViewIdx : -1);  
     }      
-        fprintf(stderr,"After lComposeJB \n");
+//         fprintf(stderr,"After lComposeJB \n");
 #endif        
     glFinish();
     const double t4 = MPI_Wtime();
