@@ -475,10 +475,10 @@ class SmokeRenderer : public SmokeRendererParams
     {
       return m_clippingPlane[i];
     }
-    void setXhighlow(const float3 xhigh, const float3 xlow)
+    void setXhighlow(const float3 xlow, const float3 xhigh)
     {
-      m_xhigh = xhigh;
       m_xlow  = xlow;
+      m_xhigh = xhigh;
     }
 };
 

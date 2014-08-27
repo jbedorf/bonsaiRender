@@ -2382,6 +2382,53 @@ void SmokeRenderer::splotchDrawSort()
         m_domainView ? m_domainViewIdx : -1, 
         compositingOrder);
 #else
+    int2 wmin = make_int2(w,h);
+    int2 wmax = make_int2(0,0);
+
+    const float3 r0 = m_xlow;
+    const float3 r1 = m_xhigh;
+    const double3 bBoxVtx[] = {
+      make_double3(r0.x,r0.y,r0.z),
+      make_double3(r1.x,r0.y,r0.z),
+      make_double3(r0.x,r1.y,r0.z),
+      make_double3(r1.x,r1.y,r0.z),
+      make_double3(r0.x,r0.y,r1.z),
+      make_double3(r1.x,r0.y,r1.z),
+      make_double3(r0.x,r1.y,r1.z),
+      make_double3(r1.x,r1.y,r1.z)
+    };
+
+    double modelView[16];
+    double projection[16];
+    int viewport[4];
+    glGetDoublev(GL_MODELVIEW_MATRIX,   modelView);
+    glGetDoublev(GL_PROJECTION_MATRIX, projection);
+    glGetIntegerv( GL_VIEWPORT, viewport);
+    for (auto v : bBoxVtx)
+    {
+      double x,y,z;
+      gluProject(v.x,v.y,v.z, modelView,projection,viewport,&x,&y,&z);
+      wmin.x = std::min(wmin.x, static_cast<int>(floor(x)));
+      wmin.y = std::min(wmin.y, static_cast<int>(floor(y)));
+      wmax.x = std::max(wmax.x, static_cast<int>(ceil(x)+1));
+      wmax.y = std::max(wmax.y, static_cast<int>(ceil(y)+1));
+    }
+    wmin.x = std::max(0, wmin.x);
+    wmax.x = std::min(w, wmax.x);
+    wmin.y = std::max(0, wmin.y);
+    wmax.y = std::min(h, wmax.y);
+//    fprintf(stderr, "rank= %d:  [%d %d] [%d %d] \n", rank, wmin.x, wmax.x, wmin.y, wmax.y);
+
+    std::vector<float4> img((wmax.x-wmin.x)*(wmax.y-wmin.y));
+    std::vector<float> z(img.size());
+    for (int j = wmin.y; j < wmax.y; j++)
+      for (int i = wmin.x; i < wmax.x; i++)
+      {
+        img[(j-wmin.y)*(wmax.x-wmin.x) + (i-wmin.x)] = imgLoc[j*w+i];
+        z  [(j-wmin.y)*(wmax.x-wmin.x) + (i-wmin.x)] = depth [j*w+i];
+      }
+
+#if 0
     const int2 wCrd = make_int2(0,0);
     const int2 wSize = make_int2(w,h);
     const int2 viewPort = make_int2(w,h);
@@ -2390,6 +2437,16 @@ void SmokeRenderer::splotchDrawSort()
         m_domainView ? m_domainViewIdx : -1, 
         compositingOrder,
         wCrd, wSize, viewPort, resize);
+#else
+    const int2 wCrd = make_int2(wmin.x, wmin.y);
+    const int2 wSize = make_int2(wmax.x-wmin.x, wmax.y-wmin.y);
+    const int2 viewPort = make_int2(w,h);
+    const bool resize = false;
+    lCompose(&img[0], &imgGlb[0], &z[0], w*h, rank, nrank, comm,
+        m_domainView ? m_domainViewIdx : -1, 
+        compositingOrder,
+        wCrd, wSize, viewPort, resize);
+#endif
 #endif
     glFinish();
     const double t4 = MPI_Wtime();
