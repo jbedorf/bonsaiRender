@@ -1560,12 +1560,17 @@ static void lComposeJB(
  
 
 #define NPROCMAX 1024
-  using vec6 = std::array<float,6>;
-  static std::vector<vec6> colorPerProc[NPROCMAX];
+  using vec5                  = std::array<float,5>;
+  constexpr int mpiDataSize = sizeof(vec5)/sizeof(float);
+  
+  assert(mpiDataSize == 5);
+  
+  static std::vector<vec5> colorPerProc[NPROCMAX];
+  
   for (int i = 0; i < nrank; i++)
   {
-	colorPerProc[i].reserve(nsend*2);
-	colorPerProc[i].clear();
+    colorPerProc[i].reserve(nsend*2);
+    colorPerProc[i].clear();
   }
 
 
@@ -1573,102 +1578,95 @@ static void lComposeJB(
 #if 1 
   //Or use a simpeler 1D decompositionx
   
+  
+   std::vector<int4> boundsPerRank(nrank); //minx, miny, maxx, maxy
+   std::vector<int4> recvBoundsPerRank(nrank); //minx, miny, maxx, maxy
+   for(auto &b : boundsPerRank) b = make_int4(INT_MAX,INT_MAX, INT_MIN, INT_MIN);
+  
+   const int nSub = (endH-startH)*(endW-startW);
+  
   //Convert each of our pixels back to the global-screen ID
+  //TODO make a count/prefix sum loop and then a data-copy loop
   //#pragma omp parallel for schedule(static)
   for(int idx = 0; idx < (endH-startH)*(endW-startW); idx++)
   {
     int y = idx / (endW-startW);
     int x = idx % (endW-startW);
-    
+        
     //In global ordering this would be pixel:
     int globalY       = y + startH;
     int globalX       = x + startW;
     int globalIdx     = globalY * w + globalX;
     int localIdx      = y*(endW-startW)+x;
-    src[globalIdx]    = srcSub[localIdx]; //make_float4(0,0,0,0);    
+    //src[globalIdx]    = srcSub[localIdx]; //make_float4(0,0,0,0);    
     
     depthSub[y* (endW-startW)+x] = depth[globalIdx]; //Fill our sub depth-buffer   
 
     //Compute the rank to which one this belongs
     int rankToSend = globalIdx / nsend;   	
     assert(rankToSend < nrank);
-
-    //Not thread save
-    colorPerProc[rankToSend].push_back(       
-          vec6{{
-            srcSub[localIdx].x,
-            srcSub[localIdx].y,
-            srcSub[localIdx].z,
-            srcSub[localIdx].w,
-            depth[globalIdx], (float)globalIdx}});
+    
+    boundsPerRank[rankToSend].x = std::min(globalX, boundsPerRank[rankToSend].x);
+    boundsPerRank[rankToSend].y = std::min(globalY, boundsPerRank[rankToSend].y);
+    boundsPerRank[rankToSend].z = std::max(globalX, boundsPerRank[rankToSend].z);
+    boundsPerRank[rankToSend].w = std::max(globalY, boundsPerRank[rankToSend].w);
+    
+    //Not thread save!!
+    colorPerProc[rankToSend].push_back(vec5{srcSub[localIdx].x,
+                                            srcSub[localIdx].y,
+                                            srcSub[localIdx].z,
+                                            srcSub[localIdx].w,
+                                            depth[globalIdx]});
   }
-  
-  fprintf(stderr,"[ %d ] Sending: %ld %ld %ld %ld \tTotal: %d \n", 
-		  rank,
-		  colorPerProc[0].size(),
-		  colorPerProc[1].size(),
-		  colorPerProc[2].size(),
-		  colorPerProc[3].size(),
-		  (endH-startH)*(endW-startW)	  );
 
+  //Fix coordinates to be inclusive and/or 0 when nothing is send
+  for(int rankToSend = 0;  rankToSend  < nrank; rankToSend++)
+  {
+    if(colorPerProc[rankToSend].size() == 0)
+      boundsPerRank[rankToSend] = make_int4(0,0,0,0);      
+    else      
+      boundsPerRank[rankToSend] = make_int4(boundsPerRank[rankToSend].x, boundsPerRank[rankToSend].y, boundsPerRank[rankToSend].z+1, boundsPerRank[rankToSend].w+1);      
+  }
+
+  
   //Compute displacements etc
   std::vector<int> sdispl(nrank+1,0), scount(nrank);
-  std::vector<int> sdisplByte(nrank+1,0), scountByte(nrank);
-  int nA2ASend = 0;
+  std::vector<int> nrecv(nrank, 0), nrecvDispl(nrank+1,0);  
+  std::vector<vec5> data(nSub);  data.clear();
+  
   for (int i = 0; i < nrank; i++)
   {
-    scount[i]   = colorPerProc[i].size();
-
-    scountByte[i] = sizeof(float)*6*scount[i];
-     
-//     fprintf(stderr,"Proc: %d to: %d \t %d \n", rank, i,  scountByte[i]);
-
-    nA2ASend   += scount[i];
-    sdispl[i+1] = sdispl[i] + scount[i];
-    sdisplByte[i+1] = sizeof(float)*6*sdispl[i+1];
-  }
-  std::vector<vec6> data(nA2ASend);
-  for (int i = 0; i < nrank; i++)
-  {
-     const int displ = sdispl[i];
-     const int nsend = scount[i];
-     for (int j = 0; j < nsend; j++)
-        data[displ + j] = colorPerProc[i][j];
+    scount[i] = mpiDataSize*colorPerProc[i].size();
+    sdispl[i+1] = mpiDataSize*colorPerProc[i].size()+sdispl[i];    
+    for (auto color : colorPerProc[i]) data.push_back(color);
   }
 
 
-  std::vector<int> nrecvByte(nrank, 0), nrecvDisplByte(nrank+1,0);  
+  MPI_Alltoall(&boundsPerRank[0], 4, MPI_INT, &recvBoundsPerRank[0], 4, MPI_INT, comm);
 
-  MPI_Alltoall(&scountByte[0], 1, MPI_INT, &nrecvByte[0], 1, MPI_INT, comm);
 
-  int nrecvCount = 0; 
   for (int i = 0; i < nrank; i++)
   { 
-     nrecvCount         += nrecvByte[i] / 6;
-     nrecvDisplByte[i+1] = nrecvByte[i] + nrecvDisplByte[i];
-     //      fprintf(stderr,"Proc: %d from: %d \t %d \n", rank, i,  nrecvByte[i]);
+    const int nItems = (recvBoundsPerRank[i].w-recvBoundsPerRank[i].y)*(recvBoundsPerRank[i].z-recvBoundsPerRank[i].x);
+    nrecv[i]         = nItems*mpiDataSize;
+    nrecvDispl[i+1]  = nrecv[i] + nrecvDispl[i];    
   }
-
-
-  fprintf(stderr,"[ %d ] Going to receive %d items \n", rank, nrecvCount);
   
-  float dataSize = nrecvCount*sizeof(vec6);
-  float globalSize;
   
-  MPI_Reduce(&dataSize, &globalSize, 1, MPI_FLOAT, MPI_SUM, 0, comm);
-
+  std::vector<vec5> importedData( (nrecvDispl[nrank] / mpiDataSize));
   
-  std::vector<vec6> importedData(nrecvCount);
-  
-     const double t3 = MPI_Wtime();
-  MPI_Alltoallv(&data[0],         &scountByte[0], &sdisplByte[0],     MPI_BYTE,
-                &importedData[0], &nrecvByte[0],  &nrecvDisplByte[0], MPI_BYTE,
+  const double t3 = MPI_Wtime();
+  MPI_Alltoallv(&data[0],         &scount[0], &sdispl[0],     MPI_FLOAT,
+                &importedData[0], &nrecv[0],  &nrecvDispl[0], MPI_FLOAT,
                 MPI_COMM_WORLD);
   const double t4 = MPI_Wtime();
 
+  float dataSize, localSize = nrecvDispl[nrank]*sizeof(float);  
+  MPI_Reduce(&localSize, &dataSize, 1, MPI_FLOAT, MPI_SUM, 0, comm);
+
   if(rank == 0)
   {
-    fprintf(stderr,"MPI_Alltoallv time: %lg data: %f MB Bw: %f MB/s \n", t4-t3, dataSize / (1024*1024), (1.0 / (t4-t3)) * dataSize / (1024*1024));
+    fprintf(stderr,"MPI_Alltoallv time: %lg data: %f MB Bw: %f MB/s \n", t4-t3, dataSize / (1024.0*1024), (1.0 / (t4-t3)) * dataSize / (1024.0*1024));
   }
 
   
@@ -1731,19 +1729,23 @@ static void lComposeJB(
       depth[i] = 1.0f;
     }
 
+#if 0
  //   MPI_Alltoall(src, nsend*4, MPI_FLOAT, &colorArray[0], nsend*4, MPI_FLOAT, comm);
  //   MPI_Alltoall(depth, nsend, MPI_FLOAT, &depthArray[0], nsend, MPI_FLOAT, comm);
-    
-#if 1
-    //Put back our alltoall data
+#else
+    //Put back our alltoallv data in locations that would match alltoall
     int start = 0;
     for(int i=0;  i < nrank; i++)
     {
-      int nrecv = nrecvByte[i]      / (6*sizeof(float));      
-      for(int idx = 0; idx < nrecv; idx++)
+      int nrecvL = nrecv[i]  / mpiDataSize;      
+      for(int idx = 0; idx < nrecvL; idx++)
       {
-        vec6 dataItem = importedData[start+idx];
-        int globalIdx = dataItem[5];
+        vec5 dataItem  = importedData[start+idx];        
+        int4 dims      = recvBoundsPerRank[i];        
+
+        int  globalX   = dims.x + idx % (dims.z-dims.x); 
+        int  globalY   = dims.y + idx / (dims.z-dims.x);
+        int globalIdx  = globalX+globalY*w;
         
         //Convert the globalIdx to a localIdx
         int offset = globalIdx % nsend;
@@ -1751,7 +1753,7 @@ static void lComposeJB(
         colorArray[i*nsend + offset] = make_float4(dataItem[0],dataItem[1],dataItem[2],dataItem[3]);
         depth     [i*nsend + offset] = dataItem[4];
       }
-      start += nrecv;
+      start += nrecvL;
     }
 #endif    
     
@@ -1864,28 +1866,28 @@ void SmokeRenderer::splotchDraw()
 
    //Draw bounding box
   glColor4f(0.0f, 1.0f, 0.0f, 1.0f);   
-	glBegin(GL_LINE_LOOP);
-	glVertex3f(boxMin.x, boxMin.y, boxMin.z);
-	glVertex3f(boxMax.x, boxMin.y, boxMin.z);
-	glVertex3f(boxMax.x, boxMax.y, boxMin.z);
-	glVertex3f(boxMin.x, boxMax.y, boxMin.z);
-	glEnd();
-	glBegin(GL_LINE_LOOP);
-	glVertex3f(boxMin.x, boxMin.y, boxMax.z);
-	glVertex3f(boxMax.x, boxMin.y, boxMax.z);
-	glVertex3f(boxMax.x, boxMax.y, boxMax.z);
-	glVertex3f(boxMin.x, boxMax.y, boxMax.z);
-	glEnd();
-	glBegin(GL_LINES);
-	glVertex3f(boxMin.x, boxMin.y, boxMin.z);
-	glVertex3f(boxMin.x, boxMin.y, boxMax.z);
-	glVertex3f(boxMax.x, boxMin.y, boxMin.z);
-	glVertex3f(boxMax.x, boxMin.y, boxMax.z);
-	glVertex3f(boxMax.x, boxMax.y, boxMin.z);
-	glVertex3f(boxMax.x, boxMax.y, boxMax.z);
-	glVertex3f(boxMin.x, boxMax.y, boxMin.z);
-	glVertex3f(boxMin.x, boxMax.y, boxMax.z);
-	glEnd();
+  glBegin(GL_LINE_LOOP);
+      glVertex3f(boxMin.x, boxMin.y, boxMin.z);
+      glVertex3f(boxMax.x, boxMin.y, boxMin.z);
+      glVertex3f(boxMax.x, boxMax.y, boxMin.z);
+      glVertex3f(boxMin.x, boxMax.y, boxMin.z);
+  glEnd();
+  glBegin(GL_LINE_LOOP);
+      glVertex3f(boxMin.x, boxMin.y, boxMax.z);
+      glVertex3f(boxMax.x, boxMin.y, boxMax.z);
+      glVertex3f(boxMax.x, boxMax.y, boxMax.z);
+      glVertex3f(boxMin.x, boxMax.y, boxMax.z);
+  glEnd();
+  glBegin(GL_LINES);
+      glVertex3f(boxMin.x, boxMin.y, boxMin.z);
+      glVertex3f(boxMin.x, boxMin.y, boxMax.z);
+      glVertex3f(boxMax.x, boxMin.y, boxMin.z);
+      glVertex3f(boxMax.x, boxMin.y, boxMax.z);
+      glVertex3f(boxMax.x, boxMax.y, boxMin.z);
+      glVertex3f(boxMax.x, boxMax.y, boxMax.z);
+      glVertex3f(boxMin.x, boxMax.y, boxMin.z);
+      glVertex3f(boxMin.x, boxMax.y, boxMax.z);
+  glEnd();
 
 
     //Convert the boundaries to screenspace
@@ -1934,9 +1936,10 @@ void SmokeRenderer::splotchDraw()
 	    minZ = std::min(worldBounds[i].z / worldBounds[i].w, minZ);
     }
     
-    fprintf(stderr,"Location min: %f %f   max: %f %f  \t minZ: %f\n", winxMin, winyMin, winxMax, winyMax, minZ);
+    bool showDomain = true; 
+    if(m_domainView) { showDomain = (m_domainViewIdx == rank);}
     
-    
+
     
     
     //eye = modelview * coor
@@ -2073,16 +2076,26 @@ void SmokeRenderer::splotchDraw()
 
     //fprintf(stderr,"From: ( %d , %d ) to ( %d , %d ) \n", startIdxH, startIdxW, endIdxH, endIdxW);
     
+    if(showDomain)
+    {
+      fprintf(stderr,"JB [ %d ] Location min: %f %f   max: %f %f  \t minZ: %f || %d,%d to %d,%d \t box: %f %f %f | %f %f %f\n", 
+              rank, winxMin, winyMin, winxMax, winyMax, minZ, startIdxW, startIdxH, endIdxW, endIdxH,
+              boxMin.x, boxMin.y, boxMin.z, boxMax.x, boxMax.y, boxMax.z);
+    }
+    
+        
+    
+    
     #if 1
     //Blank out non needed parts
     for(int i=0; i < h; i++)
     {
 	    for(int j=0; j < w; j++)
 	    {
-		   if(i< winyMin)  imgLoc[i*w+j] = make_float4(1,0,0,0);  //This blanks out the bottom part
-		   if(j< winxMin)  imgLoc[i*w+j] = make_float4(0,0,1,0);  //This blanks out the left part	
-		   if(i > winyMax)  imgLoc[i*w+j] = make_float4(1,0,1,0);  //This blanks out the top part
-		   if(j > winxMax)  imgLoc[i*w+j] = make_float4(0,1,1,0);  //This blanks out the right part	
+// 		   if(i< winyMin)  imgLoc[i*w+j] = make_float4(1,0,0,0);  //This blanks out the bottom part
+// 		   if(j< winxMin)  imgLoc[i*w+j] = make_float4(0,0,1,0);  //This blanks out the left part	
+// 		   if(i > winyMax)  imgLoc[i*w+j] = make_float4(1,0,1,0);  //This blanks out the top part
+// 		   if(j > winxMax)  imgLoc[i*w+j] = make_float4(0,1,1,0);  //This blanks out the right part	
 		    
 	    }
     }    
@@ -2798,11 +2811,26 @@ void SmokeRenderer::splotchDrawSortOpt()
 lCompose(&imgLoc[0], &imgGlb[0], &depth[0], w*h, rank, nrank, comm, m_domainView ? m_domainViewIdx : -1);
 #else    
     fprintf(stderr,"Before lComposeJB \n");
-    lComposeJB(&imgLoc[0], &imgSub[0], &imgGlb[0], &depth[0], &depthSub[0],
-               w*h, w, h, 
-               startIdxW, endIdxW, startIdxH, endIdxH,
-               rank, nrank, comm,
-        m_domainView ? m_domainViewIdx : -1);  
+    
+    bool showDomain = true; 
+    if(m_domainView) { showDomain = (m_domainViewIdx == rank);}
+    
+    if(showDomain)
+    {
+      lComposeJB(&imgLoc[0], &imgSub[0], &imgGlb[0], &depth[0], &depthSub[0],
+                w*h, w, h, 
+                startIdxW, endIdxW, startIdxH, endIdxH,
+                rank, nrank, comm,
+                m_domainView ? m_domainViewIdx : -1);  
+    }
+    else
+    {
+      lComposeJB(&imgLoc[0], &imgSub[0], &imgGlb[0], &depth[0], &depthSub[0],
+                w*h, w, h, 
+                0, 0, 0, 0,
+                rank, nrank, comm,
+                m_domainView ? m_domainViewIdx : -1);  
+    }      
         fprintf(stderr,"After lComposeJB \n");
 #endif        
     glFinish();
