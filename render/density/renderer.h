@@ -456,6 +456,7 @@ class SmokeRenderer : public SmokeRendererParams
     uint   *mParticleIndices;
 
     float4 m_clippingPlane[6];  
+    float3 m_xhigh, m_xlow;
 
     std::vector<int> compositingOrder;
 
@@ -473,6 +474,11 @@ class SmokeRenderer : public SmokeRendererParams
     float4 getClippingPlane(const int i) const
     {
       return m_clippingPlane[i];
+    }
+    void setXhighlow(const float3 xhigh, const float3 xlow)
+    {
+      m_xhigh = xhigh;
+      m_xlow  = xlow;
     }
 };
 

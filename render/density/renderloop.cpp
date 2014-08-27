@@ -462,6 +462,8 @@ class Demo
           m_idata.getBoundBoxHigh(2)
           );
 
+      m_renderer.setXhighlow(r0, r1);
+
       float3 dr = make_float3(
           r1.x-r0.x,
           r1.y-r0.y,
