@@ -21,6 +21,7 @@
 #include "nvMath.h"
 #include "paramgl.h"
 #include <cuda_runtime.h>
+#include <array>
 //#include "GpuArray.h"
 //
 class SmokeRendererParams
@@ -459,6 +460,8 @@ class SmokeRenderer : public SmokeRendererParams
     float3 m_xhigh, m_xlow;
 
     std::vector<int> compositingOrder;
+
+    std::array<int,4> getVisibleViewport() const;
 
   public:
 

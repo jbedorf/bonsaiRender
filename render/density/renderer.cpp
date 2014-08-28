@@ -1393,9 +1393,7 @@ static void lSetClippingPlane(const GLenum planeid, const float4 &plane)
 
 static void lCompose(
     float4 *src, float4 *dst, float *depth,
-    const int n, const int rank, const int nrank, const MPI_Comm &comm,
-    const int showDomain,
-    std::vector<int> compositingOrder,
+    const int rank, const int nrank, const MPI_Comm &comm,
     const int2 wCrd, const int2 wSize,
     const int2 viewPort, const bool resize = false)
 {
@@ -1817,6 +1815,50 @@ static void lCompose(
 
   MPI_Gather(&colorArray[0], nsend*4, MPI_FLOAT, dst, 4*nsend, MPI_FLOAT, master, comm);
 #endif
+}
+
+std::array<int,4> SmokeRenderer::getVisibleViewport() const
+{
+  const float3 r0 = m_xlow;
+  const float3 r1 = m_xhigh;
+  const double3 bBoxVtx[] = {
+    make_double3(r0.x,r0.y,r0.z),
+    make_double3(r1.x,r0.y,r0.z),
+    make_double3(r0.x,r1.y,r0.z),
+    make_double3(r1.x,r1.y,r0.z),
+    make_double3(r0.x,r0.y,r1.z),
+    make_double3(r1.x,r0.y,r1.z),
+    make_double3(r0.x,r1.y,r1.z),
+    make_double3(r1.x,r1.y,r1.z)
+  };
+  const int w = mWindowW;
+  const int h = mWindowH;
+  std::array<int,4> visibleViewport{{w,h,0,0}};
+
+  double modelView[16];
+  double projection[16];
+  int viewport[4];
+  glGetDoublev(GL_MODELVIEW_MATRIX,   modelView);
+  glGetDoublev(GL_PROJECTION_MATRIX, projection);
+  glGetIntegerv( GL_VIEWPORT, viewport);
+  for (auto v : bBoxVtx)
+  {
+    double x,y,z;
+    gluProject(v.x,v.y,v.z, modelView,projection,viewport,&x,&y,&z);
+    visibleViewport[0] = std::min(visibleViewport[0], static_cast<int>(floor(x)));
+    visibleViewport[1] = std::min(visibleViewport[1], static_cast<int>(floor(y)));
+    visibleViewport[2] = std::max(visibleViewport[2], static_cast<int>(ceil(x)+1));
+    visibleViewport[3] = std::max(visibleViewport[3], static_cast<int>(ceil(y)+1));
+  }
+  visibleViewport[0]= std::max(visibleViewport[0],0);
+  visibleViewport[1]= std::max(visibleViewport[1],0);
+  visibleViewport[2]= std::min(visibleViewport[2],w);
+  visibleViewport[3]= std::min(visibleViewport[3],h);
+
+  visibleViewport[2] -= visibleViewport[0];
+  visibleViewport[3] -= visibleViewport[1];
+
+  return visibleViewport;
 }
 
 void SmokeRenderer::splotchDraw()
@@ -2381,72 +2423,32 @@ void SmokeRenderer::splotchDrawSort()
     lCompose(&imgLoc[0], &imgGlb[0], &depth[0], w*h, rank, nrank, comm,
         m_domainView ? m_domainViewIdx : -1, 
         compositingOrder);
-#else
-    int2 wmin = make_int2(w,h);
-    int2 wmax = make_int2(0,0);
-
-    const float3 r0 = m_xlow;
-    const float3 r1 = m_xhigh;
-    const double3 bBoxVtx[] = {
-      make_double3(r0.x,r0.y,r0.z),
-      make_double3(r1.x,r0.y,r0.z),
-      make_double3(r0.x,r1.y,r0.z),
-      make_double3(r1.x,r1.y,r0.z),
-      make_double3(r0.x,r0.y,r1.z),
-      make_double3(r1.x,r0.y,r1.z),
-      make_double3(r0.x,r1.y,r1.z),
-      make_double3(r1.x,r1.y,r1.z)
-    };
-
-    double modelView[16];
-    double projection[16];
-    int viewport[4];
-    glGetDoublev(GL_MODELVIEW_MATRIX,   modelView);
-    glGetDoublev(GL_PROJECTION_MATRIX, projection);
-    glGetIntegerv( GL_VIEWPORT, viewport);
-    for (auto v : bBoxVtx)
-    {
-      double x,y,z;
-      gluProject(v.x,v.y,v.z, modelView,projection,viewport,&x,&y,&z);
-      wmin.x = std::min(wmin.x, static_cast<int>(floor(x)));
-      wmin.y = std::min(wmin.y, static_cast<int>(floor(y)));
-      wmax.x = std::max(wmax.x, static_cast<int>(ceil(x)+1));
-      wmax.y = std::max(wmax.y, static_cast<int>(ceil(y)+1));
-    }
-    wmin.x = std::max(0, wmin.x);
-    wmax.x = std::min(w, wmax.x);
-    wmin.y = std::max(0, wmin.y);
-    wmax.y = std::min(h, wmax.y);
-//    fprintf(stderr, "rank= %d:  [%d %d] [%d %d] \n", rank, wmin.x, wmax.x, wmin.y, wmax.y);
-
-    std::vector<float4> img((wmax.x-wmin.x)*(wmax.y-wmin.y));
-    std::vector<float> z(img.size());
-    for (int j = wmin.y; j < wmax.y; j++)
-      for (int i = wmin.x; i < wmax.x; i++)
-      {
-        img[(j-wmin.y)*(wmax.x-wmin.x) + (i-wmin.x)] = imgLoc[j*w+i];
-        z  [(j-wmin.y)*(wmax.x-wmin.x) + (i-wmin.x)] = depth [j*w+i];
-      }
-
-#if 0
+#elif 0
     const int2 wCrd = make_int2(0,0);
     const int2 wSize = make_int2(w,h);
     const int2 viewPort = make_int2(w,h);
     const bool resize = false;
-    lCompose(&imgLoc[0], &imgGlb[0], &depth[0], w*h, rank, nrank, comm,
-        m_domainView ? m_domainViewIdx : -1, 
-        compositingOrder,
+    lCompose(&imgLoc[0], &imgGlb[0], &depth[0], rank, nrank, comm,
         wCrd, wSize, viewPort, resize);
 #else
-    const int2 wCrd = make_int2(wmin.x, wmin.y);
-    const int2 wSize = make_int2(wmax.x-wmin.x, wmax.y-wmin.y);
-    const int2 viewPort = make_int2(w,h);
+    const auto &viewport = getVisibleViewport();
+    const int2 wCrd  = make_int2(viewport[0], viewport[1]);
+    const int2 wSize = make_int2(viewport[2], viewport[3]);
+    const int2 viewPort = make_int2(mWindowW,mWindowH);
+
+
+    std::vector<float4> img(wSize.x*wSize.y);
+    std::vector<float>  z(wSize.x*wSize.y);
+    for (int j = 0; j < wSize.y; j++)
+      for (int i = 0; i < wSize.x; i++)
+      {
+        img[j*wSize.x + i] = imgLoc[(j+wCrd.y)*viewPort.x + (i+wCrd.x)];
+        z  [j*wSize.x + i] = depth [(j+wCrd.y)*viewPort.x + (i+wCrd.x)];
+      }
+
     const bool resize = false;
-    lCompose(&img[0], &imgGlb[0], &z[0], w*h, rank, nrank, comm,
-        m_domainView ? m_domainViewIdx : -1, 
-        compositingOrder,
+    lCompose(&img[0], &imgGlb[0], &z[0], rank, nrank, comm,
         wCrd, wSize, viewPort, resize);
-#endif
 #endif
     glFinish();
     const double t4 = MPI_Wtime();
