@@ -8,10 +8,10 @@
 #elif 0
 #define WINX 1920
 #define WINY 1080
-#elif 1
+#elif 0
 #define WINX 3840
 #define WINY 2160
-#elif 0
+#elif 1
 #define WINX 4096
 #define WINY 3072
 #endif

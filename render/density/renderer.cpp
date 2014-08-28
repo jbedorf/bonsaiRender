@@ -2449,6 +2449,9 @@ void SmokeRenderer::splotchDrawSort()
             xmax = std::max(xmax,i+1);
             ymax = std::max(ymax,j+1);
           }
+      
+      if (xmin == w)
+        xmin = ymin = xmax = ymax = 0.0;
 
       wCrd  = make_int2(xmin,ymin);
       wSize = make_int2(xmax-xmin, ymax-ymin);
@@ -2469,7 +2472,8 @@ void SmokeRenderer::splotchDrawSort()
     MPI_Barrier(comm);
     const double t40 = MPI_Wtime();
 
-    rptr = glMapBufferRange(GL_PIXEL_PACK_BUFFER, 0, wSize.x*wSize.y*sizeof(float4), GL_MAP_READ_BIT);
+    if (wSize.x*wSize.y > 0)
+      rptr = glMapBufferRange(GL_PIXEL_PACK_BUFFER, 0, wSize.x*wSize.y*sizeof(float4), GL_MAP_READ_BIT);
 
     if (wSize.x*wSize.y > 0)
     {
@@ -2522,7 +2526,6 @@ void SmokeRenderer::splotchDrawSort()
         reinterpret_cast<float4*>(wptr)[i] = imgGlb[i];
 
       glFinish();
-      MPI_Barrier(comm);
       const double t80 = MPI_Wtime();
 
       glUnmapBuffer(GL_PIXEL_UNPACK_BUFFER);
@@ -2534,7 +2537,6 @@ void SmokeRenderer::splotchDrawSort()
       glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
 
       glFinish();
-      MPI_Barrier(comm);
       const double t90 = MPI_Wtime();
 
 #if 0
