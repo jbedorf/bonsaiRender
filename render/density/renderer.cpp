@@ -1754,12 +1754,12 @@ static void lComposeJB(
     
     
     
-#pragma omp parallel for schedule(static)
-    for (int i = n; i < nsend*nrank; i++)
-    {
-      src[i] = make_float4(0.0f);
-      depth[i] = 1.0f;
-    }
+// #pragma omp parallel for schedule(static)
+//     for (int i = n; i < nsend*nrank; i++)
+//     {
+//       src[i] = make_float4(0.0f);
+//       depth[i] = 1.0f;
+//     }
 
 #if 0
  //   MPI_Alltoall(src, nsend*4, MPI_FLOAT, &colorArray[0], nsend*4, MPI_FLOAT, comm);
