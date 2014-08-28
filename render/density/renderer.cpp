@@ -2448,14 +2448,23 @@ void SmokeRenderer::splotchDrawSort()
 
     glBindTexture(GL_TEXTURE_2D, m_imageTex[0]);
     glBindBuffer(GL_PIXEL_PACK_BUFFER, pbo_id[0]);
-    glReadPixels(wCrd.x, wCrd.y, wSize.x, wSize.y, GL_RGBA, GL_FLOAT, 0);
+    if (wSize.x*wSize.y > 0)
+      glReadPixels(wCrd.x, wCrd.y, wSize.x, wSize.y, GL_RGBA, GL_FLOAT, 0);
     glFinish();
     const double t2 = MPI_Wtime();
 
     rptr = glMapBufferRange(GL_PIXEL_PACK_BUFFER, 0, wSize.x*wSize.y*sizeof(float4), GL_MAP_READ_BIT);
 
-    imgLoc.resize(wSize.x*wSize.y);
-    depthLoc.resize(wSize.x*wSize.y);
+    if (wSize.x*wSize.y > 0)
+    {
+      imgLoc.resize(wSize.x*wSize.y);
+      depthLoc.resize(wSize.x*wSize.y);
+    }
+    else
+    {
+      imgLoc.clear();
+      depthLoc.clear();
+    }
 #pragma omp parallel for schedule(static)
     for (int i = 0; i < wSize.x*wSize.y; i++)
     {

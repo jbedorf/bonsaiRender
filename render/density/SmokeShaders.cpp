@@ -231,7 +231,6 @@ STRINGIFY(
     uniform sampler2D rampTex;
     //uniform sampler2DArray spriteTex;
     uniform sampler2D spriteTex;
-    attribute float pointRadiusAttr;                          \n
     uniform float pointRadius;                                         \n
     uniform float overBright = 1.0;
     uniform float overBrightThreshold;
@@ -284,7 +283,6 @@ STRINGIFY(
     uniform sampler2D spriteTex;
     uniform sampler2D shadowTex;                                       \n
     //uniform sampler2D depthTex;                                        \n
-    attribute float pointRadiusAttr;                          \n
     uniform float pointRadius;                                         \n
     uniform vec2 shadowTexScale;
     uniform float overBright = 1.0;
@@ -343,7 +341,6 @@ const char *particleAAPS =
 STRINGIFY(
     uniform sampler2D rampTex;
     uniform sampler2DArray spriteTex;
-    attribute float pointRadiusAttr;                          \n
     uniform float pointRadius;                                         \n
     uniform float overBright = 1.0;
     uniform float overBrightThreshold;
@@ -378,7 +375,6 @@ STRINGIFY(
 
 // render particle as lit sphere
 const char *particleSpherePS = STRINGIFY(
-    attribute float pointRadiusAttr;                          \n
     uniform float pointRadius;                                         \n
     uniform vec3 lightDir = vec3(0.577, 0.577, 0.577);                 \n
     void main()                                                        \n
@@ -923,13 +919,11 @@ STRINGIFY(
 const char *splotchPS = 
 //"#version 150\n"
 STRINGIFY(
-    attribute float particleSize;                             \n
     uniform float spriteScale;                                \n
     uniform sampler2D spriteTex;                                       \n
     uniform float alphaScale;                                          \n
     uniform float transmission;                                        \n
     uniform float sorted;                                              \n
-    in varying vec2 texCrd;
     void main()                                                        \n
     {                                                                  \n
       float type = gl_TexCoord[1].w;                                   \n
