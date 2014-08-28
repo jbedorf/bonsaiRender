@@ -48,10 +48,10 @@
 using namespace nv;
   
   template<typename T>
-static inline float4 lMatVec(const T _m[16], const float4 pos)
+static inline double4 lMatVec(const T _m[16], const double4 pos)
 {
   const T (*m)[4] = (T (*)[4])_m;
-  return make_float4(
+  return make_double4(
       m[0][0]*pos.x + m[1][0]*pos.y + m[2][0]*pos.z + m[3][0]*pos.w,
       m[0][1]*pos.x + m[1][1]*pos.y + m[2][1]*pos.z + m[3][1]*pos.w,
       m[0][2]*pos.x + m[1][2]*pos.y + m[2][2]*pos.z + m[3][2]*pos.w,
@@ -1410,9 +1410,11 @@ static void lCompose(
 {
   constexpr int master = 0;
 
+#if 0  /* could be NULL if nothing is drawn */
   assert(src   != NULL);
   assert(dst   != NULL);
   assert(depth != NULL);
+#endif
 
   assert(wCrd.x >= 0);
   assert(wCrd.y >= 0);
@@ -1853,21 +1855,23 @@ std::array<int,4> SmokeRenderer::getVisibleViewport() const
 #if 1
     double x,y,z;
     gluProject(v.x,v.y,v.z, m_modelViewWin,m_projectionWin,viewport,&x,&y,&z);
-#if 1
-    fprintf(stderr, " rank= %d: xyz= %g %g %g  pxyz= %g %g %g \n",
-        rank, v.x,v.y,v.z, x,y,z);
-#endif
 #else
-    const float4 pos0 = make_float4(v.x,v.y,v.z,1.0f);
-    const float4 posO = lMatVec(modelView,pos0);
-    const float4 posP = lMatVec(projection,posO);
+    const double4 pos0 = make_double4(v.x,v.y,v.z,1.0);
+    const double4 posO = lMatVec(m_modelViewWin,pos0);
+    const double4 posP = lMatVec(m_projectionWin,posO);
 
-    const float wclip = -1.0/posO.z;
-    const float2 posV = make_float2(posP.x*wclip, posP.y*wclip);
+    const double wclip = 1.0/posP.w;
+    double3 posV = make_double3(posP.x*wclip, posP.y*wclip, posP.z*wclip);
+
+#if 0
+    fprintf(stderr, " rank= %d: xyz= %g %g %g  pxyz= %g %g %g \n",
+        rank, v.x,v.y,v.z, posV.x,posV.y,posV.z);
+#endif
 
     double x = (posV.x + 1.0)*0.5*w;
     double y = (posV.y + 1.0)*0.5*h;
 #endif
+
 
     x = std::max(x, static_cast<double>(0));
     y = std::max(y, static_cast<double>(0));
@@ -2373,7 +2377,6 @@ void SmokeRenderer::splotchDrawSort()
     imgLoc.resize(2*w*h);
     imgGlb.resize(2*w*h);
     depth.resize(2*w*h);
-    const int imgSize = w*h*4*sizeof(float);
 
     const double t1 = MPI_Wtime();
 
@@ -2390,32 +2393,20 @@ void SmokeRenderer::splotchDrawSort()
       glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
     }
     assert(pbo_id[0] && pbo_id[1]);
+   
+    /* determine visible viewport bounds */ 
 
-    /***** fetch image *****/
-
-    glBindTexture(GL_TEXTURE_2D, m_imageTex[0]);
-    glBindBuffer(GL_PIXEL_PACK_BUFFER, pbo_id[0]);
-    glGetTexImage(GL_TEXTURE_2D, 0, GL_RGBA, GL_FLOAT, 0);
-    //      glReadPixels(0, 0, w, h, GL_RGBA, GL_FLOAT, 0);
-    glFinish();
-    const double t2 = MPI_Wtime();
-
-    GLvoid *rptr = glMapBufferRange(GL_PIXEL_PACK_BUFFER, 0, imgSize, GL_MAP_READ_BIT);
-
-#pragma omp parallel for schedule(static)
-    for (int i = 0; i < w*h; i++)
-      imgLoc[i] = reinterpret_cast<float4*>(rptr)[i];
-
-    glUnmapBuffer(GL_PIXEL_PACK_BUFFER);
-    glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
-    glBindTexture(GL_TEXTURE_2D,0);
+    const auto &viewport = getVisibleViewport();
+    int2 wCrd  = make_int2(viewport[0], viewport[1]);
+    int2 wSize = make_int2(viewport[2], viewport[3]);
+    const int2 viewPort = make_int2(mWindowW,mWindowH);
 
     /***** fetch depth buffer *****/
 
     glBindTexture(GL_TEXTURE_2D, m_depthTex);
     glBindBuffer(GL_PIXEL_PACK_BUFFER, pbo_id[0]);
     glGetTexImage(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT, GL_FLOAT, 0);
-    rptr = glMapBufferRange(GL_PIXEL_PACK_BUFFER, 0, imgSize, GL_MAP_READ_BIT);
+    GLvoid *rptr = glMapBufferRange(GL_PIXEL_PACK_BUFFER, 0, w*h*sizeof(float), GL_MAP_READ_BIT);
 
     float dmin = +HUGE, dmax = -HUGE;
 #pragma omp parallel for schedule(static) reduction(min:dmin) reduction(max:dmax)
@@ -2430,67 +2421,65 @@ void SmokeRenderer::splotchDrawSort()
     glUnmapBuffer(GL_PIXEL_PACK_BUFFER);
     glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
     glBindTexture(GL_TEXTURE_2D,0);
+   
+    /* determine real bounds to which pixels are written */ 
+    { 
+      int xmin = w;
+      int ymin = h;
+      int xmax = 0;
+      int ymax = 0;
+
+#pragma omp parallel for schedule(static) collapse(2) reduction(min:xmin,ymin) reduction(max:xmax,ymax)
+      for (int j = 0; j < h; j++)
+        for (int i = 0; i < w; i++)
+          if (depth[j*w+i] < 1.0f)
+          {
+            xmin = std::min(xmin,i);
+            ymin = std::min(ymin,j);
+            xmax = std::max(xmax,i+1);
+            ymax = std::max(ymax,j+1);
+          }
+
+      wCrd  = make_int2(xmin,ymin);
+      wSize = make_int2(xmax-xmin, ymax-ymin);
+    }
+
+    /***** fetch image *****/
+
+    glBindTexture(GL_TEXTURE_2D, m_imageTex[0]);
+    glBindBuffer(GL_PIXEL_PACK_BUFFER, pbo_id[0]);
+    glReadPixels(wCrd.x, wCrd.y, wSize.x, wSize.y, GL_RGBA, GL_FLOAT, 0);
+    glFinish();
+    const double t2 = MPI_Wtime();
+
+    rptr = glMapBufferRange(GL_PIXEL_PACK_BUFFER, 0, wSize.x*wSize.y*sizeof(float4), GL_MAP_READ_BIT);
+
+    imgLoc.resize(wSize.x*wSize.y);
+#pragma omp parallel for schedule(static)
+    for (int i = 0; i < wSize.x*wSize.y; i++)
+      imgLoc[i] = reinterpret_cast<float4*>(rptr)[i];
+
+    glUnmapBuffer(GL_PIXEL_PACK_BUFFER);
+    glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
+    glBindTexture(GL_TEXTURE_2D,0);
 
     glFinish();
     MPI_Barrier(comm);
     const double t3 = MPI_Wtime();
 
-#if  0
+#if 0
     lCompose(&imgLoc[0], &imgGlb[0], &depth[0], w*h, rank, nrank, comm,
         m_domainView ? m_domainViewIdx : -1, 
         compositingOrder);
-#elif 0
-    const int2 wCrd = make_int2(0,0);
-    const int2 wSize = make_int2(w,h);
-    const int2 viewPort = make_int2(w,h);
-    const bool resize = false;
-    lCompose(&imgLoc[0], &imgGlb[0], &depth[0], rank, nrank, comm,
-        wCrd, wSize, viewPort, resize);
 #else
-    const auto &viewport = getVisibleViewport();
-    int2 wCrd  = make_int2(viewport[0], viewport[1]);
-    int2 wSize = make_int2(viewport[2], viewport[3]);
-    const int2 viewPort = make_int2(mWindowW,mWindowH);
-
-#if 1  /* test composer, if we get problem with glu project */
-    int xmin = w;
-    int ymin = h;
-    int xmax = 0;
-    int ymax = 0;
-
-#pragma omp parallel for schedule(static) collapse(2) reduction(min:xmin,ymin) reduction(max:xmax,ymax)
-    for (int j = 0; j < h; j++)
-      for (int i = 0; i < w; i++)
-      {
-        const float z = depth[j*w+i];
-        if (z < 1.0f)
-        {
-          xmin = std::min(xmin,i);
-          ymin = std::min(ymin,j);
-          xmax = std::max(xmax,i+1);
-          ymax = std::max(ymax,j+1);
-        }
-      }
-
-    wCrd  = make_int2(xmin,ymin);
-    wSize = make_int2(xmax-xmin, ymax-ymin);
-#endif
-
-
-
-
-    std::vector<float4> img(wSize.x*wSize.y);
     std::vector<float>  z(wSize.x*wSize.y);
 #pragma omp parallel for schedule(static) collapse(2)
     for (int j = 0; j < wSize.y; j++)
       for (int i = 0; i < wSize.x; i++)
-      {
-        img[j*wSize.x + i] = imgLoc[(j+wCrd.y)*viewPort.x + (i+wCrd.x)];
-        z  [j*wSize.x + i] = depth [(j+wCrd.y)*viewPort.x + (i+wCrd.x)];
-      }
+        z[j*wSize.x + i] = depth[(j+wCrd.y)*viewPort.x + (i+wCrd.x)];
 
     const bool resize = false;
-    lCompose(&img[0], &imgGlb[0], &z[0], rank, nrank, comm,
+    lCompose(&imgLoc[0], &imgGlb[0], &z[0], rank, nrank, comm,
         wCrd, wSize, viewPort, resize);
 #endif
     const double t4 = MPI_Wtime();
@@ -2501,7 +2490,7 @@ void SmokeRenderer::splotchDrawSort()
       /***** place back to fbo *****/
 
       glBindBuffer(GL_PIXEL_UNPACK_BUFFER, pbo_id[1]);
-      GLvoid *wptr = glMapBufferRange(GL_PIXEL_UNPACK_BUFFER, 0, imgSize, GL_MAP_WRITE_BIT);
+      GLvoid *wptr = glMapBufferRange(GL_PIXEL_UNPACK_BUFFER, 0, w*h*sizeof(float4), GL_MAP_WRITE_BIT);
 
 #pragma omp parallel for schedule(static)
       for (int i = 0; i < w*h; i++)
@@ -2518,11 +2507,18 @@ void SmokeRenderer::splotchDrawSort()
       glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
       const double t6 = MPI_Wtime();
 
+#if 0
       if (1)
         fprintf(stderr, 
             "total= %g: d2h= %g cpy= %g  mpi= %g  cpy= %g h2d= %g :: bwMPI= %g bwD2H= %g  bwH2D= %g\n", t6-t0,
                           t2-t1, t3-t2,   t4-t3,   t5-t4,  t6-t5,
             3.0*imgSize/(t4-t3)/1e6, imgSize/(t2-t1)/1e6, imgSize/(t6-t5)/1e6);
+#else
+      if (1)
+        fprintf(stderr, 
+            "total= %g: d2h= %g cpy= %g  mpi= %g  cpy= %g h2d= %g \n\n", t6-t0,
+                          t2-t1, t3-t2,   t4-t3,   t5-t4,  t6-t5);
+#endif
     }
 
   }
