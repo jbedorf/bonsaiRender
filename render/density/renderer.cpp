@@ -1507,8 +1507,8 @@ static void lCompose(
   }
 
   static std::vector<vec5> sendbuf;
-  assert(senddispl[nrank] > 0);
-  sendbuf.resize(senddispl[nrank] / mpiDataSize);
+  if (senddispl[nrank] > 0)
+    sendbuf.resize(senddispl[nrank] / mpiDataSize);
 
   /************************/
   /* populate send buffer */
@@ -1562,8 +1562,8 @@ static void lCompose(
     recvdispl[p+1] = recvdispl[p] + recvcount[p];
 
   static std::vector<vec5> recvbuf;
-  assert(recvdispl[nrank] > 0);
-  recvbuf.resize(recvdispl[nrank] / mpiDataSize);
+  if (recvdispl[nrank] > 0)
+    recvbuf.resize(recvdispl[nrank] / mpiDataSize);
 
   /***********************/
   /* exchange pixel data */
