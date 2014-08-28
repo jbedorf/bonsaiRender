@@ -1863,7 +1863,7 @@ std::array<int,4> SmokeRenderer::getVisibleViewport() const
     const double4 posP = lMatVec(projection,posO);
 
     const double wclip = -1.0/posO.z;
-    const double2 posV = make_double4(posP.x*wclip, posP.y*wclip);
+    const double2 posV = make_double2(posP.x*wclip, posP.y*wclip);
 
     const double x = (posV.x + 1.0)*0.5*w;
     const double y = (posV.y + 1.0)*0.5*h;
