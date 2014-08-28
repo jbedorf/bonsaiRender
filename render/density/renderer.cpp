@@ -2364,7 +2364,6 @@ void SmokeRenderer::splotchDrawSort()
 
 #if 1
   {
-    const double t0 = MPI_Wtime();
     GLint w, h, internalformat;
 
     glBindTexture(GL_TEXTURE_2D, m_imageTex[0]);
@@ -2379,7 +2378,6 @@ void SmokeRenderer::splotchDrawSort()
     imgGlb.resize(2*w*h);
     depth.resize(2*w*h);
 
-    const double t1 = MPI_Wtime();
 
     static GLuint pbo_id[2];
     if (!pbo_id[0])
@@ -2403,11 +2401,18 @@ void SmokeRenderer::splotchDrawSort()
     const int2 viewPort = make_int2(mWindowW,mWindowH);
 
     /***** fetch depth buffer *****/
+    glFinish();
+    MPI_Barrier(comm);
+    const double t00 = MPI_Wtime();
 
     glBindTexture(GL_TEXTURE_2D, m_depthTex);
     glBindBuffer(GL_PIXEL_PACK_BUFFER, pbo_id[0]);
     glGetTexImage(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT, GL_FLOAT, 0);
     GLvoid *rptr = glMapBufferRange(GL_PIXEL_PACK_BUFFER, 0, w*h*sizeof(float), GL_MAP_READ_BIT);
+    
+    glFinish();
+    MPI_Barrier(comm);
+    const double t10 = MPI_Wtime();
 
     float dmin = +HUGE, dmax = -HUGE;
 #pragma omp parallel for schedule(static) reduction(min:dmin) reduction(max:dmax)
@@ -2422,6 +2427,10 @@ void SmokeRenderer::splotchDrawSort()
     glUnmapBuffer(GL_PIXEL_PACK_BUFFER);
     glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
     glBindTexture(GL_TEXTURE_2D,0);
+    
+    glFinish();
+    MPI_Barrier(comm);
+    const double t20 = MPI_Wtime();
    
     /* determine real bounds to which pixels are written */ 
     { 
@@ -2445,14 +2454,20 @@ void SmokeRenderer::splotchDrawSort()
       wSize = make_int2(xmax-xmin, ymax-ymin);
     }
 
+    glFinish();
+    MPI_Barrier(comm);
+    const double t30 = MPI_Wtime();
+
     /***** fetch image *****/
 
     glBindTexture(GL_TEXTURE_2D, m_imageTex[0]);
     glBindBuffer(GL_PIXEL_PACK_BUFFER, pbo_id[0]);
     if (wSize.x*wSize.y > 0)
       glReadPixels(wCrd.x, wCrd.y, wSize.x, wSize.y, GL_RGBA, GL_FLOAT, 0);
+
     glFinish();
-    const double t2 = MPI_Wtime();
+    MPI_Barrier(comm);
+    const double t40 = MPI_Wtime();
 
     rptr = glMapBufferRange(GL_PIXEL_PACK_BUFFER, 0, wSize.x*wSize.y*sizeof(float4), GL_MAP_READ_BIT);
 
@@ -2466,6 +2481,11 @@ void SmokeRenderer::splotchDrawSort()
       imgLoc.clear();
       depthLoc.clear();
     }
+    
+    glFinish();
+    MPI_Barrier(comm);
+    const double t50 = MPI_Wtime();
+
 #pragma omp parallel for schedule(static)
     for (int i = 0; i < wSize.x*wSize.y; i++)
     {
@@ -2478,15 +2498,17 @@ void SmokeRenderer::splotchDrawSort()
     glUnmapBuffer(GL_PIXEL_PACK_BUFFER);
     glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
     glBindTexture(GL_TEXTURE_2D,0);
-
+    
     glFinish();
     MPI_Barrier(comm);
-    const double t3 = MPI_Wtime();
+    const double t60 = MPI_Wtime();
 
     lCompose(&imgLoc[0], &imgGlb[0], &depthLoc[0], rank, nrank, comm,
         wCrd, wSize, viewPort);
+
+    glFinish();
     MPI_Barrier(comm);
-    const double t4 = MPI_Wtime();
+    const double t70 = MPI_Wtime();
 
     if (isMaster())
     {
@@ -2498,8 +2520,10 @@ void SmokeRenderer::splotchDrawSort()
 #pragma omp parallel for schedule(static)
       for (int i = 0; i < w*h; i++)
         reinterpret_cast<float4*>(wptr)[i] = imgGlb[i];
+
       glFinish();
-      const double t5 = MPI_Wtime();
+      MPI_Barrier(comm);
+      const double t80 = MPI_Wtime();
 
       glUnmapBuffer(GL_PIXEL_UNPACK_BUFFER);
 
@@ -2508,7 +2532,10 @@ void SmokeRenderer::splotchDrawSort()
       glFinish();
       glBindTexture(GL_TEXTURE_2D,0);
       glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
-      const double t6 = MPI_Wtime();
+
+      glFinish();
+      MPI_Barrier(comm);
+      const double t90 = MPI_Wtime();
 
 #if 0
       if (1)
@@ -2518,9 +2545,11 @@ void SmokeRenderer::splotchDrawSort()
             3.0*imgSize/(t4-t3)/1e6, imgSize/(t2-t1)/1e6, imgSize/(t6-t5)/1e6);
 #else
       if (1)
-        fprintf(stderr, 
-            "total= %g: d2h= %g cpy= %g  mpi= %g  cpy= %g h2d= %g \n\n", t6-t0,
-                          t2-t1, t3-t2,   t4-t3,   t5-t4,  t6-t5);
+        fprintf(stderr, "total= %g: depth= [%g %g %g] img= [%g %g %g] mpi= %g  wb= [ %g %g ]\n", t90 - t00,
+            t10-t00, t20-t10, t30-t20,
+            t40-t30, t50-t40, t60-t50,
+            t70-t60,
+            t80-t70, t90-t80);
 #endif
     }
 
