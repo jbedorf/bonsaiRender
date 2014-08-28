@@ -2444,9 +2444,35 @@ void SmokeRenderer::splotchDrawSort()
         wCrd, wSize, viewPort, resize);
 #else
     const auto &viewport = getVisibleViewport();
-    const int2 wCrd  = make_int2(viewport[0], viewport[1]);
-    const int2 wSize = make_int2(viewport[2], viewport[3]);
+    int2 wCrd  = make_int2(viewport[0], viewport[1]);
+    int2 wSize = make_int2(viewport[2], viewport[3]);
     const int2 viewPort = make_int2(mWindowW,mWindowH);
+
+#if 1  /* test composer, if we get problem with glu project */
+    int xmin = w;
+    int ymin = h;
+    int xmax = 0;
+    int ymax = 0;
+
+#pragma omp parallel for schedule(static) collapse(2) reduction(min:xmin,ymin) reduction(max:xmax,ymax)
+    for (int j = 0; j < h; j++)
+      for (int i = 0; i < w; i++)
+      {
+        const float z = depth[j*w+i];
+        if (z < 1.0f)
+        {
+          xmin = std::min(xmin,i);
+          ymin = std::min(ymin,j);
+          xmax = std::max(xmax,i+1);
+          ymax = std::max(ymax,j+1);
+        }
+      }
+
+    wCrd  = make_int2(xmin,ymin);
+    wSize = make_int2(xmax-xmin, ymax-ymin);
+#endif
+
+
 
 
     std::vector<float4> img(wSize.x*wSize.y);
