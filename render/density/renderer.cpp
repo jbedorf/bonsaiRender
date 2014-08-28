@@ -1468,6 +1468,7 @@ static void lCompose(
   static std::vector<int> sendcount(nrank), senddispl(nrank+1);
   senddispl[0] = 0;
 
+#pragma omp parallel for schedule(static)
   for (int p = 0; p < nrank; p++)
   {
     const int irank = p % npx;
@@ -1503,8 +1504,10 @@ static void lCompose(
 
     tilesBnd [p]   = make_int4(tile[0], tile[1], tile[2]-tile[0], tile[3]-tile[1]);
     sendcount[p]   = tilesBnd[p].z*tilesBnd[p].w*mpiDataSize;
-    senddispl[p+1] = senddispl[p] + sendcount[p];
   }
+
+  for (int p = 0; p < nrank; p++)
+    senddispl[p+1] = senddispl[p] + sendcount[p];
 
   static std::vector<vec5> sendbuf;
   if (senddispl[nrank] > 0)
@@ -1516,7 +1519,7 @@ static void lCompose(
 
 #pragma omp parallel
   {
-//#pragma omp for schedule(dynamic)
+#pragma omp for schedule(dynamic)
     for (int p = 0; p < nrank; p++)
       if (sendcount[p] > 0)
       {
@@ -1525,7 +1528,7 @@ static void lCompose(
         const int xmax  = tilesBnd[p].z + xmin;
         const int ymax  = tilesBnd[p].w + ymin;
         const int displ = senddispl[p] / mpiDataSize;
-#pragma omp for schedule(static) collapse(2) nowait
+//#pragma omp for schedule(static) collapse(2) nowait
         for (int j = ymin; j < ymax; j++)
           for (int i = xmin; i < xmax; i++)
           {
@@ -1550,8 +1553,6 @@ static void lCompose(
 
   static std::vector<int4> tilesBndRecv(nrank);
   MPI_Alltoall(&tilesBnd[0], 4, MPI_INT, &tilesBndRecv[0], 4, MPI_INT, comm);
-
-  std::copy(tilesBndRecv.begin(), tilesBndRecv.end(), tilesBnd.begin());
 
   static std::vector<int> recvcount(nrank), recvdispl(nrank+1);
   for (int p = 0; p < nrank; p++)
@@ -1618,10 +1619,10 @@ static void lCompose(
         /* extract non-zero pixels */
         for (int p = 0; p < nrank; p++)
         {
-          const int xminr = tilesBnd[p].x;
-          const int yminr = tilesBnd[p].y;
-          const int xmaxr = tilesBnd[p].z + xminr;
-          const int ymaxr = tilesBnd[p].w + yminr;
+          const int xminr = tilesBndRecv[p].x;
+          const int yminr = tilesBndRecv[p].y;
+          const int xmaxr = tilesBndRecv[p].z + xminr;
+          const int ymaxr = tilesBndRecv[p].w + yminr;
           if (i >= xminr && i < xmaxr && j >= yminr && j < ymaxr)
           {
             const int iloc = i - xminr;
@@ -2383,7 +2384,7 @@ void SmokeRenderer::splotchDrawSort()
     static GLuint pbo_id[2];
     if (!pbo_id[0])
     {
-      const int pbo_size = 8*1920*1080*4*sizeof(float);
+      const int pbo_size = 8*4096*3072*sizeof(float4);
       glGenBuffers(2, pbo_id);
       glBindBuffer(GL_PIXEL_PACK_BUFFER, pbo_id[0]);
       glBufferData(GL_PIXEL_PACK_BUFFER, pbo_size, 0, GL_STATIC_READ);
@@ -2484,6 +2485,7 @@ void SmokeRenderer::splotchDrawSort()
 
     lCompose(&imgLoc[0], &imgGlb[0], &depthLoc[0], rank, nrank, comm,
         wCrd, wSize, viewPort);
+    MPI_Barrier(comm);
     const double t4 = MPI_Wtime();
 
     if (isMaster())
