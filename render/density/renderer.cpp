@@ -46,6 +46,17 @@
 //extern int devID;
 
 using namespace nv;
+  
+  template<typename T>
+static inline double4 lMatVec(const T _m[16], const double4 pos)
+{
+  const T (*m)[4] = (T (*)[4])_m;
+  return make_double4(
+      m[0][0]*pos.x + m[1][0]*pos.y + m[2][0]*pos.z + m[3][0]*pos.w,
+      m[0][1]*pos.x + m[1][1]*pos.y + m[2][1]*pos.z + m[3][1]*pos.w,
+      m[0][2]*pos.x + m[1][2]*pos.y + m[2][2]*pos.z + m[3][2]*pos.w,
+      m[0][3]*pos.x + m[1][3]*pos.y + m[2][3]*pos.z + m[3][3]*pos.w);
+}
 
 SmokeRendererParams::SmokeRendererParams() :
   mParticleRadius(0.1f),
@@ -1408,15 +1419,14 @@ static void lCompose(
   assert(wCrd.x + wSize.x <= viewPort.x);
   assert(wCrd.y + wSize.y <= viewPort.y);
 
-  static std::vector<int> rankMap;  /* map for pixel (x,y) to a compositing rank  */
   static int4 localTile;           /* (xmin,ymin,xmax,ymax) local compositing tile */
   static std::vector<float4> imgLoc, imgGlb;
-  static int npx, npy;
+  static int npx = -1, npy;
 
-  if (resize) 
-    rankMap.clear();
+  if (resize)
+    npx = -1;
 
-  if (rankMap.empty())
+  if (npx == -1)
   {
     /* factorize nrank = npx*npy */
     int n_tmp = static_cast<int>(std::sqrt(nrank+0.1));
@@ -1443,20 +1453,6 @@ static void lCompose(
     imgLoc.resize(winxloc*winyloc);
     imgGlb.resize(winxloc*winyloc*nrank);
     assert((int)imgGlb.size() >= viewPort.x*viewPort.y);
-
-    /* generate rank map */
-    rankMap.resize(viewPort.x*viewPort.y);
-#pragma omp parallel for schedule(static) collapse(2)
-    for (int j = 0; j < viewPort.y; j++)
-      for (int i = 0; i < viewPort.x; i++)
-      {
-        const int icol = i / winxloc;
-        const int jcol = j / winyloc;
-        assert(icol >= 0 && icol < npx);
-        assert(jcol >= 0 && jcol < npy);
-        const int rank = jcol*npx + icol;
-        rankMap[j*viewPort.x + i] = rank;
-      }
   }
   
   using vec5 = std::array<float,5>;  /* rgb, alpha, depth */
@@ -1467,46 +1463,46 @@ static void lCompose(
   /************************************/
 
   static std::vector<int4> tilesBnd(nrank); 
-  std::fill(tilesBnd.begin(), tilesBnd.end(), make_int4(viewPort.x,viewPort.y,0,0));
-
-  static std::vector<int> sendcount(nrank);
-  std::fill(sendcount.begin(), sendcount.end(), 0);
-
-  /* count pixels to send to remote ranks */
-  {
-    for (int j = wCrd.y; j < wCrd.y + wSize.y; j++)
-      for (int i = wCrd.x; i < wCrd.x + wSize.x; i++)
-      {
-        const int dstRank = rankMap[j*viewPort.x + i];
-        assert(dstRank >= 0 && dstRank < nrank);
-
-        auto &minmax = tilesBnd[dstRank];
-        minmax.x = std::min(minmax.x, i);
-        minmax.y = std::min(minmax.y, j);
-        minmax.z = std::max(minmax.z, i+1);
-        minmax.w = std::max(minmax.w, j+1);
-
-        sendcount[dstRank] += mpiDataSize;
-      }
-
-    for (int p = 0; p < nrank; p++)
-      if (sendcount[p] == 0)
-      {
-        tilesBnd[p] = make_int4(0);
-      }
-      else
-      {
-        tilesBnd[p].z -= tilesBnd[p].x;
-        tilesBnd[p].w -= tilesBnd[p].y;
-      }
-
-  }
-
-  /* compute displacements */
-  static std::vector<int> senddispl(nrank+1);
+  static std::vector<int> sendcount(nrank), senddispl(nrank+1);
   senddispl[0] = 0;
+
   for (int p = 0; p < nrank; p++)
+  {
+    const int irank = p % npx;
+    const int jrank = p / npx;
+
+    const int winxloc = localTile.z;
+    const int winyloc = localTile.w;
+
+    const int x0 = irank*winxloc;
+    const int x1 = x0  + winxloc;
+
+    const int y0 = jrank*winyloc;
+    const int y1 = y0  + winyloc;
+
+    using vec4 = std::array<int,4> ;
+
+    /* clip image with the tile */
+    auto clip = [](const vec4 &tile, const vec4 &image)
+    {
+      vec4 t;
+      t[0] = std::min(tile[2], std::max(tile[0],image[0]));  /* clip xmin */
+      t[1] = std::min(tile[3], std::max(tile[1],image[1]));  /* clip ymin */
+      t[2] = std::max(tile[0], std::min(tile[2],image[2]));  /* clip xmax */
+      t[3] = std::max(tile[1], std::min(tile[3],image[3]));  /* clip ymax */
+      if (t[0] >= t[2] || t[1] >= t[3])  /* image is fully outside the tile */
+        t = vec4{{0,0,0,0}};
+      return t;
+    };
+
+    const auto &tile = clip(
+        vec4{{x0,y0,x1,y1}},
+        vec4{{wCrd.x,wCrd.y, wCrd.x+wSize.x, wCrd.y+wSize.y}});
+
+    tilesBnd [p]   = make_int4(tile[0], tile[1], tile[2]-tile[0], tile[3]-tile[1]);
+    sendcount[p]   = tilesBnd[p].z*tilesBnd[p].w*mpiDataSize;
     senddispl[p+1] = senddispl[p] + sendcount[p];
+  }
 
   static std::vector<vec5> sendbuf;
   assert(senddispl[nrank] > 0);
@@ -1516,25 +1512,36 @@ static void lCompose(
   /* populate send buffer */
   /************************/
 
-  static std::vector<int> offset(nrank);
-  for (int p = 0; p < nrank; p++)
-    offset[p] = senddispl[p] / mpiDataSize;
-
-  /* pupulate senfbuf with pixels */
+#pragma omp parallel
   {
-    for (int j = wCrd.y; j < wCrd.y + wSize.y; j++)
-      for (int i = wCrd.x; i < wCrd.x + wSize.x; i++)
+//#pragma omp for schedule(dynamic)
+    for (int p = 0; p < nrank; p++)
+      if (sendcount[p] > 0)
       {
-        const int isrc = (j-wCrd.y)*wSize.x + (i-wCrd.x);
-        const float4 col =   src[isrc];
-        const float  z   = depth[isrc];
+        const int xmin  = tilesBnd[p].x;
+        const int ymin  = tilesBnd[p].y;
+        const int xmax  = tilesBnd[p].z + xmin;
+        const int ymax  = tilesBnd[p].w + ymin;
+        const int displ = senddispl[p] / mpiDataSize;
+#pragma omp for schedule(static) collapse(2) nowait
+        for (int j = ymin; j < ymax; j++)
+          for (int i = xmin; i < xmax; i++)
+          {
+            const int iloc = i - wCrd.x;
+            const int jloc = j - wCrd.y;
+            assert(iloc >= 0); 
+            assert(jloc >= 0);
+            assert(iloc < wSize.x);
+            assert(jloc < wSize.y);
 
-        const int dstRank = rankMap[j*viewPort.x + i];
-        sendbuf[offset[dstRank]] = vec5{{col.x,col.y,col.z,col.w, z}};
-        offset[dstRank]++;
+            const int idx = jloc*wSize.x + iloc;
+            sendbuf[displ + (j-ymin)*(xmax-xmin)+(i-xmin)] = vec5{{
+              src[idx].x,src[idx].y,src[idx].z, src[idx].w, 
+                depth[idx]}};
+          }
       }
   }
-
+  
   /***************************/
   /* exchange tiles metadata */
   /***************************/
@@ -1559,9 +1566,9 @@ static void lCompose(
   /***********************/
   /* exchange pixel data */
   /***********************/
-
+  
   {
-    MPI_Barrier(comm);
+//    MPI_Barrier(comm);
     const double t0 = MPI_Wtime();
     MPI_Alltoallv(
         &sendbuf[0], &sendcount[0], &senddispl[0], MPI_FLOAT,
@@ -1578,14 +1585,14 @@ static void lCompose(
       fprintf(stderr, " MPI_Alltoallv: dt= %g  BW= %g MB/s  mem= %g MB\n", dt, bw/1e6, nsendrecv/1e6);
     }
   }
-
+  
   for (int p = 0; p < nrank; p++)
   {
     recvcount[p] /= mpiDataSize;
     recvdispl[p] /= mpiDataSize;
   }
   recvdispl[nrank] /= mpiDataSize;
-
+  
 
   /********************/
   /* compositing step */
@@ -1652,7 +1659,7 @@ static void lCompose(
         imgLoc[(j-ymin)*(xmax-xmin)+(i-xmin)] = dst;
       }
   }
-
+  
   /******************************************/
   /* gather local images on the master rank */
   /******************************************/
@@ -1661,7 +1668,7 @@ static void lCompose(
       &imgLoc[0], imgLoc.size()*4, MPI_FLOAT, 
       &imgGlb[0], imgLoc.size()*4, MPI_FLOAT, 
       master, comm);
-
+  
   /* combine times together */
   const int winxloc = localTile.z;
   const int winyloc = localTile.w;
@@ -1680,6 +1687,7 @@ static void lCompose(
       const int rank  = jrank * npx + irank;
       dst[j*viewPort.x+i] = imgGlb[winxloc*winyloc*rank + jloc*winxloc + iloc];
     }
+  
 }
 
 static void lCompose(
@@ -1831,9 +1839,6 @@ std::array<int,4> SmokeRenderer::getVisibleViewport() const
     make_double3(r0.x,r1.y,r1.z),
     make_double3(r1.x,r1.y,r1.z)
   };
-  const int w = mWindowW;
-  const int h = mWindowH;
-  std::array<int,4> visibleViewport{{w,h,0,0}};
 
   double modelView[16];
   double projection[16];
@@ -1841,10 +1846,29 @@ std::array<int,4> SmokeRenderer::getVisibleViewport() const
   glGetDoublev(GL_MODELVIEW_MATRIX,   modelView);
   glGetDoublev(GL_PROJECTION_MATRIX, projection);
   glGetIntegerv( GL_VIEWPORT, viewport);
+
+  const int w = viewport[2];
+  const int h = viewport[3];
+
+  std::array<int,4> visibleViewport{{w,h,0,0}};
+
   for (auto v : bBoxVtx)
   {
+#if 0
     double x,y,z;
     gluProject(v.x,v.y,v.z, modelView,projection,viewport,&x,&y,&z);
+#else
+    const double4 pos0 = make_double4(v.x,v.y,v.z,1.0);
+    const double4 posO = lMatVec(modelView,pos0);
+    const double4 posP = lMatVec(projection,posO);
+
+    const double wclip = -1.0/posO.z;
+    const double2 posV = make_double4(posP.x*wclip, posP.y*wclip);
+
+    const double x = (posV.x + 1.0)*0.5*w;
+    const double y = (posV.y + 1.0)*0.5*h;
+#endif
+
     visibleViewport[0] = std::min(visibleViewport[0], static_cast<int>(floor(x)));
     visibleViewport[1] = std::min(visibleViewport[1], static_cast<int>(floor(y)));
     visibleViewport[2] = std::max(visibleViewport[2], static_cast<int>(ceil(x)+1));
@@ -1854,6 +1878,17 @@ std::array<int,4> SmokeRenderer::getVisibleViewport() const
   visibleViewport[1]= std::max(visibleViewport[1],0);
   visibleViewport[2]= std::min(visibleViewport[2],w);
   visibleViewport[3]= std::min(visibleViewport[3],h);
+
+
+#if 0
+  fprintf(stderr, "rank= %d:  %d %d  - %d %d - %d %d \n",
+      rank, 
+      visibleViewport[0],
+      visibleViewport[1],
+      visibleViewport[2],
+      visibleViewport[3],
+      w,h);
+#endif
 
   visibleViewport[2] -= visibleViewport[0];
   visibleViewport[3] -= visibleViewport[1];
@@ -2390,34 +2425,8 @@ void SmokeRenderer::splotchDrawSort()
     glBindTexture(GL_TEXTURE_2D,0);
 
     glFinish();
+    MPI_Barrier(comm);
     const double t3 = MPI_Wtime();
-
-    /***** compose image *****/
-     
-#if 0
-#define __GLOBAL_COMPOSITING_ORDER
-#endif
-
-#ifdef __GLOBAL_COMPOSITING_ORDER
-    {
-      /*** gather depth from each rank ***/
-      std::vector<float> depth(nrank);
-      MPI_Allgather(&dmin, 1, MPI_FLOAT, &depth[0], 1, MPI_FLOAT, comm);
-
-      /*** sort ranks by depth ***/
-      using pair = std::pair<float,int>;
-      std::vector<pair> depthMap(nrank);
-      for (int p = 0; p < nrank; p++)
-        depthMap[p] = std::make_pair(depth[p],p);
-      std::sort(depthMap.begin(), depthMap.end(), 
-          [](const pair &a, const pair &b) { return a.first < b.first;});
-
-      /*** extract compositing order ***/
-      compositingOrder.clear();
-      for (auto p : depthMap)
-        compositingOrder.push_back(p.second);
-    }
-#endif
 
 #if  0
     lCompose(&imgLoc[0], &imgGlb[0], &depth[0], w*h, rank, nrank, comm,
@@ -2439,6 +2448,7 @@ void SmokeRenderer::splotchDrawSort()
 
     std::vector<float4> img(wSize.x*wSize.y);
     std::vector<float>  z(wSize.x*wSize.y);
+#pragma omp parallel for schedule(static) collapse(2)
     for (int j = 0; j < wSize.y; j++)
       for (int i = 0; i < wSize.x; i++)
       {
@@ -2450,7 +2460,6 @@ void SmokeRenderer::splotchDrawSort()
     lCompose(&img[0], &imgGlb[0], &z[0], rank, nrank, comm,
         wCrd, wSize, viewPort, resize);
 #endif
-    glFinish();
     const double t4 = MPI_Wtime();
 
     if (isMaster())
@@ -2479,7 +2488,7 @@ void SmokeRenderer::splotchDrawSort()
       if (1)
         fprintf(stderr, 
             "total= %g: d2h= %g cpy= %g  mpi= %g  cpy= %g h2d= %g :: bwMPI= %g bwD2H= %g  bwH2D= %g\n", t6-t0,
-            t2-t1,   t3-t2,       t4-t3,   t5-t4,     t6-t5,
+                          t2-t1, t3-t2,   t4-t3,   t5-t4,  t6-t5,
             3.0*imgSize/(t4-t3)/1e6, imgSize/(t2-t1)/1e6, imgSize/(t6-t5)/1e6);
     }
 
