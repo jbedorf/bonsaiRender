@@ -1585,7 +1585,7 @@ static void lCompose(
     {
       const double dt = t1-t0;
       const double bw = sizeof(float)*nsendrecv / dt;
-      fprintf(stderr, " MPI_Alltoallv: dt= %g  BW= %g MB/s  mem= %g MB\n", dt, bw/1e6, nsendrecv/1e6);
+      fprintf(stderr, " MPI_Alltoallv: dt= %g  BW= %g MB/s  mem= %g MB\n", dt, bw/1e6, sizeof(float)*nsendrecv/1e6);
     }
   }
   
