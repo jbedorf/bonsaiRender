@@ -1854,7 +1854,7 @@ std::array<int,4> SmokeRenderer::getVisibleViewport() const
 
   for (auto v : bBoxVtx)
   {
-#if 0
+#if 1
     double x,y,z;
     gluProject(v.x,v.y,v.z, modelView,projection,viewport,&x,&y,&z);
 #else
