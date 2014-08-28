@@ -1406,7 +1406,7 @@ static void lCompose(
     float4 *src, float4 *dst, float *depth,
     const int rank, const int nrank, const MPI_Comm &comm,
     const int2 wCrd, const int2 wSize,
-    const int2 viewPort, const bool resize = false)
+    const int2 viewPort, const bool resize = true)
 {
   constexpr int master = 0;
 
@@ -2373,7 +2373,7 @@ void SmokeRenderer::splotchDrawSort()
     glBindTexture(GL_TEXTURE_2D,0);
 
     static std::vector<float4> imgLoc, imgGlb;
-    static std::vector<float > depth;
+    static std::vector<float > depth, depthLoc;
     imgLoc.resize(2*w*h);
     imgGlb.resize(2*w*h);
     depth.resize(2*w*h);
@@ -2455,9 +2455,15 @@ void SmokeRenderer::splotchDrawSort()
     rptr = glMapBufferRange(GL_PIXEL_PACK_BUFFER, 0, wSize.x*wSize.y*sizeof(float4), GL_MAP_READ_BIT);
 
     imgLoc.resize(wSize.x*wSize.y);
+    depthLoc.resize(wSize.x*wSize.y);
 #pragma omp parallel for schedule(static)
     for (int i = 0; i < wSize.x*wSize.y; i++)
+    {
       imgLoc[i] = reinterpret_cast<float4*>(rptr)[i];
+      const int ix = i % wSize.x;
+      const int iy = i / wSize.x;
+      depthLoc[i] = depth[(iy+wCrd.y)*w+(ix+wCrd.x)];
+    }
 
     glUnmapBuffer(GL_PIXEL_PACK_BUFFER);
     glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
@@ -2467,26 +2473,12 @@ void SmokeRenderer::splotchDrawSort()
     MPI_Barrier(comm);
     const double t3 = MPI_Wtime();
 
-#if 0
-    lCompose(&imgLoc[0], &imgGlb[0], &depth[0], w*h, rank, nrank, comm,
-        m_domainView ? m_domainViewIdx : -1, 
-        compositingOrder);
-#else
-    std::vector<float>  z(wSize.x*wSize.y);
-#pragma omp parallel for schedule(static) collapse(2)
-    for (int j = 0; j < wSize.y; j++)
-      for (int i = 0; i < wSize.x; i++)
-        z[j*wSize.x + i] = depth[(j+wCrd.y)*viewPort.x + (i+wCrd.x)];
-
-    const bool resize = false;
-    lCompose(&imgLoc[0], &imgGlb[0], &z[0], rank, nrank, comm,
-        wCrd, wSize, viewPort, resize);
-#endif
+    lCompose(&imgLoc[0], &imgGlb[0], &depthLoc[0], rank, nrank, comm,
+        wCrd, wSize, viewPort);
     const double t4 = MPI_Wtime();
 
     if (isMaster())
     {
-
       /***** place back to fbo *****/
 
       glBindBuffer(GL_PIXEL_UNPACK_BUFFER, pbo_id[1]);
