@@ -1516,7 +1516,7 @@ static void lCompose(
 }
 
 static void lComposeJB(
-    float4 *src, float4 *srcSub, float4 *dst, float *depth, float *depthSub,
+    float4 *src, float4 *dst, float *depth,
     const int n, const int w, const int h,
     const int startW, const int endW,
     const int startH, const int endH,
@@ -1660,11 +1660,11 @@ static void lComposeJB(
       int rankToSend    = globalIdx / nsend;   
       int localIdx      = y*(endW-startW)+x;
 
-      data[countsPerRank[rankToSend]] = vec5{srcSub[localIdx].x,
-                                             srcSub[localIdx].y,
-                                             srcSub[localIdx].z,
-                                             srcSub[localIdx].w,
-                                             depth [globalIdx]};
+      data[countsPerRank[rankToSend]] = vec5{src[localIdx].x,
+                                             src[localIdx].y,
+                                             src[localIdx].z,
+                                             src[localIdx].w,
+                                             depth [globalIdx]};  //<- note globalIdx as we use full image
       countsPerRank[rankToSend] = countsPerRank[rankToSend]+1;                                            
    }   
    
@@ -2745,14 +2745,14 @@ void SmokeRenderer::splotchDrawSortOpt()
     const int subW = endIdxW-startIdxW;
 
 
-    static std::vector<float4> imgLoc, imgGlb, imgSub;
-    static std::vector<float > depth, depthSub;
+    static std::vector<float4> imgLoc, imgGlb;//, imgSub;
+    static std::vector<float > depth; //, depthSub;
     imgLoc.resize(2*w*h);
     imgGlb.resize(2*w*h);
     depth.resize(2*w*h);
     
-    imgSub.resize(2*subW*subH);
-    depthSub.resize(2*subW*subH);
+  //  imgSub.resize(2*subW*subH);
+  //  depthSub.resize(2*subW*subH);
     
     const int imgSize = w*h*4*sizeof(float);
 
@@ -2791,7 +2791,7 @@ void SmokeRenderer::splotchDrawSortOpt()
 #else
 #pragma omp parallel for schedule(static)
     for (int i = 0; i < subW*subH; i++)
-      imgSub[i] = reinterpret_cast<float4*>(rptr)[i];
+      imgLoc[i] = reinterpret_cast<float4*>(rptr)[i];
 
 #endif    
 
@@ -2849,7 +2849,7 @@ lCompose(&imgLoc[0], &imgGlb[0], &depth[0], w*h, rank, nrank, comm, m_domainView
     
     if(showDomain)
     {
-      lComposeJB(&imgLoc[0], &imgSub[0], &imgGlb[0], &depth[0], &depthSub[0],
+      lComposeJB(&imgLoc[0], &imgGlb[0], &depth[0],
                 w*h, w, h, 
                 startIdxW, endIdxW, startIdxH, endIdxH,
                 rank, nrank, comm,
@@ -2857,7 +2857,7 @@ lCompose(&imgLoc[0], &imgGlb[0], &depth[0], w*h, rank, nrank, comm, m_domainView
     }
     else
     {
-      lComposeJB(&imgLoc[0], &imgSub[0], &imgGlb[0], &depth[0], &depthSub[0],
+      lComposeJB(&imgLoc[0], &imgGlb[0], &depth[0], 
                 w*h, w, h, 
                 0, 0, 0, 0,
                 rank, nrank, comm,
