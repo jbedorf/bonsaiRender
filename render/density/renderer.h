@@ -458,10 +458,11 @@ class SmokeRenderer : public SmokeRendererParams
 
     float4 m_clippingPlane[6];  
     float3 m_xhigh, m_xlow;
+    double m_modelViewWin[16], m_projectionWin[16];
 
     std::vector<int> compositingOrder;
-
     std::array<int,4> getVisibleViewport() const;
+
 
   public:
 
@@ -482,6 +483,14 @@ class SmokeRenderer : public SmokeRendererParams
     {
       m_xlow  = xlow;
       m_xhigh = xhigh;
+    }
+    void setMVP(const double modelViewWin[16], const double projectionWin[16])
+    {
+      for (int i = 0; i < 16; i++)
+      {
+        m_modelViewWin [i] = modelViewWin [i];
+        m_projectionWin[i] = projectionWin[i];
+      }
     }
 };
 

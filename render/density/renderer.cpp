@@ -48,10 +48,10 @@
 using namespace nv;
   
   template<typename T>
-static inline double4 lMatVec(const T _m[16], const double4 pos)
+static inline float4 lMatVec(const T _m[16], const float4 pos)
 {
   const T (*m)[4] = (T (*)[4])_m;
-  return make_double4(
+  return make_float4(
       m[0][0]*pos.x + m[1][0]*pos.y + m[2][0]*pos.z + m[3][0]*pos.w,
       m[0][1]*pos.x + m[1][1]*pos.y + m[2][1]*pos.z + m[3][1]*pos.w,
       m[0][2]*pos.x + m[1][2]*pos.y + m[2][2]*pos.z + m[3][2]*pos.w,
@@ -1840,11 +1840,7 @@ std::array<int,4> SmokeRenderer::getVisibleViewport() const
     make_double3(r1.x,r1.y,r1.z)
   };
 
-  double modelView[16];
-  double projection[16];
   int viewport[4];
-  glGetDoublev(GL_MODELVIEW_MATRIX,   modelView);
-  glGetDoublev(GL_PROJECTION_MATRIX, projection);
   glGetIntegerv( GL_VIEWPORT, viewport);
 
   const int w = viewport[2];
@@ -1856,31 +1852,31 @@ std::array<int,4> SmokeRenderer::getVisibleViewport() const
   {
 #if 1
     double x,y,z;
-    gluProject(v.x,v.y,v.z, modelView,projection,viewport,&x,&y,&z);
+    gluProject(v.x,v.y,v.z, m_modelViewWin,m_projectionWin,viewport,&x,&y,&z);
 #else
-    const double4 pos0 = make_double4(v.x,v.y,v.z,1.0);
-    const double4 posO = lMatVec(modelView,pos0);
-    const double4 posP = lMatVec(projection,posO);
+    const float4 pos0 = make_float4(v.x,v.y,v.z,1.0f);
+    const float4 posO = lMatVec(modelView,pos0);
+    const float4 posP = lMatVec(projection,posO);
 
-    const double wclip = -1.0/posO.z;
-    const double2 posV = make_double2(posP.x*wclip, posP.y*wclip);
+    const float wclip = -1.0/posO.z;
+    const float2 posV = make_float2(posP.x*wclip, posP.y*wclip);
 
-    const double x = (posV.x + 1.0)*0.5*w;
-    const double y = (posV.y + 1.0)*0.5*h;
+    double x = (posV.x + 1.0)*0.5*w;
+    double y = (posV.y + 1.0)*0.5*h;
 #endif
+
+    x = std::max(x, static_cast<double>(0));
+    y = std::max(y, static_cast<double>(0));
+    x = std::min(x, static_cast<double>(w));
+    y = std::min(y, static_cast<double>(h));
 
     visibleViewport[0] = std::min(visibleViewport[0], static_cast<int>(floor(x)));
     visibleViewport[1] = std::min(visibleViewport[1], static_cast<int>(floor(y)));
-    visibleViewport[2] = std::max(visibleViewport[2], static_cast<int>(ceil(x)+1));
-    visibleViewport[3] = std::max(visibleViewport[3], static_cast<int>(ceil(y)+1));
+    visibleViewport[2] = std::max(visibleViewport[2], static_cast<int>(ceil(x)));
+    visibleViewport[3] = std::max(visibleViewport[3], static_cast<int>(ceil(y)));
+    
   }
-  visibleViewport[0]= std::max(visibleViewport[0],0);
-  visibleViewport[1]= std::max(visibleViewport[1],0);
-  visibleViewport[2]= std::min(visibleViewport[2],w);
-  visibleViewport[3]= std::min(visibleViewport[3],h);
-
-
-#if 0
+#if 1
   fprintf(stderr, "rank= %d:  %d %d  - %d %d - %d %d \n",
       rank, 
       visibleViewport[0],
@@ -1889,6 +1885,13 @@ std::array<int,4> SmokeRenderer::getVisibleViewport() const
       visibleViewport[3],
       w,h);
 #endif
+#if 0
+  visibleViewport[0]= std::max(visibleViewport[0],0);
+  visibleViewport[1]= std::max(visibleViewport[1],0);
+  visibleViewport[2]= std::min(visibleViewport[2],w);
+  visibleViewport[3]= std::min(visibleViewport[3],h);
+#endif
+
 
   visibleViewport[2] -= visibleViewport[0];
   visibleViewport[3] -= visibleViewport[1];
