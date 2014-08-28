@@ -1853,6 +1853,10 @@ std::array<int,4> SmokeRenderer::getVisibleViewport() const
 #if 1
     double x,y,z;
     gluProject(v.x,v.y,v.z, m_modelViewWin,m_projectionWin,viewport,&x,&y,&z);
+#if 1
+    fprintf(stderr, " rank= %d: xyz= %g %g %g  pxyz= %g %g %g \n",
+        rank, v.x,v.y,v.z, x,y,z);
+#endif
 #else
     const float4 pos0 = make_float4(v.x,v.y,v.z,1.0f);
     const float4 posO = lMatVec(modelView,pos0);
@@ -1876,7 +1880,7 @@ std::array<int,4> SmokeRenderer::getVisibleViewport() const
     visibleViewport[3] = std::max(visibleViewport[3], static_cast<int>(ceil(y)));
     
   }
-#if 1
+#if 0
   fprintf(stderr, "rank= %d:  %d %d  - %d %d - %d %d \n",
       rank, 
       visibleViewport[0],
