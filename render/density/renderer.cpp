@@ -1476,16 +1476,16 @@ void lCompose(
     const int pend = pbeg + nPixelsPerRank-1;
 
     /* clip image with the domain scanline */
-    const int clipBeg = std::min(pend, std::max(pbeg,imgBeg));
-    const int clipEnd = std::max(pbeg, std::min(pend,imgEnd));
+    const int clipBeg = std::min(pend+1, std::max(pbeg,  imgBeg  ));
+    const int clipEnd = std::max(pbeg,   std::min(pend+1,imgEnd+1));
 
     int sendcount = 0;
     if (clipBeg < clipEnd)
     {
       const int i0 = clipBeg % w;
       const int j0 = clipBeg / w;
-      const int i1 = clipEnd % w;
-      const int j1 = clipEnd / w;
+      const int i1 = (clipEnd-1) % w;
+      const int j1 = (clipEnd-1) / w;
       assert(j0 >= y0);
       assert(j1 <  y1);
 
@@ -2406,18 +2406,6 @@ void SmokeRenderer::splotchDraw()
   }
 #endif
 }
-
-#if 0
-float4 lPlaneEquation(float x1, float y1, float z1, float x2, float y2, float z2, float x3, float y3, float z3)
-{
-  float4 eq;
-  eq.x = (y1*(z2 – z3)) + (y2*(z3 – z1)) + (y3*(z1 – z2));
-  eq.x = (z1*(x2 – x3)) + (z2*(x3 – x1)) + (z3*(x1 – x2));
-  eq.z = (x1*(y2 – y3)) + (x2*(y3 – y1)) + (x3*(y1 – y2));
-  eq.w = -((x1*((y2*z3) – (y3*z2))) + (x2*((y3*z1) – (y1*z3))) + (x3*((y1*z2) – (y2*z1))));
-  return eq;
-}
-#endif
 
 void SmokeRenderer::splotchDrawSort()
 {
