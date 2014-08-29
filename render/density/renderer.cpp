@@ -1609,10 +1609,10 @@ void lCompose(
     const double t1 = MPI_Wtime();
     if (master == rank)
     {
-      const double dt        = t1 - t0;
-      const double nsendrecv = nPixelsPerRank*4*nrank*sizeof(float);
-      const double bw        = nsendrecv / dt;
-      fprintf(stderr, " MPI_Gather: dt= %g  BW= %g MB/s  mem= %g MB\n", dt, bw/1e6, nsendrecv/1e6);
+      const double dt    = t1 - t0;
+      const double nrecv = nPixelsPerRank*4*nrank*sizeof(float);
+      const double bw    = nrecv / dt;
+      fprintf(stderr, " MPI_Gather: dt= %g  BW= %g MB/s  mem= %g MB\n", dt, bw/1e6, nrecv/1e6);
     }
   }
 }
