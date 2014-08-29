@@ -18,7 +18,8 @@ void lCompose(
     const int rank, const int nrank, const MPI_Comm &comm,
     const int2 imgCrd,
     const int2 imgSize,
-    const int2 viewportSize)
+    const int2 viewportSize,
+    const std::vector<int> &compositeOrder)
 {
   constexpr int master = 0;
 
@@ -32,9 +33,27 @@ void lCompose(
   if (imgNPix > 0)
   {
     sendbuf.resize(imgNPix);
+    if (compositeOrder.empty() && depthSrc)
+    {
+      /* if there is no global composition order and depth is != NULL */
 #pragma omp parallel for schedule(static)
-    for (int i = 0; i < imgNPix; i++)
-      sendbuf[i] = imgData_t{{imgSrc[i].x, imgSrc[i].y, imgSrc[i].z, imgSrc[i].w, depthSrc[i]}};
+      for (int i = 0; i < imgNPix; i++)
+        sendbuf[i] = imgData_t{{imgSrc[i].x, imgSrc[i].y, imgSrc[i].z, imgSrc[i].w, depthSrc[i]}};
+    }
+    else if (compositeOrder.empty())
+    {
+      /* if there is no global composition order and no depth is passed */
+#pragma omp parallel for schedule(static)
+      for (int i = 0; i < imgNPix; i++)
+        sendbuf[i] = imgData_t{{imgSrc[i].x, imgSrc[i].y, imgSrc[i].z, imgSrc[i].w, static_cast<float>(rank)}};
+    }
+    else
+    {
+      /* if there is global composition order */
+#pragma omp parallel for schedule(static)
+      for (int i = 0; i < imgNPix; i++)
+        sendbuf[i] = imgData_t{{imgSrc[i].x, imgSrc[i].y, imgSrc[i].z, imgSrc[i].w, static_cast<float>(compositeOrder[rank])}};
+    }
   }
 
   /* compute which parts of img are sent to which rank */
@@ -104,8 +123,8 @@ void lCompose(
   senddispl[0] = recvdispl[0] = 0;
   for (int p = 0; p < nrank; p++)
   {
-    sendcount[p  ] = srcMetaData[p][5] * mpiImgDataSize;
-    recvcount[p  ] = rcvMetaData[p][5] * mpiImgDataSize;
+    sendcount[p  ] = srcMetaData[p][4] * mpiImgDataSize;
+    recvcount[p  ] = rcvMetaData[p][4] * mpiImgDataSize;
     senddispl[p+1] = senddispl[p] + sendcount[p];
     recvdispl[p+1] = recvdispl[p] + recvcount[p];
   }
@@ -136,8 +155,8 @@ void lCompose(
   const int pixelBeg =              rank * nPixelsPerRank;
   const int pixelEnd = std::min(pixelBeg + nPixelsPerRank, nPixels);
 
-  constexpr int NPROCMAX = 1024;
-  assert(nrank <= NPROCMAX);
+  constexpr int NRANKMAX = 1024;
+  assert(nrank <= NRANKMAX);
     
   for (int p = 0; p < nrank+1; p++)
     recvdispl[p] /= mpiImgDataSize;
@@ -148,7 +167,7 @@ void lCompose(
   for (int idx = pixelBeg; idx < pixelEnd; idx++)
   {
     int pcount = 0;
-    imgData_t imgData[NPROCMAX];
+    imgData_t imgData[NRANKMAX];
 
     const int i = idx % viewportSize.x;
     const int j = idx / viewportSize.x;
@@ -164,7 +183,7 @@ void lCompose(
     }
 
     std::sort(imgData, imgData+pcount, 
-        [](const imgData_t &a, const imgData_t &b) { return a[5] < b[5]; });
+        [](const imgData_t &a, const imgData_t &b) { return a[4] < b[4]; });
 
     float4 dst = make_float4(0.0f);
     for (int p = 0; p < pcount; p++)
