@@ -24,6 +24,7 @@
 #include "Cubemap.h"
 #include <array>
 #include <algorithm>
+#include <atomic>
 
 #if defined(__APPLE__) || defined(MACOSX)
 #include <GLUT/glut.h>
@@ -1515,7 +1516,7 @@ static void lCompose(
 }
 
 static void lComposeJB(
-    float4 *src, float4 *srcSub, float4 *dst, float *depth, float *depthSub,
+    float4 *src, float4 *dst, float *depth,
     const int n, const int w, const int h,
     const int startW, const int endW,
     const int startH, const int endH,
@@ -1560,115 +1561,353 @@ static void lComposeJB(
  
 
 #define NPROCMAX 1024
-  using vec6 = std::array<float,6>;
-  static std::vector<vec6> colorPerProc[NPROCMAX];
-  for (int i = 0; i < nrank; i++)
-  {
-	colorPerProc[i].reserve(nsend*2);
-	colorPerProc[i].clear();
-  }
-
-
-
+  using vec5                  = std::array<float,6>;
+  constexpr int mpiDataSize = sizeof(vec5)/sizeof(float);
+  
+//   assert(mpiDataSize == 5);
+  
 #if 1 
   //Or use a simpeler 1D decompositionx
   
-  //Convert each of our pixels back to the global-screen ID
-  //#pragma omp parallel for schedule(static)
-  for(int idx = 0; idx < (endH-startH)*(endW-startW); idx++)
+  double tStartSetup = MPI_Wtime();
+  
+//    std::vector<int4> boundsPerRank(nrank); //minx, miny, maxx, maxy
+   //std::vector<int>  countsPerRank(nrank,0); //minx, miny, maxx, maxy
+   
+   //std::atomic<int> countsPerRank[nrank]; for(auto &x : countsPerRank) x = 0;
+   std::vector<int>  countsPerRank(nrank,0); //minx, miny, maxx, maxy
+   
+   
+//    std::vector<int4> recvBoundsPerRank(nrank); //minx, miny, maxx, maxy
+//    for(auto &b : boundsPerRank) b = make_int4(INT_MAX,INT_MAX, INT_MIN, INT_MIN);
+   
+   using veci5                  = std::array<int,6>;
+   
+   std::vector<veci5> boundsPerRank(nrank); //minx, miny, maxx, maxy
+   for(auto &x : boundsPerRank)
+   {
+	   x[0] = INT_MAX;
+	   x[1] = INT_MAX;
+	   x[2] = INT_MIN; 
+	   x[3] = INT_MIN;
+	   x[4] = 0;;
+   }
+   std::vector<veci5> recvBoundsPerRank(nrank); 
+  
+   const int nSub = (endH-startH)*(endW-startW);
+   
+#if 0
+/* (x0,y0) - (x1,y1) : tile coords in viewport */
+const int imgBeg = y0*w + x0;
+const int imgEnd = y1*w + x1;
+for (int p = 0; p < nrank; p++)
+{
+  /* domain scanline beginning & end */
+  const int pbeg =    p * nsend;
+  const int pend = pbeg + nsend;
+    
+  /* clip image with the domain scanline */
+  const int clipBeg = std::min(pend, std::max(imgBeg,pbeg));
+  const int clipEnd = std::max(pbeg, std::max(imgEnd,pend));
+
+  if (clipBeg < clipEnd)
   {
-    int y = idx / (endW-startW);
-    int x = idx % (endW-startW);
-    
-    //In global ordering this would be pixel:
-    int globalY       = y + startH;
-    int globalX       = x + startW;
-    int globalIdx     = globalY * w + globalX;
-    int localIdx      = y*(endW-startW)+x;
-    src[globalIdx]    = srcSub[localIdx]; //make_float4(0,0,0,0);    
-    
-    depthSub[y* (endW-startW)+x] = depth[globalIdx]; //Fill our sub depth-buffer   
+    const int i0 = clipBeg % w;
+    const int j0 = clipBeg / w;
+    const int i1 = clipEnd % w;
+    const int j1 = clipEnd / w;
+    assert(i0 >= x0 && i0 < x1);
+    assert(i1 >= x0 && i1 < x1);
+    assert(j0 >= y0 && j0 < y1);
+    assert(j1 >= y0 && j1 < y1);
 
-    //Compute the rank to which one this belongs
-    int rankToSend = globalIdx / nsend;   	
-    assert(rankToSend < nrank);
+    /* compute number of pixels in image but multiplingh hight (j1-j0) by image
+     * width but subtracting the corners from top and bottom */
+    sendcount[p] = 
+      (j1-j0)*imgSize.x - (i0-x0) - (x1-i1);
+  }
+  else
+    sendcount[p] = 0;
+}
 
-    //Not thread save
-    colorPerProc[rankToSend].push_back(       
-          vec6{{
-            srcSub[localIdx].x,
-            srcSub[localIdx].y,
-            srcSub[localIdx].z,
-            srcSub[localIdx].w,
-            depth[globalIdx], (float)globalIdx}});
+senddispl[0] = 0;
+for (int p = 0; p < nrank; p++)
+senddispl[p+1] = senddispl[p] + sendcount[p];
+
+
+#endif
+   
+#if 0      
+   
+   {
+     //Determine for each rank the start and end pixels
+     int rankCount[nrank];
+     int globalY       = startH;
+     int globalX       = startW;
+     int globalIdx     = globalY * w + globalX;
+     int startRank     = globalIdx / nsend;
+     int4 thisDims[nrank];
+
+     for(int i=0; i < nrank; i++)
+     {
+
+      thisDims[i].x = (nsend*i) / h;
+      thisDims[i].y = (nsend*i) % h;
+      thisDims[i].z = (nsend*(i+1)) / h;
+      thisDims[i].w = (nsend*(i+1)) % h;
+      
+      //TODO I'm not 100% sure this is correct...
+      if(i == nrank - 1) 
+      {
+        thisDims[i].z = w-1;
+        thisDims[i].w = h-1;
+      }
+      
+      
+      int nPixels = (thisDims[i].z-thisDims[i].x)*h + (thisDims[i].w-thisDims[i].y) + (i == nrank-1); //last process has 1 more as our math is one short
+      
+      //Compute overlap between this domain and our rectangle that contains data
+      //NOTE that our domain is not perfectly rectangular, nor is the data we will receive
+            
+      //Per column
+      int overLapCount = 0;
+      for(int j=thisDims[i].x; j <= thisDims[i].z; j++)
+      {        
+        if(j >= startW && j <= endW)
+        {
+          if(j == startW)
+          {
+            //
+            
+          }
+          
+        }
+      }
+      
+       
+       
+       if(rank == 0) fprintf(stderr, "Dims: for: %d |  %d %d %d %d | %d %d\n", 
+         i, thisDims[i].x, thisDims[i].y, thisDims[i].z, thisDims[i].w, nsend, nPixels);
+
+       
+     }
+   } 
+    MPI_Barrier(comm);
+    assert(0);
+#endif   
+   
+#if 0
+  using imgMetaData_t = std::array<int,5>;
+  constexpr  int mpiImgMetaDataSize = sizeof(imgMetaData_t)/sizeof(int);
+
+  static std::vector<imgMetaData_t> srcMetaData(nrank);
+{
+ /* compute which parts of img are sent to which rank */
+
+  int2 viewportSize = make_int2(w,h);
+  int2 imgCrd = make_int2(startW, startH);
+  int2 imgSize = make_int2(endW-startW, endH-startH); 
+
+
+  const int nPixels = viewportSize.x*viewportSize.y;
+  const int nPixelsPerRank = (nPixels+nrank-1)/nrank;
+
+  const int x0 = imgCrd.x;
+  const int y0 = imgCrd.y;
+  const int x1 = imgCrd.x + imgSize.x;
+  const int y1 = imgCrd.y + imgSize.y;
+
+  const int w = viewportSize.x;
+
+  const int imgBeg   =  y0   *w + x0;
+  const int imgEnd   = (y1-1)*w + x1-1;
+  const int imgWidth = imgSize.x;
+
+  int totalSendCount = 0;
+
+
+  for (int p = 0; p < nrank; p++)
+  {
+    /* domain scanline beginning & end */
+    const int pbeg =    p * nPixelsPerRank;
+    const int pend = pbeg + nPixelsPerRank-1;
+
+    /* clip image with the domain scanline */
+    const int clipBeg = std::min(pend, std::max(imgBeg,pbeg));
+    const int clipEnd = std::max(pbeg, std::max(imgEnd,pend));
+
+    int sendcount = 0;
+    if (clipBeg < clipEnd)
+    {
+      const int i0 = clipBeg % w;
+      const int i1 = clipEnd % w;
+      const int j0 = clipBeg / w;
+      const int j1 = clipEnd / w;
+      assert(j0 >= y0);
+      assert(j1 <  y1);
+
+      /* compute number of pixels to send:
+       * multiply hight (j1-j0+1) by image width */
+      /* but subtract top and bottom corners */
+      sendcount =
+        + (j1-j0+1)*imgWidth
+        - std::max(0,std::min(i0-x0,   imgWidth))
+        - std::max(0,std::min(x1-i1-1, imgWidth));
+    }
+
+    srcMetaData[p] = imgMetaData_t{{x0,y0,x1,y1,sendcount}};
+    totalSendCount += sendcount;
+  }
+  assert(totalSendCount == (x1-x0)*(y1-y0));
+}
+#endif    
+
+
+   
+  //Convert each of our pixels back to the global-screen ID  
+  //#pragma omp parallel for schedule(static)
+   
+   
+   double tCountS = MPI_Wtime();
+   
+   std::vector<vec5> data(nSub);  data.clear();
+   std::vector<int> startPerRank(nSub, INT_MAX);
+  int nThreads = 8;
+  #pragma omp parallel  num_threads(nThreads) 
+  {
+    std::vector<int>  countsPerRankPrivate(nrank,0); //minx, miny, maxx, maxy
+    std::vector<int4> boundsPerRankPrivate(nrank, make_int4(INT_MAX,INT_MAX, INT_MIN, INT_MIN)); //minx, miny, maxx, maxy
+    std::vector<int>  startPerRankPrivate(nSub, INT_MAX); 
+   #pragma omp for  schedule(static) nowait 
+   for(int idx = 0; idx < nSub; idx++)
+   {
+      int y = idx / (endW-startW);
+      int x = idx % (endW-startW);     
+      int globalY       = y + startH;
+      int globalX       = x + startW;
+      int globalIdx     = globalY * w + globalX;
+      int rankToSend    = globalIdx / nsend;   
+      int localIdx      = y*(endW-startW)+x;
+      
+      data[localIdx] = vec5{src[localIdx].x,
+                            src[localIdx].y,
+                            src[localIdx].z,
+                            src[localIdx].w, 
+                            depth[globalIdx], (int)globalIdx};
+
+      //Find lowest global idx for rank
+      startPerRankPrivate[rankToSend] = std::min(globalIdx, startPerRankPrivate[rankToSend]);       
+      countsPerRankPrivate[rankToSend] = countsPerRankPrivate[rankToSend]+1;           
+      
+      boundsPerRankPrivate[rankToSend].x = std::min(globalX, boundsPerRankPrivate[rankToSend].x);
+      boundsPerRankPrivate[rankToSend].y = std::min(globalY, boundsPerRankPrivate[rankToSend].y);
+      boundsPerRankPrivate[rankToSend].z = std::max(globalX, boundsPerRankPrivate[rankToSend].z);
+      boundsPerRankPrivate[rankToSend].w = std::max(globalY, boundsPerRankPrivate[rankToSend].w);  
+   }   
+   
+#pragma omp critical
+    {
+      //Global reduction
+      for(int rankToSend = 0; rankToSend < nrank; rankToSend++)
+      {
+ 	startPerRank[rankToSend]     = std::min(startPerRankPrivate[rankToSend], startPerRank[rankToSend]);	      
+        countsPerRank[rankToSend]   += countsPerRankPrivate[rankToSend];
+        boundsPerRank[rankToSend][0] = std::min(boundsPerRankPrivate[rankToSend].x, boundsPerRank[rankToSend][0]);
+        boundsPerRank[rankToSend][1] = std::min(boundsPerRankPrivate[rankToSend].y, boundsPerRank[rankToSend][1]);
+        boundsPerRank[rankToSend][2] = std::max(boundsPerRankPrivate[rankToSend].z, boundsPerRank[rankToSend][2]);
+        boundsPerRank[rankToSend][3] = std::max(boundsPerRankPrivate[rankToSend].w, boundsPerRank[rankToSend][3]);  
+      }
+    }   
+   
+  }//omp parallel
+   
+  //Fix counts/boundaries
+  for(int rankS = 0;  rankS  < nrank; rankS++)
+  {
+    if(countsPerRank[rankS] == 0)
+      boundsPerRank[rankS] = veci5{0,0,0,0,0};      
+    else      
+    {
+      //boundsPerRank[rankS] = make_int4(boundsPerRank[rankS].x, boundsPerRank[rankS].y, boundsPerRank[rankS].z+1, boundsPerRank[rankS].w+1);
+      
+      boundsPerRank[rankS] = veci5{boundsPerRank[rankS][0], boundsPerRank[rankS][1], 
+	      			   boundsPerRank[rankS][2]+1, boundsPerRank[rankS][3]+1,
+				   countsPerRank[rankS], startPerRank[rankS] }; 
+      
+//       fprintf(stderr,"Proc: %d -> %d Compare: %d\t%d \n", 
+//               rank, rankS, countsPerRank[rankS], 
+//               (boundsPerRank[rankS][3]-boundsPerRank[rankS][1])*(boundsPerRank[rankS][2]-boundsPerRank[rankS][0]));
+    }
+  }   
+
+#if 0
+if(rank == 0)
+{
+	for(int i=0; i < nrank; i++)
+	{
+	    fprintf(stderr,"test: %d  %d %d %d %d %d || %d %d %d %d %d \n",
+			    i, 
+			    srcMetaData[i][0],
+			    srcMetaData[i][1],
+			    srcMetaData[i][2],
+			    srcMetaData[i][3],
+			    srcMetaData[i][4],
+			    boundsPerRank[i][0],
+			    boundsPerRank[i][1],
+			    boundsPerRank[i][2],
+			    boundsPerRank[i][3],
+			    boundsPerRank[i][4]);
+	}
+
+}
+  
+  
+
+MPI_Barrier(MPI_COMM_WORLD);
+assert(0);
+#endif
+  //Compute displacements for alltoallv
+  std::vector<int> sdispl(nrank+1,0), scount(nrank);
+  std::vector<int> nrecv(nrank, 0), nrecvDispl(nrank+1,0);
+  for (int i = 0; i < nrank; i++)
+  {
+    scount[i]   = mpiDataSize*countsPerRank[i];
+    sdispl[i+1] = mpiDataSize*countsPerRank[i]+sdispl[i];    
   }
   
-  fprintf(stderr,"[ %d ] Sending: %ld %ld %ld %ld \tTotal: %d \n", 
-		  rank,
-		  colorPerProc[0].size(),
-		  colorPerProc[1].size(),
-		  colorPerProc[2].size(),
-		  colorPerProc[3].size(),
-		  (endH-startH)*(endW-startW)	  );
+   
+  double tCountE = MPI_Wtime();  
 
-  //Compute displacements etc
-  std::vector<int> sdispl(nrank+1,0), scount(nrank);
-  std::vector<int> sdisplByte(nrank+1,0), scountByte(nrank);
-  int nA2ASend = 0;
-  for (int i = 0; i < nrank; i++)
-  {
-    scount[i]   = colorPerProc[i].size();
+  double tEndSetup = MPI_Wtime();
 
-    scountByte[i] = sizeof(float)*6*scount[i];
-     
-//     fprintf(stderr,"Proc: %d to: %d \t %d \n", rank, i,  scountByte[i]);
-
-    nA2ASend   += scount[i];
-    sdispl[i+1] = sdispl[i] + scount[i];
-    sdisplByte[i+1] = sizeof(float)*6*sdispl[i+1];
-  }
-  std::vector<vec6> data(nA2ASend);
-  for (int i = 0; i < nrank; i++)
-  {
-     const int displ = sdispl[i];
-     const int nsend = scount[i];
-     for (int j = 0; j < nsend; j++)
-        data[displ + j] = colorPerProc[i][j];
-  }
+  MPI_Alltoall(&boundsPerRank[0], 6, MPI_INT, &recvBoundsPerRank[0], 6, MPI_INT, comm);
 
 
-  std::vector<int> nrecvByte(nrank, 0), nrecvDisplByte(nrank+1,0);  
-
-  MPI_Alltoall(&scountByte[0], 1, MPI_INT, &nrecvByte[0], 1, MPI_INT, comm);
-
-  int nrecvCount = 0; 
   for (int i = 0; i < nrank; i++)
   { 
-     nrecvCount         += nrecvByte[i] / 6;
-     nrecvDisplByte[i+1] = nrecvByte[i] + nrecvDisplByte[i];
-     //      fprintf(stderr,"Proc: %d from: %d \t %d \n", rank, i,  nrecvByte[i]);
+   // const int nItems = (recvBoundsPerRank[i][3]-recvBoundsPerRank[i][1])*(recvBoundsPerRank[i][2]-recvBoundsPerRank[i][0]);
+    const int nItems = recvBoundsPerRank[i][4];
+    nrecv[i]         = nItems*mpiDataSize;
+    nrecvDispl[i+1]  = nrecv[i] + nrecvDispl[i];    
   }
-
-
-  fprintf(stderr,"[ %d ] Going to receive %d items \n", rank, nrecvCount);
   
-  float dataSize = nrecvCount*sizeof(vec6);
-  float globalSize;
   
-  MPI_Reduce(&dataSize, &globalSize, 1, MPI_FLOAT, MPI_SUM, 0, comm);
-
+  std::vector<vec5> importedData( (nrecvDispl[nrank] / mpiDataSize));
   
-  std::vector<vec6> importedData(nrecvCount);
-  
-     const double t3 = MPI_Wtime();
-  MPI_Alltoallv(&data[0],         &scountByte[0], &sdisplByte[0],     MPI_BYTE,
-                &importedData[0], &nrecvByte[0],  &nrecvDisplByte[0], MPI_BYTE,
+  const double t3 = MPI_Wtime();
+  MPI_Alltoallv(&data[0],         &scount[0], &sdispl[0],     MPI_FLOAT,
+                &importedData[0], &nrecv[0],  &nrecvDispl[0], MPI_FLOAT,
                 MPI_COMM_WORLD);
   const double t4 = MPI_Wtime();
 
+  float dataSize, localSize = nrecvDispl[nrank]*sizeof(float);  
+  MPI_Reduce(&localSize, &dataSize, 1, MPI_FLOAT, MPI_SUM, 0, comm);
+
   if(rank == 0)
   {
-    fprintf(stderr,"MPI_Alltoallv time: %lg data: %f MB Bw: %f MB/s \n", t4-t3, dataSize / (1024*1024), (1.0 / (t4-t3)) * dataSize / (1024*1024));
+    fprintf(stderr,"MPI_Alltoallv time: %lg data: %f MB Bw: %f MB/s \t tSetup: %lg\ttCount: %lg First half: %lg\n", 
+            t4-t3, dataSize / (1024.0*1024), (1.0 / (t4-t3)) * dataSize / (1024.0*1024),
+            tEndSetup-tStartSetup, tCountE-tCountS, t4-tStartSetup);
   }
 
   
@@ -1724,26 +1963,60 @@ static void lComposeJB(
     
     
     
-#pragma omp parallel for schedule(static)
-    for (int i = n; i < nsend*nrank; i++)
-    {
-      src[i] = make_float4(0.0f);
-      depth[i] = 1.0f;
-    }
+// #pragma omp parallel for schedule(static)
+//     for (int i = n; i < nsend*nrank; i++)
+//     {
+//       src[i] = make_float4(0.0f);
+//       depth[i] = 1.0f;
+//     }
 
+#if 0
  //   MPI_Alltoall(src, nsend*4, MPI_FLOAT, &colorArray[0], nsend*4, MPI_FLOAT, comm);
  //   MPI_Alltoall(depth, nsend, MPI_FLOAT, &depthArray[0], nsend, MPI_FLOAT, comm);
-    
-#if 1
-    //Put back our alltoall data
+#else
+    //Put back our alltoallv data in locations that would match alltoall
     int start = 0;
     for(int i=0;  i < nrank; i++)
     {
-      int nrecv = nrecvByte[i]      / (6*sizeof(float));      
-      for(int idx = 0; idx < nrecv; idx++)
+      int nrecvL = nrecv[i]  / mpiDataSize;      
+      for(int idx = 0; idx < nrecvL; idx++)
       {
-        vec6 dataItem = importedData[start+idx];
-        int globalIdx = dataItem[5];
+        vec5 dataItem  = importedData[start+idx];        
+        int4 dims      = make_int4(recvBoundsPerRank[i][0],recvBoundsPerRank[i][1], recvBoundsPerRank[i][2], recvBoundsPerRank[i][3]);
+	
+	int startOfThisBlock = recvBoundsPerRank[i][5];
+	int startOfThisBlockX = startOfThisBlock / w;
+	int startOfThisBlockY = startOfThisBlock % w;
+
+	int tempX = startOfThisBlockX;  
+	int tempY = startOfThisBlockY;
+
+	tempY += idx;
+
+
+	if(tempY >= dims.z)
+	{
+		tempX++;
+		tempY = tempY- (dims.z - startOfThisBlockX) -startOfThisBlockX;
+		tempX += (tempY / (dims.z-dims.x));
+		tempY = (tempY % (dims.z-dims.x)) + dims.x;
+		tempX += (tempY / w);
+		if(tempY / w == 1) tempY = dims.x;		
+	}
+
+	int globalIdx = tempX*w + tempY;
+       
+#if 0	
+        int tempGlobal = dataItem[5];
+	if(tempGlobal != globalIdx)
+         fprintf(stderr,"Proc: %d from: %d idx: %d Global: %d and %d  || %d %d %d %d || %d %d %d | %d %d\n", 
+			 rank, i, idx,
+			 globalIdx, tempGlobal, dims.x, dims.y, dims.z, dims.w,
+			 startOfThisBlock, startOfThisBlockX, startOfThisBlockY,
+			 tempX, tempY);
+	assert(tempGlobal == globalIdx);
+       // globalIdx = dataItem[5];
+#endif       
         
         //Convert the globalIdx to a localIdx
         int offset = globalIdx % nsend;
@@ -1751,7 +2024,7 @@ static void lComposeJB(
         colorArray[i*nsend + offset] = make_float4(dataItem[0],dataItem[1],dataItem[2],dataItem[3]);
         depth     [i*nsend + offset] = dataItem[4];
       }
-      start += nrecv;
+      start += nrecvL;
     }
 #endif    
     
@@ -1864,28 +2137,28 @@ void SmokeRenderer::splotchDraw()
 
    //Draw bounding box
   glColor4f(0.0f, 1.0f, 0.0f, 1.0f);   
-	glBegin(GL_LINE_LOOP);
-	glVertex3f(boxMin.x, boxMin.y, boxMin.z);
-	glVertex3f(boxMax.x, boxMin.y, boxMin.z);
-	glVertex3f(boxMax.x, boxMax.y, boxMin.z);
-	glVertex3f(boxMin.x, boxMax.y, boxMin.z);
-	glEnd();
-	glBegin(GL_LINE_LOOP);
-	glVertex3f(boxMin.x, boxMin.y, boxMax.z);
-	glVertex3f(boxMax.x, boxMin.y, boxMax.z);
-	glVertex3f(boxMax.x, boxMax.y, boxMax.z);
-	glVertex3f(boxMin.x, boxMax.y, boxMax.z);
-	glEnd();
-	glBegin(GL_LINES);
-	glVertex3f(boxMin.x, boxMin.y, boxMin.z);
-	glVertex3f(boxMin.x, boxMin.y, boxMax.z);
-	glVertex3f(boxMax.x, boxMin.y, boxMin.z);
-	glVertex3f(boxMax.x, boxMin.y, boxMax.z);
-	glVertex3f(boxMax.x, boxMax.y, boxMin.z);
-	glVertex3f(boxMax.x, boxMax.y, boxMax.z);
-	glVertex3f(boxMin.x, boxMax.y, boxMin.z);
-	glVertex3f(boxMin.x, boxMax.y, boxMax.z);
-	glEnd();
+  glBegin(GL_LINE_LOOP);
+      glVertex3f(boxMin.x, boxMin.y, boxMin.z);
+      glVertex3f(boxMax.x, boxMin.y, boxMin.z);
+      glVertex3f(boxMax.x, boxMax.y, boxMin.z);
+      glVertex3f(boxMin.x, boxMax.y, boxMin.z);
+  glEnd();
+  glBegin(GL_LINE_LOOP);
+      glVertex3f(boxMin.x, boxMin.y, boxMax.z);
+      glVertex3f(boxMax.x, boxMin.y, boxMax.z);
+      glVertex3f(boxMax.x, boxMax.y, boxMax.z);
+      glVertex3f(boxMin.x, boxMax.y, boxMax.z);
+  glEnd();
+  glBegin(GL_LINES);
+      glVertex3f(boxMin.x, boxMin.y, boxMin.z);
+      glVertex3f(boxMin.x, boxMin.y, boxMax.z);
+      glVertex3f(boxMax.x, boxMin.y, boxMin.z);
+      glVertex3f(boxMax.x, boxMin.y, boxMax.z);
+      glVertex3f(boxMax.x, boxMax.y, boxMin.z);
+      glVertex3f(boxMax.x, boxMax.y, boxMax.z);
+      glVertex3f(boxMin.x, boxMax.y, boxMin.z);
+      glVertex3f(boxMin.x, boxMax.y, boxMax.z);
+  glEnd();
 
 
     //Convert the boundaries to screenspace
@@ -1934,9 +2207,10 @@ void SmokeRenderer::splotchDraw()
 	    minZ = std::min(worldBounds[i].z / worldBounds[i].w, minZ);
     }
     
-    fprintf(stderr,"Location min: %f %f   max: %f %f  \t minZ: %f\n", winxMin, winyMin, winxMax, winyMax, minZ);
+    bool showDomain = true; 
+    if(m_domainView) { showDomain = (m_domainViewIdx == rank);}
     
-    
+
     
     
     //eye = modelview * coor
@@ -2073,6 +2347,26 @@ void SmokeRenderer::splotchDraw()
 
     //fprintf(stderr,"From: ( %d , %d ) to ( %d , %d ) \n", startIdxH, startIdxW, endIdxH, endIdxW);
     
+    if(showDomain)
+    {
+      fprintf(stderr,"JB [ %d ] Location min: %f %f   max: %f %f  \t minZ: %f || %d,%d to %d,%d \t box: %f %f %f | %f %f %f View: %d %d %d %d\n", 
+              rank, winxMin, winyMin, winxMax, winyMax, minZ, startIdxW, startIdxH, endIdxW, endIdxH,
+              boxMin.x, boxMin.y, boxMin.z, boxMax.x, boxMax.y, boxMax.z,
+              mView[0], mView[1], mView[2], mView[3]);
+      
+      char buffM[512], buffV[512];
+      sprintf(buffM, "Projection Location: ");
+      sprintf(buffV, "Model Location: ");
+      for(int i=0; i < 16; i++) sprintf(buffM, "%s%f ", buffM, mProjection[i]);
+      for(int i=0; i < 16; i++) sprintf(buffV, "%s%f ", buffV, mModelView[i]);
+      
+      fprintf(stderr, "%s\n", buffM);
+      fprintf(stderr, "%s\n", buffV);
+    }
+    
+        
+    
+    
     #if 1
     //Blank out non needed parts
     for(int i=0; i < h; i++)
@@ -2091,10 +2385,10 @@ void SmokeRenderer::splotchDraw()
     //Blank out the visible part
     for(int j=startIdxH; j < endIdxH; j++)
 	for(int i=startIdxW; i < endIdxW; i++)
-		imgLoc[j*w+i] = make_float4(0,0,0,0);  //This  colors the middle
+		imgLoc[j*w+i] = make_float4(1,1,1,0.5);  //This  colors the middle
     #endif	
     
-#if 1
+#if 0
 
   const int startH = startIdxH;
   const int endH   = endIdxH;
@@ -2114,8 +2408,6 @@ void SmokeRenderer::splotchDraw()
     }
   }
   
-
-
 #endif
     
     const int totalReduce = (endIdxH-startIdxH) * (endIdxW-startIdxW);
@@ -2566,6 +2858,7 @@ void SmokeRenderer::splotchDrawSortOpt()
   }  
     
 
+
   const int start = 0;
   const int count = mNumParticles;
 
@@ -2696,18 +2989,26 @@ void SmokeRenderer::splotchDrawSortOpt()
     const int endIdxW   = w;
 #endif
     
+  fprintf(stderr,"Proc: %d Bounds: %f %f %f %f -> %d %d %d %d  || box: %f %f %f | %f %f %f \n",
+          rank,
+          winxMin, winyMin, winxMax, winyMax, 
+          startIdxW, startIdxH, endIdxW, endIdxH,
+          boxMin.x, boxMin.y, boxMin.z,
+          boxMax.x, boxMax.y, boxMax.z);
+      
+    
     const int subH = endIdxH-startIdxH;
     const int subW = endIdxW-startIdxW;
 
 
-    static std::vector<float4> imgLoc, imgGlb, imgSub;
-    static std::vector<float > depth, depthSub;
+    static std::vector<float4> imgLoc, imgGlb;//, imgSub;
+    static std::vector<float > depth; //, depthSub;
     imgLoc.resize(2*w*h);
     imgGlb.resize(2*w*h);
     depth.resize(2*w*h);
     
-    imgSub.resize(2*subW*subH);
-    depthSub.resize(2*subW*subH);
+  //  imgSub.resize(2*subW*subH);
+  //  depthSub.resize(2*subW*subH);
     
     const int imgSize = w*h*4*sizeof(float);
 
@@ -2746,7 +3047,7 @@ void SmokeRenderer::splotchDrawSortOpt()
 #else
 #pragma omp parallel for schedule(static)
     for (int i = 0; i < subW*subH; i++)
-      imgSub[i] = reinterpret_cast<float4*>(rptr)[i];
+      imgLoc[i] = reinterpret_cast<float4*>(rptr)[i];
 
 #endif    
 
@@ -2797,13 +3098,28 @@ void SmokeRenderer::splotchDrawSortOpt()
 #if 0
 lCompose(&imgLoc[0], &imgGlb[0], &depth[0], w*h, rank, nrank, comm, m_domainView ? m_domainViewIdx : -1);
 #else    
-    fprintf(stderr,"Before lComposeJB \n");
-    lComposeJB(&imgLoc[0], &imgSub[0], &imgGlb[0], &depth[0], &depthSub[0],
-               w*h, w, h, 
-               startIdxW, endIdxW, startIdxH, endIdxH,
-               rank, nrank, comm,
-        m_domainView ? m_domainViewIdx : -1);  
-        fprintf(stderr,"After lComposeJB \n");
+//     fprintf(stderr,"Before lComposeJB \n");
+    
+    bool showDomain = true; 
+    if(m_domainView) { showDomain = (m_domainViewIdx == rank);}
+    
+    if(showDomain)
+    {
+      lComposeJB(&imgLoc[0], &imgGlb[0], &depth[0],
+                w*h, w, h, 
+                startIdxW, endIdxW, startIdxH, endIdxH,
+                rank, nrank, comm,
+                m_domainView ? m_domainViewIdx : -1);  
+    }
+    else
+    {
+      lComposeJB(&imgLoc[0], &imgGlb[0], &depth[0], 
+                w*h, w, h, 
+                0, 0, 0, 0,
+                rank, nrank, comm,
+                m_domainView ? m_domainViewIdx : -1);  
+    }      
+//         fprintf(stderr,"After lComposeJB \n");
 #endif        
     glFinish();
     const double t4 = MPI_Wtime();
