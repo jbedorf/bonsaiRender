@@ -888,6 +888,14 @@ class Demo
     void mainRender(EYE whichEye)
     {
       m_renderer.setMVP(m_modelView, m_projection);
+      
+      /* determine global ordering box */
+      std::vector<int> compositingOrder;
+#if 1
+      {
+      }
+#endif
+      m_renderer.setCompositingOrder(compositingOrder);
 
       m_renderer.render();
 

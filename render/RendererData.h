@@ -66,6 +66,7 @@ class RendererData
   
     bool  distributed; 
     float xlow[3], xhigh[3];
+    std::vector<std::array<float,3>> xlowVec, xhighVec;
 
 
    
@@ -97,6 +98,8 @@ class RendererData
 
     float getBoundBoxLow (const int i) const {return  xlow[i];}
     float getBoundBoxHigh(const int i) const {return xhigh[i];}
+    float getRankBoundBoxLow (const int rank, const int i) const {return xlowVec [rank][i];}
+    float getRankBoundBoxHigh(const int rank, const int i) const {return xhighVec[rank][i];}
     bool isDistributed() const { return distributed; }
 
     int n() const { return data.size(); }
@@ -901,11 +904,27 @@ class RendererDataDistribute : public RendererData
 #endif
       exchange_particles_alltoall_vector(xlow, xhigh);
 
-      for (int k = 0; k < 3; k++)
+      xlowVec.resize(nrank);
+      xhighVec.resize(nrank);
+      for (int p = 0; p < nrank; p++)
       {
-        this-> xlow[k] =  xlow[rank][k];
-        this->xhigh[k] = xhigh[rank][k];
+        xlowVec [p][0] = xlow [p][0];
+        xlowVec [p][1] = xlow [p][1];
+        xlowVec [p][2] = xlow [p][2];
+        xhighVec[p][0] = xhigh[p][0];
+        xhighVec[p][1] = xhigh[p][1];
+        xhighVec[p][2] = xhigh[p][2];
+
+        if (rank == p)
+        {
+          for (int k = 0; k < 3; k++)
+          {
+            this-> xlow[k] =  xlow[rank][k];
+            this->xhigh[k] = xhigh[rank][k];
+          }
+        }
       }
+
 
 
 #if 0
