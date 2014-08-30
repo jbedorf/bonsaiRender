@@ -66,9 +66,7 @@ class RendererData
   
     bool  distributed; 
     float xlow[3], xhigh[3];
-    std::vector<std::array<float,3>> xlowVec, xhighVec;
-
-
+    std::vector<int> visibilityOrder[8];
    
     void minmaxAttributeGlb(const Attribute_t p)   
     {
@@ -98,8 +96,10 @@ class RendererData
 
     float getBoundBoxLow (const int i) const {return  xlow[i];}
     float getBoundBoxHigh(const int i) const {return xhigh[i];}
-    float getRankBoundBoxLow (const int rank, const int i) const {return xlowVec [rank][i];}
-    float getRankBoundBoxHigh(const int rank, const int i) const {return xhighVec[rank][i];}
+    const std::vector<int>& getVisibilityOrder(const float lx, const float ly, const float lz) const 
+    {
+      return visibilityOrder[(lx>=0) + ((ly>=0.0f)*2) + ((lz>=0.0f)*4)];
+    }
     bool isDistributed() const { return distributed; }
 
     int n() const { return data.size(); }
@@ -904,26 +904,32 @@ class RendererDataDistribute : public RendererData
 #endif
       exchange_particles_alltoall_vector(xlow, xhigh);
 
-      xlowVec.resize(nrank);
-      xhighVec.resize(nrank);
-      for (int p = 0; p < nrank; p++)
+      for (int k = 0; k < 3; k++)
       {
-        xlowVec [p][0] = xlow [p][0];
-        xlowVec [p][1] = xlow [p][1];
-        xlowVec [p][2] = xlow [p][2];
-        xhighVec[p][0] = xhigh[p][0];
-        xhighVec[p][1] = xhigh[p][1];
-        xhighVec[p][2] = xhigh[p][2];
-
-        if (rank == p)
-        {
-          for (int k = 0; k < 3; k++)
-          {
-            this-> xlow[k] =  xlow[rank][k];
-            this->xhigh[k] = xhigh[rank][k];
-          }
-        }
+        this-> xlow[k] =  xlow[rank][k];
+        this->xhigh[k] = xhigh[rank][k];
       }
+
+      if (visibilityOrder[0].empty())
+      {
+        for (int l = 0; l < 8; l++)
+          visibilityOrder[l].reserve(nrank);
+
+        for (int k = 0; k < npz; k++)
+          for (int j = 0; j < npy; j++)
+            for (int i = 0; i < npy; i++)
+              for (int l = 0; l < 8; l++)
+              {
+                const int px = l&1 ?  i : npx-1-i;
+                const int py = l&2 ?  j : npy-1-j;
+                const int pz = l&4 ?  k : npz-1-k;
+                visibilityOrder[l].push_back(px + npx*(py + npy*pz));
+              }
+      }
+
+
+
+
 
 
 
