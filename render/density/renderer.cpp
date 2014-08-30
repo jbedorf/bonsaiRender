@@ -1555,14 +1555,16 @@ void lCompose(
   imgLoc.resize(nPixelsPerRank);
   const int pixelBeg =              rank * nPixelsPerRank;
   const int pixelEnd = std::min(pixelBeg + nPixelsPerRank, nPixels);
-#pragma omp parallel for schedule(static)
-  for (int idx = pixelBeg; idx < pixelEnd; idx++)
-  {
-    int pcount = 0;
-    imgData_t imgData[NRANKMAX];
 
-    const int i = idx % viewportSize.x;
-    const int j = idx / viewportSize.x;
+  constexpr int NBLOCK = 16;
+#pragma omp parallel for schedule(static)
+  for (int idxb = pixelBeg; idxb < pixelEnd; idxb += NBLOCK)
+  {
+    imgData_t imgData[NBLOCK][NRANKMAX];
+    int pcount[NBLOCK] = {0};
+    
+    const int idx0 = idxb;
+    const int idx1 = std::min(idxb+NBLOCK,pixelEnd);
 
     for (int p = 0; p < nrank; p++)
       if (showDomain == -1 || showDomain == p)
@@ -1573,33 +1575,46 @@ void lCompose(
         const int y1   = rcvMetaData[p][3];
         const int offs = rcvMetaData[p][4];
         const int cnt  = rcvMetaData[p][5];
-        const int idx =  (j-y0)*(x1-x0) + (i-x0) - offs;
-        if (x0  <= i && i   < x1 &&
-            y0  <= j && j   < y1 && 
-            idx >= 0 && idx < cnt)
-          imgData[pcount++] = recvbuf[recvdispl[p] + idx];
+
+        for (int idx = idx0; idx < idx1; idx++)
+        {
+          const int i = idx % viewportSize.x;
+          const int j = idx / viewportSize.x;
+          const int k = (j-y0)*(x1-x0) + (i-x0) - offs;
+          const int block = idx-idx0;
+          if (x0 <= i && i < x1 &&
+              y0 <= j && j < y1 && 
+              k  >= 0 && k < cnt)
+            imgData[block][pcount[block]++] = recvbuf[recvdispl[p] + k];
+        }
       }
 
-    std::sort(imgData, imgData+pcount, 
-        [](const imgData_t &a, const imgData_t &b) { return a[4] < b[4]; });
 
-    float4 dst = make_float4(0.0f);
-    for (int p = 0; p < pcount; p++)
+    for (int idx = idx0; idx < idx1; idx++)
     {
-      auto &src = imgData[p];
-      src[0] *= 1.0f - dst.w;
-      src[1] *= 1.0f - dst.w;
-      src[2] *= 1.0f - dst.w;
-      src[3] *= 1.0f - dst.w;
+      const int block = idx-idx0;
+      auto data = imgData[block];
+      std::sort(data, data+pcount[block], 
+          [](const imgData_t &a, const imgData_t &b) { return a[4] < b[4]; });
 
-      dst.x += src[0];
-      dst.y += src[1];
-      dst.z += src[2];
-      dst.w += src[3];
+      float4 dst = make_float4(0.0f);
+      for (int p = 0; p < pcount[block]; p++)
+      {
+        auto &src = data[p];
+        src[0] *= 1.0f - dst.w;
+        src[1] *= 1.0f - dst.w;
+        src[2] *= 1.0f - dst.w;
+        src[3] *= 1.0f - dst.w;
 
-      dst.w = std::min(dst.w, 1.0f);
+        dst.x += src[0];
+        dst.y += src[1];
+        dst.z += src[2];
+        dst.w += src[3];
+
+        dst.w = std::min(dst.w, 1.0f);
+      }
+      imgLoc[idx - pixelBeg] = dst;
     }
-    imgLoc[idx - pixelBeg] = dst;
   }
 
   /* gather composited part of images into a single image on the master rank */
