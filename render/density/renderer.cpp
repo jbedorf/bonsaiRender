@@ -1559,7 +1559,8 @@ void lCompose(
   for (int idx = pixelBeg; idx < pixelEnd; idx++)
   {
     int pcount = 0;
-    imgData_t imgData[NRANKMAX];
+    using pair_t = std::pair<float,int>;
+    pair_t keyval[NRANKMAX];
 
     const int i = idx % viewportSize.x;
     const int j = idx / viewportSize.x;
@@ -1577,16 +1578,16 @@ void lCompose(
         if (x0  <= i && i   < x1 &&
             y0  <= j && j   < y1 && 
             idx >= 0 && idx < cnt)
-          imgData[pcount++] = recvbuf[recvdispl[p] + idx];
+          keyval[pcount++] = std::make_pair(recvbuf[recvdispl[p] + idx][4], recvdispl[p]+idx);
       }
 
-    std::sort(imgData, imgData+pcount, 
-        [](const imgData_t &a, const imgData_t &b) { return a[4] < b[4]; });
+    std::sort(keyval, keyval+pcount, 
+        [](const pair_t &a, const pair_t &b) { return a.first < b.first; });
 
     float4 dst = make_float4(0.0f);
     for (int p = 0; p < pcount; p++)
     {
-      auto &src = imgData[p];
+      auto &src = recvbuf[keyval[p].second];
       src[0] *= 1.0f - dst.w;
       src[1] *= 1.0f - dst.w;
       src[2] *= 1.0f - dst.w;

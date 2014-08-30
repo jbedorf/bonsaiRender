@@ -2,10 +2,10 @@
 #include <stdio.h>
 #include "renderloop.h"
 
-#if 1
+#if 0
 #define WINX 1024
 #define WINY 768
-#elif 0
+#elif 1
 #define WINX 1920
 #define WINY 1080
 #elif 0
