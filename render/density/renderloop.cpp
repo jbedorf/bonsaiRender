@@ -892,13 +892,15 @@ class Demo
     {
       m_renderer.setMVP(m_modelView, m_projection);
       
-      /* determine global ordering box */
-      std::vector<int> compositingOrder;
-#if 1
+#if 0
       {
+        /* determine global ordering box */
+        const float3 cam = make_float3(0.0f, 0.0f, 1.0f);
+        const float3 dir = ixform(cam, m_modelView);
+        const auto &compositingOrder = m_idata.getVisibilityOrder(dir.x,dir.y,dir.z);
+        m_renderer.setCompositingOrder(compositingOrder);
       }
 #endif
-      m_renderer.setCompositingOrder(compositingOrder);
 
       m_renderer.render();
 
@@ -1261,7 +1263,7 @@ class Demo
     }
 
     // transform vector by inverse of matrix (assuming orthonormal)
-    float3 ixform(float3 &v, double *m)
+    float3 ixform(const float3 &v, double *m)
     {
       float3 r;
       r.x = v.x*m[0] + v.y*m[1] + v.z*m[2];

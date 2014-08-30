@@ -2727,7 +2727,6 @@ void SmokeRenderer::splotchDrawSort()
     MPI_Barrier(comm);
     const double t60 = MPI_Wtime();
 
-    compositingOrder.clear();
     lCompose(
         &imgLoc[0], &depthLoc[0], &imgGlb[0], 
         rank, nrank, comm,
