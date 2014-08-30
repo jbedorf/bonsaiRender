@@ -98,7 +98,7 @@ class RendererData
     float getBoundBoxHigh(const int i) const {return xhigh[i];}
     const std::vector<int>& getVisibilityOrder(const float lx, const float ly, const float lz) const 
     {
-      return visibilityOrder[(lx>=0) + ((ly>=0.0f)*2) + ((lz>=0.0f)*4)];
+      return visibilityOrder[(lx>0.0f) + (ly>0.0f)*2 + (lz>0.0f)*4];
     }
     bool isDistributed() const { return distributed; }
 
@@ -915,15 +915,16 @@ class RendererDataDistribute : public RendererData
         for (int l = 0; l < 8; l++)
           visibilityOrder[l].reserve(nrank);
 
-        for (int k = 0; k < npz; k++)
+        for (int i = 0; i < npx; i++)
           for (int j = 0; j < npy; j++)
-            for (int i = 0; i < npy; i++)
+            for (int k = 0; k < npz; k++)
               for (int l = 0; l < 8; l++)
               {
                 const int px = l&1 ?  i : npx-1-i;
                 const int py = l&2 ?  j : npy-1-j;
                 const int pz = l&4 ?  k : npz-1-k;
                 visibilityOrder[l].push_back(px + npx*(py + npy*pz));
+///                visibilityOrder[l].push_back(pz + npz*(py + npy*px));
               }
       }
 
