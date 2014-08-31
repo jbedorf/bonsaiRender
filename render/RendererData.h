@@ -66,7 +66,7 @@ class RendererData
   
     bool  distributed; 
     float xlow[3], xhigh[3];
-    std::vector<int> visibilityOrder[8];
+    int npx, npy, npz;
    
     void minmaxAttributeGlb(const Attribute_t p)   
     {
@@ -85,6 +85,13 @@ class RendererData
     assert(rank < nrank);
   }
 
+    void getRankFactor(int &npx, int &npy, int &npz) const
+    {
+      npx = this->npx;
+      npy = this->npy;
+      npz = this->npz;
+    }
+
     void resize(const int n)
     {
       data.resize(n);
@@ -96,10 +103,6 @@ class RendererData
 
     float getBoundBoxLow (const int i) const {return  xlow[i];}
     float getBoundBoxHigh(const int i) const {return xhigh[i];}
-    const std::vector<int>& getVisibilityOrder(const float lx, const float ly, const float lz) const 
-    {
-      return visibilityOrder[(lx>0.0f) + (ly>0.0f)*2 + (lz>0.0f)*4];
-    }
     bool isDistributed() const { return distributed; }
 
     int n() const { return data.size(); }
@@ -312,7 +315,6 @@ class RendererDataDistribute : public RendererData
   private:
     enum { NMAXPROC   = 1024};
     int NMAXSAMPLE;
-    int npx, npy, npz;
     int sample_freq;
 
     using vector3 = std::array<double,3>;
@@ -909,30 +911,6 @@ class RendererDataDistribute : public RendererData
         this-> xlow[k] =  xlow[rank][k];
         this->xhigh[k] = xhigh[rank][k];
       }
-
-      if (visibilityOrder[0].empty())
-      {
-        for (int l = 0; l < 8; l++)
-          visibilityOrder[l].reserve(nrank);
-
-        for (int i = 0; i < npx; i++)
-          for (int j = 0; j < npy; j++)
-            for (int k = 0; k < npz; k++)
-              for (int l = 0; l < 8; l++)
-              {
-                const int px = l&1 ?  i : npx-1-i;
-                const int py = l&2 ?  j : npy-1-j;
-                const int pz = l&4 ?  k : npz-1-k;
-                visibilityOrder[l].push_back(px + npx*(py + npy*pz));
-///                visibilityOrder[l].push_back(pz + npz*(py + npy*px));
-              }
-      }
-
-
-
-
-
-
 
 #if 0
       {

@@ -892,12 +892,91 @@ class Demo
     {
       m_renderer.setMVP(m_modelView, m_projection);
       
-#if 0
+#if 1
       {
-        /* determine global ordering box */
-        const float3 cam = make_float3(0.0f, 0.0f, -1.0f);
-        const float3 dir = ixform(cam, m_modelView);
-        const auto &compositingOrder = m_idata.getVisibilityOrder(dir.x,dir.y,dir.z);
+        using pair_t = std::pair<float3,float3>;
+        pair_t bnd;
+        bnd.first .x = m_idata.getBoundBoxLow (0);
+        bnd.first .y = m_idata.getBoundBoxLow (1);
+        bnd.first .z = m_idata.getBoundBoxLow (2);
+        bnd.second.x = m_idata.getBoundBoxHigh(0);
+        bnd.second.y = m_idata.getBoundBoxHigh(1);
+        bnd.second.z = m_idata.getBoundBoxHigh(2);
+
+        int npx,npy,npz;
+        m_idata.getRankFactor(npx,npy,npz);
+
+        static std::vector<pair_t> bounds(nrank);
+        MPI_Allgather(&bnd, 6, MPI_FLOAT, &bounds[0], 6, MPI_FLOAT, comm);
+
+        double cx,cy,cz;
+        gluUnProject( 
+            (m_viewport[2]-m_viewport[0])/2 , (m_viewport[3]-m_viewport[1])/2, 
+            0.0,  
+            m_modelView, m_projection, m_viewport,
+            &cx,&cy,&cz);
+        const float3 camPos = make_float3(cx,cy,cz);
+        
+        auto xdi = [&](int ix, int iy, int iz)
+        {
+          return iz + npz*(iy + npy*(ix));
+        };
+
+        auto locate = [](std::vector<float> &splits, const float val)
+        {
+          const float fscale = 0.001f;
+          const float range = splits.back() - splits.front();
+          splits.front() -= fscale*range;
+          splits.back () += fscale*range;
+          auto up = std::upper_bound(splits.begin(), splits.end(), val);
+          const int idx = up - splits.begin();
+          const int np = splits.size()-1;
+          return std::max(0, std::min(np-1,idx-1));
+        };
+        
+        static std::vector<int> compositingOrder(nrank);
+
+        {
+          std::vector<float> splits(nrank+1);
+
+          splits.resize(npx+1);
+          for (int px = 0; px < npx; px++)
+            splits[px] = bounds[xdi( px,  0,0)].first .x;
+          splits [npx] = bounds[xdi(npx-1,0,0)].second.x;
+          const int pxc = locate(splits, camPos.x);
+
+          for (int i = 0; i < npx; i++)
+          {
+            const int px = i <= pxc ? pxc-i : i;
+            assert(px >=0 && px < npx);
+
+            splits.resize(npy+1);
+            for (int py = 0; py < npy; py++)
+              splits[py] = bounds[xdi(px, py,  0)].first .y;
+            splits [npy] = bounds[xdi(px,npy-1,0)].second.y;
+            const int pyc = locate(splits, camPos.y);
+
+            for (int j = 0; j < npy; j++)
+            {
+              const int py = j <= pyc ? pyc-j : j;
+              assert(py >=0 && py < npy);
+
+              splits.resize(npz+1);
+              for (int pz = 0; pz < npz; pz++)
+                splits[pz] = bounds[xdi(px,py, pz  )].first .z;
+              splits [npz] = bounds[xdi(px,py,npz-1)].second.z;
+              const int pzc = locate(splits, camPos.z);
+
+              for (int k = 0; k < npz; k++)
+              {
+                const int pz = k <= pzc ? pzc-k : k;
+                assert(pz >=0 && pz < npz);
+                compositingOrder[k + npz*(j + npy*i)] = pz + npz*(py + npy*px);
+              }
+            }
+          }
+        }
+        assert((int)compositingOrder.size() == nrank);
         m_renderer.setCompositingOrder(compositingOrder);
       }
 #endif
