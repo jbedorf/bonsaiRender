@@ -925,13 +925,9 @@ class Demo
 
         auto locate = [](std::vector<float> &splits, const float val)
         {
-          const float fscale = 0.001f;
-          const float range = splits.back() - splits.front();
-          splits.front() -= fscale*range;
-          splits.back () += fscale*range;
           auto up = std::upper_bound(splits.begin(), splits.end(), val);
           const int idx = up - splits.begin();
-          const int np = splits.size()-1;
+          const int np = splits.size();
           return std::max(0, std::min(np-1,idx-1));
         };
         
@@ -940,38 +936,35 @@ class Demo
         {
           std::vector<float> splits(nrank+1);
 
-          splits.resize(npx+1);
+          splits.resize(npx);
           for (int px = 0; px < npx; px++)
-            splits[px] = bounds[xdi( px,  0,0)].first .x;
-          splits [npx] = bounds[xdi(npx-1,0,0)].second.x;
+            splits[px] = bounds[xdi( px,  0,0)].first.x;
           const int pxc = locate(splits, camPos.x);
 
           for (int i = 0; i < npx; i++)
           {
             const int px = i <= pxc ? pxc-i : i;
-            assert(px >=0 && px < npx);
+            assert(px >= 0 && px < npx);
 
-            splits.resize(npy+1);
+            splits.resize(npy);
             for (int py = 0; py < npy; py++)
-              splits[py] = bounds[xdi(px, py,  0)].first .y;
-            splits [npy] = bounds[xdi(px,npy-1,0)].second.y;
+              splits[py] = bounds[xdi(px, py,  0)].first.y;
             const int pyc = locate(splits, camPos.y);
 
             for (int j = 0; j < npy; j++)
             {
               const int py = j <= pyc ? pyc-j : j;
-              assert(py >=0 && py < npy);
+              assert(py >= 0 && py < npy);
 
-              splits.resize(npz+1);
+              splits.resize(npz);
               for (int pz = 0; pz < npz; pz++)
-                splits[pz] = bounds[xdi(px,py, pz  )].first .z;
-              splits [npz] = bounds[xdi(px,py,npz-1)].second.z;
+                splits[pz] = bounds[xdi(px,py, pz  )].first.z;
               const int pzc = locate(splits, camPos.z);
 
               for (int k = 0; k < npz; k++)
               {
                 const int pz = k <= pzc ? pzc-k : k;
-                assert(pz >=0 && pz < npz);
+                assert(pz >= 0 && pz < npz);
                 compositingOrder[k + npz*(j + npy*i)] = pz + npz*(py + npy*px);
               }
             }
