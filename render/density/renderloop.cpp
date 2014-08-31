@@ -932,6 +932,14 @@ class Demo
           const int idx = up - splits;
           return std::max(0, std::min(n-1,idx-1));
         };
+
+        auto spin = [](const int i, const int pxc, const int npx)
+        {
+          const int px = i <= pxc ? pxc-i : i;
+          assert(px >= 0 && px < npx);
+          return px;
+        };
+
         
         static std::vector<int> compositingOrder(nrank);
         {
@@ -948,8 +956,7 @@ class Demo
 #pragma omp parallel for schedule(static)
           for (int i = 0; i < npx; i++)
           {
-            const int px = i <= pxc ? pxc-i : i;
-            assert(px >= 0 && px < npx);
+            const int px = spin(i,pxc,npx);
 
             float ysplits[NRANKMAX];
             for (int py = 0; py < npy; py++)
@@ -958,8 +965,7 @@ class Demo
 
             for (int j = 0; j < npy; j++)
             {
-              const int py = j <= pyc ? pyc-j : j;
-              assert(py >= 0 && py < npy);
+              const int py = spin(j,pyc,npy);
 
               float zsplits[NRANKMAX];
               for (int pz = 0; pz < npz; pz++)
@@ -968,8 +974,7 @@ class Demo
 
               for (int k = 0; k < npz; k++)
               {
-                const int pz = k <= pzc ? pzc-k : k;
-                assert(pz >= 0 && pz < npz);
+                const int pz = spin(k,pzc,npz);
                 compositingOrder[xdi(i,j,k)] = xdi(px,py,pz);
               }
             }
