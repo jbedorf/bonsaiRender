@@ -938,7 +938,7 @@ class Demo
 
           splits.resize(npx);
           for (int px = 0; px < npx; px++)
-            splits[px] = bounds[xdi( px,  0,0)].first.x;
+            splits[px] = bounds[xdi(px,0,0)].first.x;
           const int pxc = locate(splits, camPos.x);
 
           for (int i = 0; i < npx; i++)
@@ -948,7 +948,7 @@ class Demo
 
             splits.resize(npy);
             for (int py = 0; py < npy; py++)
-              splits[py] = bounds[xdi(px, py,  0)].first.y;
+              splits[py] = bounds[xdi(px,py,0)].first.y;
             const int pyc = locate(splits, camPos.y);
 
             for (int j = 0; j < npy; j++)
@@ -958,7 +958,7 @@ class Demo
 
               splits.resize(npz);
               for (int pz = 0; pz < npz; pz++)
-                splits[pz] = bounds[xdi(px,py, pz  )].first.z;
+                splits[pz] = bounds[xdi(px,py,pz)].first.z;
               const int pzc = locate(splits, camPos.z);
 
               for (int k = 0; k < npz; k++)
