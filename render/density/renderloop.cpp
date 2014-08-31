@@ -895,20 +895,12 @@ class Demo
 #if 1
       if (m_idata.isDistributed())
       {
-        using pair_t = std::pair<float3,float3>;
-        pair_t bnd;
-        bnd.first .x = m_idata.getBoundBoxLow (0);
-        bnd.first .y = m_idata.getBoundBoxLow (1);
-        bnd.first .z = m_idata.getBoundBoxLow (2);
-        bnd.second.x = m_idata.getBoundBoxHigh(0);
-        bnd.second.y = m_idata.getBoundBoxHigh(1);
-        bnd.second.z = m_idata.getBoundBoxHigh(2);
-
-        int npx,npy,npz;
-        m_idata.getRankFactor(npx,npy,npz);
-
-        static std::vector<pair_t> bounds(nrank);
-        MPI_Allgather(&bnd, 6, MPI_FLOAT, &bounds[0], 6, MPI_FLOAT, comm);
+        static std::vector<float3> bounds(nrank);
+        float3 xlow = make_float3(
+           m_idata.getBoundBoxLow(0),
+           m_idata.getBoundBoxLow(1),
+           m_idata.getBoundBoxLow(2));
+        MPI_Allgather(&xlow, 3, MPI_FLOAT, &bounds[0], 3, MPI_FLOAT, comm);
 
         double cx,cy,cz;
         gluUnProject( 
@@ -917,8 +909,11 @@ class Demo
             m_modelView, m_projection, m_viewport,
             &cx,&cy,&cz);
         const float3 camPos = make_float3(cx,cy,cz);
+
+        int npx,npy,npz;
+        m_idata.getRankFactor(npx,npy,npz);
         
-        auto xdi = [&](int ix, int iy, int iz)
+        auto xdi = [=](int ix, int iy, int iz)
         {
           return iz + npz*(iy + npy*(ix));
         };
@@ -932,13 +927,12 @@ class Demo
         };
         
         static std::vector<int> compositingOrder(nrank);
-
         {
           std::vector<float> splits(nrank+1);
 
           splits.resize(npx);
           for (int px = 0; px < npx; px++)
-            splits[px] = bounds[xdi(px,0,0)].first.x;
+            splits[px] = bounds[xdi(px,0,0)].x;
           const int pxc = locate(splits, camPos.x);
 
           for (int i = 0; i < npx; i++)
@@ -948,7 +942,7 @@ class Demo
 
             splits.resize(npy);
             for (int py = 0; py < npy; py++)
-              splits[py] = bounds[xdi(px,py,0)].first.y;
+              splits[py] = bounds[xdi(px,py,0)].y;
             const int pyc = locate(splits, camPos.y);
 
             for (int j = 0; j < npy; j++)
@@ -958,7 +952,7 @@ class Demo
 
               splits.resize(npz);
               for (int pz = 0; pz < npz; pz++)
-                splits[pz] = bounds[xdi(px,py,pz)].first.z;
+                splits[pz] = bounds[xdi(px,py,pz)].z;
               const int pzc = locate(splits, camPos.z);
 
               for (int k = 0; k < npz; k++)
