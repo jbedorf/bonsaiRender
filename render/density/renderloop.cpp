@@ -893,6 +893,7 @@ class Demo
       m_renderer.setMVP(m_modelView, m_projection);
       
 #if 1
+      if (m_idata.isDistributed())
       {
         using pair_t = std::pair<float3,float3>;
         pair_t bnd;
