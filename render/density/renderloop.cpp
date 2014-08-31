@@ -970,7 +970,7 @@ class Demo
               {
                 const int pz = k <= pzc ? pzc-k : k;
                 assert(pz >= 0 && pz < npz);
-                compositingOrder[k + npz*(j + npy*i)] = pz + npz*(py + npy*px);
+                compositingOrder[xdi(i,j,k)] = xdi(px,py,pz);
               }
             }
           }
