@@ -85,11 +85,9 @@ class RendererData
     assert(rank < nrank);
   }
 
-    void getRankFactor(int &npx, int &npy, int &npz) const
+    std::array<int,3> getRankFactor() const
     {
-      npx = this->npx;
-      npy = this->npy;
-      npz = this->npz;
+      return {{npx,npy,npz}};
     }
 
     void resize(const int n)

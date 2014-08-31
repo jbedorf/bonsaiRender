@@ -895,6 +895,7 @@ class Demo
 #if 1
       if (m_idata.isDistributed())
       {
+        const double t0 = MPI_Wtime();
         static std::vector<float3> bounds(nrank);
         float3 xlow = make_float3(
            m_idata.getBoundBoxLow(0),
@@ -902,58 +903,68 @@ class Demo
            m_idata.getBoundBoxLow(2));
         MPI_Allgather(&xlow, 3, MPI_FLOAT, &bounds[0], 3, MPI_FLOAT, comm);
 
-        double cx,cy,cz;
-        gluUnProject( 
-            (m_viewport[2]-m_viewport[0])/2 , (m_viewport[3]-m_viewport[1])/2, 
-            0.0,  
-            m_modelView, m_projection, m_viewport,
-            &cx,&cy,&cz);
-        const float3 camPos = make_float3(cx,cy,cz);
+        const double t1 = MPI_Wtime();
+        auto getCamPos = [&]()
+        {
+          double cx,cy,cz;
+          gluUnProject( 
+              (m_viewport[2]-m_viewport[0])/2 , (m_viewport[3]-m_viewport[1])/2, 
+              0.0,  
+              m_modelView, m_projection, m_viewport,
+              &cx,&cy,&cz);
+          return make_float3(cx,cy,cz);
+        };
+        const float3 camPos = getCamPos();
 
-        int npx,npy,npz;
-        m_idata.getRankFactor(npx,npy,npz);
+        const auto &nPartitions = m_idata.getRankFactor();
+        const int npx = nPartitions[0];
+        const int npy = nPartitions[1];
+        const int npz = nPartitions[2];
         
         auto xdi = [=](int ix, int iy, int iz)
         {
           return iz + npz*(iy + npy*(ix));
         };
 
-        auto locate = [](std::vector<float> &splits, const float val)
+        auto locate = [](float splits[], const int n, const float val)
         {
-          auto up = std::upper_bound(splits.begin(), splits.end(), val);
-          const int idx = up - splits.begin();
-          const int np = splits.size();
-          return std::max(0, std::min(np-1,idx-1));
+          auto up = std::upper_bound(splits, splits+n, val);
+          const int idx = up - splits;
+          return std::max(0, std::min(n-1,idx-1));
         };
         
         static std::vector<int> compositingOrder(nrank);
         {
-          std::vector<float> splits(nrank+1);
+          constexpr int NRANKMAX = 1024;
+          assert(npx <= NRANKMAX);
+          assert(npy <= NRANKMAX);
+          assert(npz <= NRANKMAX);
 
-          splits.resize(npx);
+          float xsplits[NRANKMAX];
           for (int px = 0; px < npx; px++)
-            splits[px] = bounds[xdi(px,0,0)].x;
-          const int pxc = locate(splits, camPos.x);
+            xsplits[px] = bounds[xdi(px,0,0)].x;
+          const int pxc = locate(xsplits, npx, camPos.x);
 
+#pragma omp parallel for schedule(static)
           for (int i = 0; i < npx; i++)
           {
             const int px = i <= pxc ? pxc-i : i;
             assert(px >= 0 && px < npx);
 
-            splits.resize(npy);
+            float ysplits[NRANKMAX];
             for (int py = 0; py < npy; py++)
-              splits[py] = bounds[xdi(px,py,0)].y;
-            const int pyc = locate(splits, camPos.y);
+              ysplits[py] = bounds[xdi(px,py,0)].y;
+            const int pyc = locate(ysplits, npy, camPos.y);
 
             for (int j = 0; j < npy; j++)
             {
               const int py = j <= pyc ? pyc-j : j;
               assert(py >= 0 && py < npy);
 
-              splits.resize(npz);
+              float zsplits[NRANKMAX];
               for (int pz = 0; pz < npz; pz++)
-                splits[pz] = bounds[xdi(px,py,pz)].z;
-              const int pzc = locate(splits, camPos.z);
+                zsplits[pz] = bounds[xdi(px,py,pz)].z;
+              const int pzc = locate(zsplits, npz, camPos.z);
 
               for (int k = 0; k < npz; k++)
               {
@@ -964,7 +975,9 @@ class Demo
             }
           }
         }
-        assert((int)compositingOrder.size() == nrank);
+        const double t2 = MPI_Wtime();
+        if (isMaster())
+          fprintf(stderr, " globalOrder: tot= %g  algorithm %g sec \n", t2-t0, t2-t1);
         m_renderer.setCompositingOrder(compositingOrder);
       }
 #endif
