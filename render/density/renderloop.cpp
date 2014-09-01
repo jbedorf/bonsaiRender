@@ -893,6 +893,10 @@ class Demo
       m_renderer.setMVP(m_modelView, m_projection);
       
 #if 1
+      /* eg: code must be moved to RendererData.h. It doesn't belong here. 
+       * suggested interface: 
+       *    const std::vector<int>& m_idata.getVisibilityOrder(const float3 cameraPosition) 
+       */
       if (m_idata.isDistributed())
       {
         const double t0 = MPI_Wtime();
