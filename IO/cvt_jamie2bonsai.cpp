@@ -127,30 +127,36 @@ int main(int argc, char * argv[])
     FILE *fin = fopen(inputFn.c_str(), "rb");
     assert(fin);
 
-    int ntot, idum;
-    double t, rdum;
-    fread(&idum /* recsz */,  sizeof(int), 1, fin);
-    fread(&ntot /* ntot  */,  sizeof(int), 1, fin);
-    fread(&idum /* nnopt */, sizeof(int), 1, fin);
-    fread(&rdum /* hmin  */, sizeof(double), 1, fin);
-    fread(&rdum /* hmax  */, sizeof(double), 1, fin);
-    fread(&rdum /* sep0  */, sizeof(double), 1, fin);
-    fread(&rdum /* tf    */, sizeof(double), 1, fin);
-    fread(&rdum /* dtout */, sizeof(double), 1, fin);
-    fread(&idum /* nout  */, sizeof(int), 1, fin);
-    fread(&idum /* nit   */, sizeof(int), 1, fin);
-    fread(&t     /* t     */, sizeof(double), 1, fin);
-    fread(&idum /* nav   */, sizeof(int), 1, fin);
-    fread(&rdum /* alpha */, sizeof(double), 1, fin);
-    fread(&rdum /* beta  */, sizeof(double), 1, fin);
-    fread(&rdum /* tskip */, sizeof(double), 1, fin);
-    fread(&idum /* ngr   */, sizeof(int), 1, fin);
-    fread(&idum /* nrelax*/, sizeof(int), 1, fin);
-    fread(&rdum /* trelax*/, sizeof(double), 1, fin);
-    fread(&rdum /* dt    */, sizeof(double), 1, fin);
-    fread(&rdum /* omega2*/, sizeof(double), 1, fin);
+    struct __attribute__((__packed__)) header_t
+    {
+      int ntot;
+      int nnopt;
+      double hmin;
+      double hmax;
+      double sep0;
+      double tf;
+      double dtout;
+      int nout;
+      int nit;
+      double t;
+      int anv;
+      double alpha;
+      double beta;
+      double tskip;
+      int ngr;
+      int nrelax;
+      double trelax;
+      double dt;
+      double omega2;
+    };
 
-    fprintf(stderr, "ntot =%d  t= %g \n", ntot, t);
+    int idum; 
+    header_t h;
+    fread(&idum /* recsz */,  sizeof(int), 1, fin); assert(idum == (int)sizeof(header_t));
+    fread(&h, sizeof(header_t), 1, fin);
+    fread(&idum /* recsz */,  sizeof(int), 1, fin); assert(idum == (int)sizeof(header_t));
+
+    fprintf(stderr, "ntot= %d  t= %g \n", h.ntot, h.t);
   }
 
 
