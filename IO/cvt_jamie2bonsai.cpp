@@ -1,7 +1,6 @@
 #include "BonsaiIO.h"
-#include "IDType.h"
-#include "read_tipsy.h"
 
+#if 0
 template<typename IO>
 static double writeDM(ReadTipsy &data, IO &out)
 {
@@ -95,6 +94,7 @@ static double writeStars(ReadTipsy &data, IO &out)
 
   return dtWrite;
 }
+#endif
 
 
 int main(int argc, char * argv[])
@@ -108,26 +108,53 @@ int main(int argc, char * argv[])
   MPI_Comm_rank(comm, &rank);
 
 
-  if (argc < 4)
+  if (argc < 3)
   {
     if (rank == 0)
     {
       fprintf(stderr, " ------------------------------------------------------------------------\n");
       fprintf(stderr, " Usage: \n");
-      fprintf(stderr, " %s  baseName nDomains outputName \n", argv[0]);
+      fprintf(stderr, " %s  inputFileName outputFileName \n", argv[0]);
       fprintf(stderr, " ------------------------------------------------------------------------\n");
     }
     exit(-1);
   }
   
-  const std::string baseName(argv[1]);
-  const int nDomains = atoi(argv[2]);
-  const std::string outputName(argv[3]);
+  const std::string inputFn(argv[1]);
+  const std::string outputFn(argv[2]);
 
-  int reduceFactorFirst  = 1;
-  int reduceFactorSecond = 1;
+  {
+    FILE *fin = fopen(inputFn.c_str(), "rb");
+    assert(fin);
+
+    int ntot, idum;
+    double t, rdum;
+    fread(&idum /* recsz */,  sizeof(int), 1, fin);
+    fread(&ntot /* ntot  */,  sizeof(int), 1, fin);
+    fread(&idum /* nnopt */, sizeof(int), 1, fin);
+    fread(&rdum /* hmin  */, sizeof(double), 1, fin);
+    fread(&rdum /* hmax  */, sizeof(double), 1, fin);
+    fread(&rdum /* sep0  */, sizeof(double), 1, fin);
+    fread(&rdum /* tf    */, sizeof(double), 1, fin);
+    fread(&rdum /* dtout */, sizeof(double), 1, fin);
+    fread(&idum /* nout  */, sizeof(int), 1, fin);
+    fread(&idum /* nit   */, sizeof(int), 1, fin);
+    fread(&t     /* t     */, sizeof(double), 1, fin);
+    fread(&idum /* nav   */, sizeof(int), 1, fin);
+    fread(&rdum /* alpha */, sizeof(double), 1, fin);
+    fread(&rdum /* beta  */, sizeof(double), 1, fin);
+    fread(&rdum /* tskip */, sizeof(double), 1, fin);
+    fread(&idum /* ngr   */, sizeof(int), 1, fin);
+    fread(&idum /* nrelax*/, sizeof(int), 1, fin);
+    fread(&rdum /* trelax*/, sizeof(double), 1, fin);
+    fread(&rdum /* dt    */, sizeof(double), 1, fin);
+    fread(&rdum /* omega2*/, sizeof(double), 1, fin);
+
+    fprintf(stderr, "ntot =%d  t= %g \n", ntot, t);
+  }
 
 
+#if 0
   ReadTipsy data(
       baseName, 
       rank, nranks,
@@ -198,6 +225,7 @@ int main(int argc, char * argv[])
   if (rank == 0)
     fprintf(stderr, "All operations done in   %g sec \n", dtAllGlb);
 
+#endif
 
 
 
