@@ -1274,7 +1274,7 @@ class Demo
 
       if (m_buttonState == 3) {
         // left+middle = zoom
-        float3 v = make_float3(0.0f, 0.0f, dy*zoomSpeed*fmaxf(fabs(m_cameraTrans.z), 100.0f));
+        float3 v = make_float3(0.0f, 0.0f, dy*zoomSpeed*fmaxf(fabs(m_cameraTrans.z), 1.0f));
         if (m_flyMode) {
           v = ixform(v, m_modelView);
         }
