@@ -75,11 +75,11 @@ int main(int argc, char * argv[])
 
   /* write IDs */
   {
-    BonsaiIO::DataType<IDType> ID("DM:IDType", pCount);
+    BonsaiIO::DataType<IDType> ID("Stars:IDType", pCount);
     for (int i = 0; i< pCount; i++)
     {
       ID[i].setID(i);
-      ID[i].setType(0);
+      ID[i].setType(1);
     }
     out.write(ID);
   }
@@ -87,12 +87,12 @@ int main(int argc, char * argv[])
   /* write pos */
   {
     typedef float vec4[4];
-    BonsaiIO::DataType<vec4> pos("DM:POS:real4",pCount);
+    BonsaiIO::DataType<vec4> pos("Stars:POS:real4",pCount);
     for (int i = 0; i< pCount; i++)
     {
-      pos[i][0] = posV[i][0];
-      pos[i][1] = posV[i][1];
-      pos[i][2] = posV[i][2];
+      pos[i][0] = posV[i][0] - 0.5f;
+      pos[i][1] = posV[i][1] - 0.5f;
+      pos[i][2] = posV[i][2] - 0.5f;
       pos[i][3] = 1.0f/(float)pCount;
     }
     out.write(pos);
@@ -101,7 +101,7 @@ int main(int argc, char * argv[])
   /* write vel */
   {
     typedef float vec3[3];
-    BonsaiIO::DataType<vec3> vel("DM:VEL:float[3]",pCount);
+    BonsaiIO::DataType<vec3> vel("Stars:VEL:float[3]",pCount);
     for (int i = 0; i< pCount; i++)
     {
       vel[i][0] = velV[i][0];
