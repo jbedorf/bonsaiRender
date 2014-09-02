@@ -117,6 +117,8 @@ int main(int argc, char * argv[])
     out.write(el);
   }
 
+  out.close();
+
 
   MPI_Finalize();
 

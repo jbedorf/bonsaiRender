@@ -12,114 +12,22 @@
 #include "anyoption.h"
 #include "RendererData.h"
 
+
 template<typename T>
-static T* readBonsaiReduced(
+static T* readBonsai(
     const int rank, const int nranks, const MPI_Comm &comm,
     const std::string &fileName,
     const int reduceDM,
-    const int reduceS)
+    const int reduceS,
+    const bool print_header = false)
 {
-  if (rank == 0)
-    fprintf(stderr, " ----------- \n");
-  BonsaiIO::Core in(rank, nranks, comm, BonsaiIO::READ, fileName);
-  if (rank == 0)
-    in.getHeader().printFields();
-  typedef float float5[5];
-  typedef float float3[3];
-
-  BonsaiIO::DataType<float3> posStars("Stars:XYZ:float[3]");
-  BonsaiIO::DataType<float5> attrStars("Stars:VxVyVz,DENS,H:float[5]");
-
-  if (reduceS > 0)
-  {
-    if (rank  == 0)
-      fprintf(stderr, " Reading star data \n");
-    if(!in.read(posStars,  true, reduceS)) return NULL;
-    assert(in.read(attrStars, true, reduceS));
-    assert(posStars.getNumElements() == attrStars.getNumElements());
-  }
-
-  BonsaiIO::DataType<float3> posDM("DM:XYZ:float[3]");
-  BonsaiIO::DataType<float5> attrDM("DM:VxVyVz,DENS,H:float[5]");
-
-  if (reduceDM > 0)
-  {
-    if (rank  == 0)
-      fprintf(stderr, " Reading DM data \n");
-    if (!in.read(posDM,  true, reduceDM)) return NULL;
-    assert(in.read(attrDM, true, reduceDM));
-    assert(posDM.getNumElements() == attrDM.getNumElements());
-  }
-
-
-
-  const int nS  = posStars.getNumElements();
-  const int nDM = posDM.getNumElements();
-  long long int nSloc = nS, nSglb;
-  long long int nDMloc = nDM, nDMglb;
-
-  MPI_Allreduce(&nSloc, &nSglb, 1, MPI_LONG, MPI_SUM, comm);
-  MPI_Allreduce(&nDMloc, &nDMglb, 1, MPI_LONG, MPI_SUM, comm);
-  if (rank == 0)
-  {
-    fprintf(stderr, "nStars = %lld\n", nSglb);
-    fprintf(stderr, "nDM    = %lld\n", nDMglb);
-  }
-
-
-  T *rDataPtr = new T(rank,nranks,comm);
-  rDataPtr->resize(nS+nDM);
-  auto &rData = *rDataPtr;
-  for (int i = 0; i < nS; i++)
-  {
-    const int ip = i;
-    rData.posx(ip) = posStars[i][0];
-    rData.posy(ip) = posStars[i][1];
-    rData.posz(ip) = posStars[i][2];
-    rData.ID  (ip) = i;
-    rData.type(ip) = 1;
-//    rData.attribute(RendererData::MASS, ip) = 1.0/nS;
-    rData.attribute(RendererData::VEL,  ip) =
-      std::sqrt(
-          attrStars[i][0]*attrStars[i][0] +
-          attrStars[i][1]*attrStars[i][1] +
-          attrStars[i][2]*attrStars[i][2]);
-    rData.attribute(RendererData::RHO, ip) = attrStars[i][3];
-    rData.attribute(RendererData::H,   ip) = attrStars[i][4];
-  }
-
-  for (int i = 0; i < nDM; i++)
-  {
-    const int ip = i + nS;
-    rData.posx(ip) = posDM[i][0];
-    rData.posy(ip) = posDM[i][1];
-    rData.posz(ip) = posDM[i][2];
-    rData.ID  (ip) = i+1000000000;
-    rData.type(ip) = 0;
-//    rData.attribute(RendererData::MASS, ip) = 1.0/nDM;
-    rData.attribute(RendererData::VEL,  ip) =
-      std::sqrt(
-          attrDM[i][0]*attrDM[i][0] +
-          attrDM[i][1]*attrDM[i][1] +
-          attrDM[i][2]*attrDM[i][2]);
-    rData.attribute(RendererData::RHO, ip) = attrDM[i][3];
-    rData.attribute(RendererData::H,   ip) = attrDM[i][4];
-  }
-  return rDataPtr;
-}
-
-template<typename T>
-static T* readBonsaiFull(
-    const int rank, const int nranks, const MPI_Comm &comm,
-    const std::string &fileName,
-    const int reduceDM,
-    const int reduceS)
-{
-  if (rank == 0)
-    fprintf(stderr, " ----------- \n");
   BonsaiIO::Core out(rank, nranks, comm, BonsaiIO::READ, fileName);
-  if (rank == 0)
+  if (rank == 0 && print_header)
+  {
+    fprintf(stderr, "---- Bonsai header info ----\n");
     out.getHeader().printFields();
+    fprintf(stderr, "----------------------------\n");
+  }
   typedef float float4[4];
   typedef float float3[3];
   typedef float float2[2];
@@ -131,9 +39,9 @@ static T* readBonsaiFull(
 
   if (reduceS > 0)
   {
+    if (!out.read(IDListS, true, reduceS)) return NULL;
     if (rank  == 0)
       fprintf(stderr, " Reading star data \n");
-    if (!out.read(IDListS, true, reduceS)) return NULL;
     assert(out.read(posS,    true, reduceS));
     assert(out.read(velS,    true, reduceS));
     bool renderDensity = true;
@@ -253,6 +161,97 @@ static T* readBonsaiFull(
   return rDataPtr;
 }
 
+template<typename T>
+static T* readJamieSPH(
+    const int rank, const int nranks, const MPI_Comm &comm,
+    const std::string &fileName,
+    const int reduceS,
+    const bool print_header = false)
+{
+  BonsaiIO::Core out(rank, nranks, comm, BonsaiIO::READ, fileName);
+  if (rank == 0 && print_header)
+  {
+    out.getHeader().printFields();
+  }
+  
+  struct __attribute__((__packed__)) header_t
+  {
+    int ntot;
+    int nnopt;
+    double hmin;
+    double hmax;
+    double sep0;
+    double tf;
+    double dtout;
+    int nout;
+    int nit;
+    double t;
+    int anv;
+    double alpha;
+    double beta;
+    double tskip;
+    int ngr;
+    int nrelax;
+    double trelax;
+    double dt;
+    double omega2;
+  };
+  
+  struct __attribute__((__packed__)) sph_t
+  {
+    double x,y,z;
+    double am,hp,rho;
+    double vx,vy,vz;
+    double vxdot,vydot,vzdot;
+    double u,udot;
+    double grpot, mmu;
+    int cc;
+    double divv;
+  };
+
+  assert(reduceS > 0);
+
+  BonsaiIO::DataType<header_t> h("SPH:header:jamieHeader_t");
+  BonsaiIO::DataType<sph_t> sph("SPH:data:jamieData_t");
+
+  if (!out.read(h)) 
+    return NULL;
+  if (rank  == 0)
+    fprintf(stderr, " Reading SPH data \n");
+  assert(out.read(sph, true, reduceS));
+
+  fprintf(stderr, "rank= %d  ntot= %d\n", rank, h[0].ntot);
+
+
+
+  T *rDataPtr = new T(rank,nranks,comm);
+  rDataPtr->resize(h[0].ntot);
+
+  auto &rData = *rDataPtr;
+  for (int i = 0; i < h[0].ntot; i++)
+  {
+    const int ip = i;
+    rData.posx(ip) = sph[i].x;
+    rData.posy(ip) = sph[i].y;
+    rData.posz(ip) = sph[i].z;
+    rData.ID  (ip) = i;
+    rData.type(ip) = 0;
+#if 1
+    rData.attribute(RendererData::VEL,  ip) =
+      std::sqrt(
+          sph[i].vx*sph[i].vx +
+          sph[i].vy*sph[i].vy +
+          sph[i].vz*sph[i].vz);
+#else
+    rData.attribute(RendererData::VEL,  ip) = sph[i].udot;
+#endif
+    rData.attribute(RendererData::RHO, ip) = sph[i].rho;
+    rData.attribute(RendererData::H,   ip)  = sph[i].hp;
+  }
+
+  return rDataPtr;
+}
+
 
 
 int main(int argc, char * argv[])
@@ -357,8 +356,8 @@ int main(int argc, char * argv[])
 
   using RendererDataT = RendererDataDistribute;
   RendererDataT *rDataPtr;
-  if ((rDataPtr = readBonsaiFull<RendererDataT>(rank, nranks, comm, fileName, reduceDM, reduceS))) {}
-  else if ((rDataPtr = readBonsaiReduced<RendererDataT>(rank, nranks, comm, fileName, reduceDM, reduceS))) {}
+  if ((rDataPtr = readBonsai<RendererDataT>(rank, nranks, comm, fileName, reduceDM, reduceS))) {}
+  else if ((rDataPtr = readJamieSPH<RendererDataT>(rank, nranks, comm, fileName, reduceS,true))) {}
   else
   {
     if (rank == 0)
