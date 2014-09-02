@@ -908,6 +908,7 @@ class Demo
         MPI_Allgather(&xlow, 3, MPI_FLOAT, &bounds[0], 3, MPI_FLOAT, comm);
 
         const double t1 = MPI_Wtime();
+#if 0
         auto getCamPos = [&]()
         {
           double cx,cy,cz;
@@ -918,6 +919,15 @@ class Demo
               &cx,&cy,&cz);
           return make_float3(cx,cy,cz);
         };
+#else
+        auto getCamPos = [&]()
+        {
+          double inv[16];
+          gluInvertMatrix(m_modelView, inv);
+          const double4 cam = lMatVec(inv, make_double4(0,0,0,1));
+          return make_float3(cam.x,cam.y,cam.z);
+        };
+#endif
         const float3 camPos = getCamPos();
 
         const auto &nPartitions = m_idata.getRankFactor();
@@ -956,6 +966,21 @@ class Demo
           for (int px = 0; px < npx; px++)
             xsplits[px] = bounds[xdi(px,0,0)].x;
           const int pxc = locate(xsplits, npx, camPos.x);
+
+#if 0
+          if (rank == 0)
+          {
+            fprintf(stderr, "cam= %g %g %g \n", camPos.x, camPos.y, camPos.z);
+            fprintf(stderr, "xsplit= %g %g %g \n",
+                xsplits[0], xsplits[1], xsplits[2]);
+            for (int i = 0; i < npx; i++)
+            {
+              const int px = spin(i,pxc,npx);
+              if (rank == 0)
+                fprintf(stderr, "pxc= %d | i= %d  px= %d\n", pxc,i ,px);
+            }
+          }
+#endif
 
 #pragma omp parallel for schedule(static)
           for (int i = 0; i < npx; i++)
