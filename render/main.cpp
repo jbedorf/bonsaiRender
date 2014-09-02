@@ -220,22 +220,22 @@ static T* readJamieSPH(
     fprintf(stderr, " Reading SPH data \n");
   assert(out.read(sph, true, reduceS));
 
-  fprintf(stderr, "rank= %d  ntot= %d\n", rank, h[0].ntot);
+  fprintf(stderr, "rank= %d  ntot= %d\n", rank, (int)sph.size());
 
 
 
   T *rDataPtr = new T(rank,nranks,comm);
-  rDataPtr->resize(h[0].ntot);
+  rDataPtr->resize(sph.size());
 
   auto &rData = *rDataPtr;
-  for (int i = 0; i < h[0].ntot; i++)
+  for (int i = 0; i < (int)sph.size(); i++)
   {
     const int ip = i;
     rData.posx(ip) = sph[i].x;
     rData.posy(ip) = sph[i].y;
     rData.posz(ip) = sph[i].z;
     rData.ID  (ip) = i;
-    rData.type(ip) = 0;
+    rData.type(ip) = 1;
 #if 1
     rData.attribute(RendererData::VEL,  ip) =
       std::sqrt(

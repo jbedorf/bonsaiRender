@@ -1,4 +1,5 @@
 #include "BonsaiIO.h"
+#include <cmath>
 
 int main(int argc, char * argv[])
 {
@@ -17,7 +18,7 @@ int main(int argc, char * argv[])
     {
       fprintf(stderr, " ------------------------------------------------------------------------\n");
       fprintf(stderr, " Usage: \n");
-      fprintf(stderr, " %s  inputFileName outputFileName \n", argv[0]);
+      fprintf(stderr, " %s  inputFileName outputFileName Lclip \n", argv[0]);
       fprintf(stderr, " ------------------------------------------------------------------------\n");
     }
     exit(-1);
@@ -25,6 +26,9 @@ int main(int argc, char * argv[])
   
   const std::string inputFn(argv[1]);
   const std::string outputFn(argv[2]);
+
+  const double Lclip = argc > 3 ? atof(argv[3]) : HUGE;
+  fprintf(stderr, "Lclip= %g\n", Lclip);
 
   FILE *fin = fopen(inputFn.c_str(), "rb");
   assert(fin);
@@ -76,18 +80,43 @@ int main(int argc, char * argv[])
     double divv;
   };
 
-  std::vector<sph_t> data(h.ntot);
+  std::vector<sph_t> data;
+  data.reserve(h.ntot);
 
+  double min[3] = { HUGE};
+  double max[3] = {- HUGE};
   for (int i = 0; i < h.ntot; i++)
   {
     fread(&idum,  sizeof(int), 1, fin); 
     assert(idum == (int)sizeof(sph_t));
 
-    fread(&data[i], sizeof(sph_t), 1, fin);
-
+    sph_t d;
+    fread(&d, sizeof(sph_t), 1, fin);
+    
     fread(&idum,  sizeof(int), 1, fin); 
     assert(idum == (int)sizeof(sph_t));
+
+    if (!(
+        d.x >= -Lclip && d.x < Lclip &&
+        d.y >= -Lclip && d.y < Lclip &&
+        d.z >= -Lclip && d.z < Lclip))
+      continue;
+
+
+    data.push_back(d);
+
+
+    min[0] = std::min(min[0], data[i].x);
+    min[1] = std::min(min[1], data[i].y);
+    min[2] = std::min(min[2], data[i].z);
+    
+    max[0] = std::max(max[0], data[i].x);
+    max[1] = std::max(max[1], data[i].y);
+    max[2] = std::max(max[2], data[i].z);
   }
+
+  fprintf(stderr, "min= %g %g %g \n", min[0], min[1], min[2]);
+  fprintf(stderr, "max= %g %g %g \n", max[0], max[1], max[2]);
 
   fread(&idum,  sizeof(int), 1, fin); 
   assert(idum == (int)sizeof(int));
@@ -97,9 +126,9 @@ int main(int argc, char * argv[])
 
   fread(&idum,  sizeof(int), 1, fin); 
   assert(idum == (int)sizeof(int));
-   
 
-  const int ntot = h.ntot;
+  fprintf(stderr, "n= %d\n", (int)data.size());
+   
   BonsaiIO::Core out(rank, nranks, comm, BonsaiIO::WRITE, outputFn);
 
   /* write metadata */
@@ -111,8 +140,8 @@ int main(int argc, char * argv[])
 
   /* write pos */
   {
-    BonsaiIO::DataType<sph_t> el("SPH:data:jamieData_t", ntot);
-    for (int i = 0; i < ntot; i++)
+    BonsaiIO::DataType<sph_t> el("SPH:data:jamieData_t", data.size());
+    for (int i = 0; i < (int)data.size(); i++)
       el[i] = data[i];
     out.write(el);
   }
