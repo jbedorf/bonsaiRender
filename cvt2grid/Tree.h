@@ -83,10 +83,11 @@ struct Tree
         for(int i=0; i<(int)group_list.size(); i++)
           *group_list[i] << root;
 #endif
-        int nbMean = 0;
-        int nbMax  = 0;
-        int nbMin  = 1<<30;
-        //#pragma omp parallel for reduction(+:nbMean, max:nbMax, min:nbMin)
+        using long_t = unsigned long long;
+        long_t nbMean = 0;
+        long_t nbMax  = 0;
+        long_t nbMin  = 1<<30;
+#pragma omp parallel for reduction(+:nbMean) reduction(max:nbMax) reduction(min:nbMin)
         for (int i = 0; i < nbody; i++)
         {
           const float f = 0.5f * (1.0f + cbrtf(Nngb / (float)ptcl[i].nnb));
@@ -94,8 +95,8 @@ struct Tree
           ptcl[i].set_h(ptcl[i].get_h() * fScale);
 
           nbMean += ptcl[i].nnb;
-          nbMax   = std::max(nbMax, ptcl[i].nnb);
-          nbMin   = std::min(nbMin, ptcl[i].nnb);
+          nbMax   = std::max(nbMax, (long_t)ptcl[i].nnb);
+          nbMin   = std::min(nbMin, (long_t)ptcl[i].nnb);
           ptcl[i].nnb = 0;
         }
         fprintf(stderr, "iteration= %d : nbMin= %g  nbMean= %g  nbMax= %g\n", 
