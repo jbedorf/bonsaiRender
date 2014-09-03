@@ -934,7 +934,7 @@ class Demo
           return std::max(0, std::min(n-1,idx-1));
         };
 
-        auto spin = [](const int i, const int pxc, const int npx)
+        auto map = [](const int i, const int pxc, const int npx)
         {
           const int px = i <= pxc ? pxc-i : i;
           assert(px >= 0 && px < npx);
@@ -962,7 +962,7 @@ class Demo
                 xsplits[0], xsplits[1], xsplits[2]);
             for (int i = 0; i < npx; i++)
             {
-              const int px = spin(i,pxc,npx);
+              const int px = map(i,pxc,npx);
               if (rank == 0)
                 fprintf(stderr, "pxc= %d | i= %d  px= %d\n", pxc,i ,px);
             }
@@ -972,7 +972,7 @@ class Demo
 #pragma omp parallel for schedule(static)
           for (int i = 0; i < npx; i++)
           {
-            const int px = spin(i,pxc,npx);
+            const int px = map(i,pxc,npx);
 
             float ysplits[NRANKMAX];
             for (int py = 0; py < npy; py++)
@@ -981,7 +981,7 @@ class Demo
 
             for (int j = 0; j < npy; j++)
             {
-              const int py = spin(j,pyc,npy);
+              const int py = map(j,pyc,npy);
 
               float zsplits[NRANKMAX];
               for (int pz = 0; pz < npz; pz++)
@@ -990,7 +990,7 @@ class Demo
 
               for (int k = 0; k < npz; k++)
               {
-                const int pz = spin(k,pzc,npz);
+                const int pz = map(k,pzc,npz);
                 compositingOrder[xdi(i,j,k)] = xdi(px,py,pz);
               }
             }
