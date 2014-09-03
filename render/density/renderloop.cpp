@@ -2,7 +2,7 @@
 #include <stdio.h>
 #include "renderloop.h"
 
-#if 1
+#if 0
 #define WINX 1024
 #define WINY 768
 #elif 1
