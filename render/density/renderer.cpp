@@ -1387,7 +1387,7 @@ void SmokeRenderer::render()
   glutReportErrors();
 }
    
-void lCompose(
+static void lCompose(
     float4* imgSrc,
     float4* imgDst,
     const int rank, const int nrank, const MPI_Comm &comm,
@@ -1602,7 +1602,7 @@ void lCompose(
   }
 }
 
-void lCompose(
+static void lCompose(
     const float4* imgSrc,
     const float*  depthSrc,
     float4* imgDst,
