@@ -1397,6 +1397,11 @@ void lCompose(
     const int showDomain,
     std::vector<int> compositeOrder)
 {
+  assert(imgCrd.x >= 0);
+  assert(imgCrd.y >= 0);
+  assert(imgCrd.x + imgSize.x <= viewportSize.x);
+  assert(imgCrd.y + imgSize.y <= viewportSize.y);
+
   if (compositeOrder.empty())
   {
     compositeOrder.resize(nrank);
@@ -1602,6 +1607,11 @@ void lCompose(
     const int showDomain,
     const std::vector<int> &compositeOrder)
 {
+  assert(imgCrd.x >= 0);
+  assert(imgCrd.y >= 0);
+  assert(imgCrd.x + imgSize.x <= viewportSize.x);
+  assert(imgCrd.y + imgSize.y <= viewportSize.y);
+
   constexpr int master = 0;
 
   using imgData_t = std::array<float,5>;
@@ -2114,6 +2124,7 @@ static void lCompose(
 }
 #endif
 
+#if 0
 static void lCompose(
     float4 *src, float4 *dst, float *depth,
     const int n, const int rank, const int nrank, const MPI_Comm &comm,
@@ -2244,6 +2255,7 @@ static void lCompose(
 
   MPI_Gather(&colorArray[0], nsend*4, MPI_FLOAT, dst, 4*nsend, MPI_FLOAT, master, comm);
 }
+#endif
 
 void SmokeRenderer::composeImages(const GLint imgTex, const GLint depthTex)
 {
@@ -2705,7 +2717,7 @@ void SmokeRenderer::splotchDraw()
 void SmokeRenderer::splotchDrawSort()
 {
   int depthTex = 0;
-#if 0  
+#if 1  
   /* render depth buffer */
   depthTex = m_depthTex;
 #endif
