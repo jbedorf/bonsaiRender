@@ -2545,10 +2545,7 @@ std::array<int,4> SmokeRenderer::getVisibleViewport() const
   viewportMatrix[15] = 2.0;
 
 
-  std::array<int,4> visibleViewport{{
-    viewport[0]+viewport[2],
-    viewport[1]+viewport[3],
-    viewport[0],viewport[1]}};
+  std::array<double,4> window{{+HUGE,+HUGE,-HUGE,-HUGE}};
 
   for (auto &v : bBoxVtx)
   {
@@ -2557,16 +2554,12 @@ std::array<int,4> SmokeRenderer::getVisibleViewport() const
     v = lMatVec(viewportMatrix,  v);
   }
 
-  auto clip = [&](double x, double y)
+  auto clip = [&](const double x, const double y)
   {
-    auto x0 = std::min(visibleViewport[0], static_cast<int>(floor(x)));
-    auto y0 = std::min(visibleViewport[1], static_cast<int>(floor(y)));
-    auto x1 = std::max(visibleViewport[2], static_cast<int>( ceil(x)))+1;
-    auto y1 = std::max(visibleViewport[3], static_cast<int>( ceil(y)))+1;
-    visibleViewport[0] = std::min(std::max(x0, viewport[0]), viewport[0]+viewport[2]);
-    visibleViewport[1] = std::min(std::max(y0, viewport[1]), viewport[1]+viewport[3]);
-    visibleViewport[2] = std::min(std::max(x1, viewport[0]), viewport[0]+viewport[2]);
-    visibleViewport[3] = std::min(std::max(y1, viewport[1]), viewport[1]+viewport[3]);
+    window[0] = std::min(window[0], x);
+    window[1] = std::min(window[1], y);
+    window[2] = std::max(window[2], x);
+    window[3] = std::max(window[3], y);
   };
 
 
@@ -2600,10 +2593,27 @@ std::array<int,4> SmokeRenderer::getVisibleViewport() const
       visibleViewport[3]);
 #endif
 
-  visibleViewport[2] -= visibleViewport[0];
-  visibleViewport[3] -= visibleViewport[1];
+  std::array<int,4> vp;
+  vp[0] = static_cast<int>(floor(window[0]));
+  vp[1] = static_cast<int>(floor(window[1]));
+  vp[2] = static_cast<int>(ceil (window[2]))+1;
+  vp[3] = static_cast<int>(ceil (window[3]))+1;
 
-  return visibleViewport;
+  vp[0] = std::max(vp[0], viewport[0]);
+  vp[1] = std::max(vp[1], viewport[1]);
+  vp[2] = std::min(vp[2], viewport[0]+viewport[2]);
+  vp[3] = std::min(vp[3], viewport[1]+viewport[3]);
+
+
+  vp[2] -= vp[0];
+  vp[3] -= vp[1];
+
+  assert(vp[0] >= viewport[0]);
+  assert(vp[1] >= viewport[1]);
+  assert(vp[2] <= viewport[2]);
+  assert(vp[3] <= viewport[3]);
+
+  return vp;
 }
 
 void SmokeRenderer::splotchDraw()
