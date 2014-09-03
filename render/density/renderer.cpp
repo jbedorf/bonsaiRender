@@ -2574,9 +2574,8 @@ std::array<int,4> SmokeRenderer::getVisibleViewport() const
   };
 
 
-  const double wMin = 0.1;
   for (const auto &v : bBoxVtx)
-    if (v.z + v.w >= 0.0 && v.w >= wMin)
+    if (v.z + v.w >= 0.0)
     {
       const double invw = 1.0/v.w;
       const double x = v.x*invw;
@@ -2586,7 +2585,7 @@ std::array<int,4> SmokeRenderer::getVisibleViewport() const
     else
     {
       for (const auto &v2 : bBoxVtx)
-        if (v2.z+v2.w >= 0.0 && v2.w >= wMin)
+        if (v2.z+v2.w >= 0.0)
         {
           const double t = (v2.z+v2.w)/(v2.z-v.z + v2.w-v.w);
           const double invw = 1.0/((v.w - v2.w)*t + v2.w);
@@ -2753,7 +2752,7 @@ void SmokeRenderer::splotchDraw()
 void SmokeRenderer::splotchDrawSort()
 {
   GLuint depthTex = 0;
-#if 0  
+#if 0
   /* render depth buffer */
   depthTex = m_depthTex;
 #endif
