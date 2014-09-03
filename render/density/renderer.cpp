@@ -2594,7 +2594,7 @@ std::array<int,4> SmokeRenderer::getVisibleViewport() const
           const double t = (v2.z+v2.w)/(v2.z-v.z + v2.w-v.w);
           const double invw = 1.0/((v.w - v2.w)*t + v2.w);
           const double x = ((v.x - v2.x)*t + v2.x) * invw;
-          const double y = ((v.y - v2.y)*t + v2.x) * invw;
+          const double y = ((v.y - v2.y)*t + v2.y) * invw;
           clip(x,y);
         }
     }
