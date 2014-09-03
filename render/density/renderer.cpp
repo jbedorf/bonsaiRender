@@ -2249,79 +2249,101 @@ static void lCompose(
 #endif
 }
 
+/* some code samples and ideas are taken from IceT */
 std::array<int,4> SmokeRenderer::getVisibleViewport() const
 {
   const float3 r0 = m_xlow;
   const float3 r1 = m_xhigh;
-  const double3 bBoxVtx[] = {
-    make_double3(r0.x,r0.y,r0.z),
-    make_double3(r1.x,r0.y,r0.z),
-    make_double3(r0.x,r1.y,r0.z),
-    make_double3(r1.x,r1.y,r0.z),
-    make_double3(r0.x,r0.y,r1.z),
-    make_double3(r1.x,r0.y,r1.z),
-    make_double3(r0.x,r1.y,r1.z),
-    make_double3(r1.x,r1.y,r1.z)
+  double4 bBoxVtx[] = {
+    make_double4(r0.x,r0.y,r0.z,1.0),
+    make_double4(r1.x,r0.y,r0.z,1.0),
+    make_double4(r0.x,r1.y,r0.z,1.0),
+    make_double4(r1.x,r1.y,r0.z,1.0),
+    make_double4(r0.x,r0.y,r1.z,1.0),
+    make_double4(r1.x,r0.y,r1.z,1.0),
+    make_double4(r0.x,r1.y,r1.z,1.0),
+    make_double4(r1.x,r1.y,r1.z,1.0)
   };
-
+  
   int viewport[4];
   glGetIntegerv( GL_VIEWPORT, viewport);
 
-  const int w = viewport[2];
-  const int h = viewport[3];
+  double viewportMatrix[16];
+  viewportMatrix[ 0] = viewport[2];
+  viewportMatrix[ 1] = 0.0;
+  viewportMatrix[ 2] = 0.0;
+  viewportMatrix[ 3] = 0.0;
 
-  std::array<int,4> visibleViewport{{w,h,0,0}};
+  viewportMatrix[ 4] = 0.0;
+  viewportMatrix[ 5] = viewport[3];
+  viewportMatrix[ 6] = 0.0;
+  viewportMatrix[ 7] = 0.0;
 
-  for (auto v : bBoxVtx)
+  viewportMatrix[ 8] = 0.0;
+  viewportMatrix[ 9] = 0.0;
+  viewportMatrix[10] = 2.0;
+  viewportMatrix[11] = 0.0;
+
+  viewportMatrix[12] = viewport[2] + viewport[0]*2.0;
+  viewportMatrix[13] = viewport[3] + viewport[1]*2.0;
+  viewportMatrix[14] = 0.0;
+  viewportMatrix[15] = 2.0;
+
+
+  std::array<int,4> visibleViewport{{
+    viewport[0]+viewport[2],
+    viewport[1]+viewport[3],
+    viewport[0],viewport[1]}};
+
+  for (auto &v : bBoxVtx)
   {
-#if 1
-    double x,y,z;
-    gluProject(v.x,v.y,v.z, m_modelViewWin,m_projectionWin,viewport,&x,&y,&z);
-#else
-    const double4 pos0 = make_double4(v.x,v.y,v.z,1.0);
-    const double4 posO = lMatVec(m_modelViewWin,pos0);
-    const double4 posP = lMatVec(m_projectionWin,posO);
+    v = lMatVec(m_modelViewWin,  v);
+    v = lMatVec(m_projectionWin, v);
+    v = lMatVec(viewportMatrix,  v);
+  }
 
-    const double wclip = 1.0/posP.w;
-    double3 posV = make_double3(posP.x*wclip, posP.y*wclip, posP.z*wclip);
-
-#if 0
-    fprintf(stderr, " rank= %d: xyz= %g %g %g  pxyz= %g %g %g \n",
-        rank, v.x,v.y,v.z, posV.x,posV.y,posV.z);
-#endif
-
-    double x = (posV.x + 1.0)*0.5*w;
-    double y = (posV.y + 1.0)*0.5*h;
-#endif
-
-
-    x = std::max(x, static_cast<double>(0));
-    y = std::max(y, static_cast<double>(0));
-    x = std::min(x, static_cast<double>(w));
-    y = std::min(y, static_cast<double>(h));
-
+  auto clip = [&](double x, double y)
+  {
+    x = std::max(x, static_cast<double>(viewport[0]));
+    y = std::max(y, static_cast<double>(viewport[1]));
+    x = std::min(x, static_cast<double>(viewport[0]+viewport[2]));
+    y = std::min(y, static_cast<double>(viewport[1]+viewport[3]));
     visibleViewport[0] = std::min(visibleViewport[0], static_cast<int>(floor(x)));
     visibleViewport[1] = std::min(visibleViewport[1], static_cast<int>(floor(y)));
-    visibleViewport[2] = std::max(visibleViewport[2], static_cast<int>(ceil(x)));
-    visibleViewport[3] = std::max(visibleViewport[3], static_cast<int>(ceil(y)));
-    
-  }
+    visibleViewport[2] = std::max(visibleViewport[2], static_cast<int>( ceil(x)));
+    visibleViewport[3] = std::max(visibleViewport[3], static_cast<int>( ceil(y)));
+  };
+
+
+  for (const auto &v : bBoxVtx)
+    if (v.z + v.w >= 0.0)
+    {
+      const double invw = 1.0/v.w;
+      const double x = v.x*invw;
+      const double y = v.y*invw;
+      clip(x,y);
+    }
+    else
+    {
+      for (const auto &v2 : bBoxVtx)
+        if (v2.z+v2.w >= 0.0)
+        {
+          const double t = (v2.z+v2.w)/(v2.z-v.z + v2.w-v.w);
+          const double invw = 1.0/((v.w - v2.w)*t + v2.w);
+          const double x = ((v.x - v2.x)*t + v2.x) * invw;
+          const double y = ((v.y - v2.y)*t + v2.x) * invw;
+          clip(x,y);
+        }
+    }
+
 #if 0
-  fprintf(stderr, "rank= %d:  %d %d  - %d %d - %d %d \n",
+  fprintf(stderr, "rank= %d : (%d,%d) -  (%d,%d)\n",
       rank, 
       visibleViewport[0],
       visibleViewport[1],
       visibleViewport[2],
-      visibleViewport[3],
-      w,h);
+      visibleViewport[3]);
 #endif
-#if 0
-  visibleViewport[0]= std::max(visibleViewport[0],0);
-  visibleViewport[1]= std::max(visibleViewport[1],0);
-  visibleViewport[2]= std::min(visibleViewport[2],w);
-  visibleViewport[3]= std::min(visibleViewport[3],h);
-#endif
-
 
   visibleViewport[2] -= visibleViewport[0];
   visibleViewport[3] -= visibleViewport[1];
@@ -2771,6 +2793,7 @@ void SmokeRenderer::splotchDrawSort()
     int2 wSize = make_int2(viewport[2], viewport[3]);
     const int2 viewPort = make_int2(mWindowW,mWindowH);
 
+#if 0
     /***** fetch depth buffer *****/
     glFinish();
     MPI_Barrier(comm);
@@ -2827,6 +2850,13 @@ void SmokeRenderer::splotchDrawSort()
       wCrd  = make_int2(xmin,ymin);
       wSize = make_int2(xmax-xmin, ymax-ymin);
     }
+#else
+    const double t00 = MPI_Wtime();
+    const double t10 = MPI_Wtime();
+    const double t20 = MPI_Wtime();
+    GLvoid *rptr;
+    depth.clear();
+#endif
 
     glFinish();
     MPI_Barrier(comm);
@@ -2867,10 +2897,12 @@ void SmokeRenderer::splotchDrawSort()
       imgLoc[i] = reinterpret_cast<float4*>(rptr)[i];
       const int ix = i % wSize.x;
       const int iy = i / wSize.x;
-      depthLoc[i] = depth[(iy+wCrd.y)*w+(ix+wCrd.x)];
+      if (!depth.empty())
+        depthLoc[i] = depth[(iy+wCrd.y)*w+(ix+wCrd.x)];
     }
 
-    glUnmapBuffer(GL_PIXEL_PACK_BUFFER);
+    if (wSize.x*wSize.y > 0)
+      glUnmapBuffer(GL_PIXEL_PACK_BUFFER);
     glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
     glBindTexture(GL_TEXTURE_2D,0);
     
@@ -2878,7 +2910,7 @@ void SmokeRenderer::splotchDrawSort()
     MPI_Barrier(comm);
     const double t60 = MPI_Wtime();
 
-    if (compositingOrder.empty())
+    if (compositingOrder.empty() && !depth.empty())
       lCompose(
           &imgLoc[0], &depthLoc[0], &imgGlb[0], 
           rank, nrank, comm,
@@ -3132,7 +3164,7 @@ void SmokeRenderer::createBuffers(int w, int h)
 
   // create texture for image buffer
   GLint format = GL_RGBA32F;
-// format = GL_RGBA16F;
+  format = GL_RGBA16F;
   //GLint format = GL_LUMINANCE16F_ARB;
   //GLint format = GL_RGBA8;
   m_imageTex[0] = createTexture(GL_TEXTURE_2D, m_imageW, m_imageH, format, GL_RGBA);
@@ -3142,7 +3174,7 @@ void SmokeRenderer::createBuffers(int w, int h)
   m_imageTex[4] = createTexture(GL_TEXTURE_2D, m_imageW, m_imageH, format, GL_RGBA);
 
 //  m_depthTex = createTexture(GL_TEXTURE_2D, m_imageW, m_imageH, GL_DEPTH_COMPONENT24_ARB, GL_DEPTH_COMPONENT);
-  m_depthTex = createTexture(GL_TEXTURE_2D, m_imageW, m_imageH, GL_DEPTH_COMPONENT32_ARB, GL_DEPTH_COMPONENT);
+//  m_depthTex = createTexture(GL_TEXTURE_2D, m_imageW, m_imageH, GL_DEPTH_COMPONENT32_ARB, GL_DEPTH_COMPONENT);
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
 

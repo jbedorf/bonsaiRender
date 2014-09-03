@@ -858,7 +858,7 @@ STRINGIFY(
     {
       gl_FrontColor = vcol[0];
       float s = vsize[0];
-//      s = min(s, 512);  
+      s = min(s, 256);
       float sx = s / resx;
       float sy = s / resy;
 
