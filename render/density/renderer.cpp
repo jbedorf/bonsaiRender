@@ -2245,7 +2245,7 @@ static void lCompose(
   MPI_Gather(&colorArray[0], nsend*4, MPI_FLOAT, dst, 4*nsend, MPI_FLOAT, master, comm);
 }
 
-void SmokeRenderer::composeImages(const GLint imgTex, const GLint depthTex)
+void SmokeRenderer::composeImages(const GLuint imgTex, const GLuint depthTex)
 {
 #if 1
 #define __PROFILE
@@ -2298,6 +2298,7 @@ void SmokeRenderer::composeImages(const GLint imgTex, const GLint depthTex)
   double t20 = MPI_Wtime();
   if (depthTex)
   {
+    depth.resize(2*w*h);
     /***** fetch depth buffer *****/
 #ifdef __PROFILE
     glFinish();
@@ -2704,8 +2705,8 @@ void SmokeRenderer::splotchDraw()
 
 void SmokeRenderer::splotchDrawSort()
 {
-  int depthTex = 0;
-#if 0  
+  GLuint depthTex = 0;
+#if 1  
   /* render depth buffer */
   depthTex = m_depthTex;
 #endif
@@ -3063,7 +3064,7 @@ void SmokeRenderer::createBuffers(int w, int h)
   m_imageTex[4] = createTexture(GL_TEXTURE_2D, m_imageW, m_imageH, format, GL_RGBA);
 
 //  m_depthTex = createTexture(GL_TEXTURE_2D, m_imageW, m_imageH, GL_DEPTH_COMPONENT24_ARB, GL_DEPTH_COMPONENT);
-//  m_depthTex = createTexture(GL_TEXTURE_2D, m_imageW, m_imageH, GL_DEPTH_COMPONENT32_ARB, GL_DEPTH_COMPONENT);
+  m_depthTex = createTexture(GL_TEXTURE_2D, m_imageW, m_imageH, GL_DEPTH_COMPONENT32_ARB, GL_DEPTH_COMPONENT);
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
 
