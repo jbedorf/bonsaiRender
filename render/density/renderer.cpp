@@ -2311,9 +2311,13 @@ void SmokeRenderer::composeImages(const GLuint imgTex, const GLuint depthTex)
 
 
   GLvoid *rptr;
+#ifdef __PROFILE
+  glFinish();
+  MPI_Barrier(comm);
   double t00 = MPI_Wtime();
   double t10 = MPI_Wtime();
   double t20 = MPI_Wtime();
+#endif
   if (depthTex)
   {
     depth.resize(2*w*h);
