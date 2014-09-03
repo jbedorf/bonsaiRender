@@ -2298,9 +2298,9 @@ void SmokeRenderer::composeImages(const GLuint imgTex, const GLuint depthTex)
 
   /* determine visible viewport bounds */ 
 
-  const auto &viewport = getVisibleViewport();
-  int2 wCrd  = make_int2(viewport[0], viewport[1]);
-  int2 wSize = make_int2(viewport[2], viewport[3]);
+  const auto &visibleViewport = getVisibleViewport();
+  int2 wCrd  = make_int2(visibleViewport[0], visibleViewport[1]);
+  int2 wSize = make_int2(visibleViewport[2], visibleViewport[3]);
   const int2 viewPort = make_int2(mWindowW,mWindowH);
 
 
@@ -2559,14 +2559,14 @@ std::array<int,4> SmokeRenderer::getVisibleViewport() const
 
   auto clip = [&](double x, double y)
   {
-    x = std::max(x, static_cast<double>(viewport[0]));
-    y = std::max(y, static_cast<double>(viewport[1]));
-    x = std::min(x, static_cast<double>(viewport[0]+viewport[2]));
-    y = std::min(y, static_cast<double>(viewport[1]+viewport[3]));
-    visibleViewport[0] = std::min(visibleViewport[0], static_cast<int>(floor(x)));
-    visibleViewport[1] = std::min(visibleViewport[1], static_cast<int>(floor(y)));
-    visibleViewport[2] = std::max(visibleViewport[2], static_cast<int>( ceil(x)));
-    visibleViewport[3] = std::max(visibleViewport[3], static_cast<int>( ceil(y)));
+    auto x0 = std::min(visibleViewport[0], static_cast<int>(floor(x)));
+    auto y0 = std::min(visibleViewport[1], static_cast<int>(floor(y)));
+    auto x1 = std::max(visibleViewport[2], static_cast<int>( ceil(x)))+1;
+    auto y1 = std::max(visibleViewport[3], static_cast<int>( ceil(y)))+1;
+    visibleViewport[0] = std::min(std::max(x0, viewport[0]), viewport[0]+viewport[2]);
+    visibleViewport[1] = std::min(std::max(y0, viewport[1]), viewport[1]+viewport[3]);
+    visibleViewport[2] = std::min(std::max(x1, viewport[0]), viewport[0]+viewport[2]);
+    visibleViewport[3] = std::min(std::max(y1, viewport[1]), viewport[1]+viewport[3]);
   };
 
 
@@ -2718,7 +2718,7 @@ void SmokeRenderer::splotchDraw()
 void SmokeRenderer::splotchDrawSort()
 {
   GLuint depthTex = 0;
-#if 1  
+#if 0  
   /* render depth buffer */
   depthTex = m_depthTex;
 #endif
