@@ -2551,12 +2551,12 @@ std::array<int,4> SmokeRenderer::getVisibleViewport() const
   viewportMatrix[15] = 2.0;
 
 
-  std::array<double,4> window{
+  std::array<double,4> window{{
     static_cast<double>(viewport[0]+viewport[2]),
     static_cast<double>(viewport[1]+viewport[3]),
     static_cast<double>(viewport[0]),
     static_cast<double>(viewport[1])
-  };
+  }};
 
   for (auto &v : bBoxVtx)
   {
@@ -2574,8 +2574,9 @@ std::array<int,4> SmokeRenderer::getVisibleViewport() const
   };
 
 
+  const double wMin = 0.1;
   for (const auto &v : bBoxVtx)
-    if (v.z + v.w >= 0.0)
+    if (v.z + v.w >= 0.0 && v.w >= wMin)
     {
       const double invw = 1.0/v.w;
       const double x = v.x*invw;
@@ -2585,7 +2586,7 @@ std::array<int,4> SmokeRenderer::getVisibleViewport() const
     else
     {
       for (const auto &v2 : bBoxVtx)
-        if (v2.z+v2.w >= 0.0)
+        if (v2.z+v2.w >= 0.0 && v2.w >= wMin)
         {
           const double t = (v2.z+v2.w)/(v2.z-v.z + v2.w-v.w);
           const double invw = 1.0/((v.w - v2.w)*t + v2.w);
@@ -2620,7 +2621,7 @@ std::array<int,4> SmokeRenderer::getVisibleViewport() const
   vp[3] -= vp[1];
 
   if (vp[2] < 0 || vp[3] < 0)
-    vp = {0,0,0,0};
+    vp = {{0,0,0,0}};
 
   assert(vp[2] >= 0);
   assert(vp[3] >= 0);
