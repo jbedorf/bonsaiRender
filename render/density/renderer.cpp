@@ -2121,9 +2121,6 @@ static void lCompose(
     std::vector<int> compositingOrder)
 {
   const int master = 0;
-#if 0
-  MPI_Reduce(src, dst, 4*n, MPI_FLOAT, MPI_SUM, master, comm);
-#else
   const int nsend = (n+nrank-1)/nrank;
   static std::vector<float4> colorArray;
   colorArray.resize(nsend*nrank);
@@ -2246,7 +2243,252 @@ static void lCompose(
   }
 
   MPI_Gather(&colorArray[0], nsend*4, MPI_FLOAT, dst, 4*nsend, MPI_FLOAT, master, comm);
+}
+
+void SmokeRenderer::composeImages(const GLint imgTex, const GLint depthTex)
+{
+#if 1
+#define __PROFILE
 #endif
+
+  m_fbo->Bind();
+  m_fbo->AttachTexture(GL_TEXTURE_2D, imgTex, GL_COLOR_ATTACHMENT0_EXT);
+  m_fbo->AttachTexture(GL_TEXTURE_2D, depthTex, GL_DEPTH_ATTACHMENT_EXT);
+
+  GLint w, h, internalformat;
+
+  glBindTexture(GL_TEXTURE_2D, imgTex);
+  glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_WIDTH,  &w);
+  glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_HEIGHT, &h);
+  glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_INTERNAL_FORMAT, &internalformat);
+  glBindTexture(GL_TEXTURE_2D,0);
+
+  static std::vector<float4> imgLoc, imgGlb;
+  static std::vector<float > depth, depthLoc;
+  imgLoc.resize(2*w*h);
+  imgGlb.resize(2*w*h);
+  depth.clear();
+
+
+  static GLuint pbo_id[2];
+  if (!pbo_id[0])
+  {
+    const int pbo_size = 8*4096*3072*sizeof(float4);
+    glGenBuffers(2, pbo_id);
+    glBindBuffer(GL_PIXEL_PACK_BUFFER, pbo_id[0]);
+    glBufferData(GL_PIXEL_PACK_BUFFER, pbo_size, 0, GL_STATIC_READ);
+    glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
+    glBindBuffer(GL_PIXEL_UNPACK_BUFFER, pbo_id[1]);
+    glBufferData(GL_PIXEL_UNPACK_BUFFER, pbo_size, 0, GL_STATIC_DRAW);
+    glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
+  }
+  assert(pbo_id[0] && pbo_id[1]);
+
+  /* determine visible viewport bounds */ 
+
+  const auto &viewport = getVisibleViewport();
+  int2 wCrd  = make_int2(viewport[0], viewport[1]);
+  int2 wSize = make_int2(viewport[2], viewport[3]);
+  const int2 viewPort = make_int2(mWindowW,mWindowH);
+
+
+  GLvoid *rptr;
+  double t00 = MPI_Wtime();
+  double t10 = MPI_Wtime();
+  double t20 = MPI_Wtime();
+  if (depthTex)
+  {
+    /***** fetch depth buffer *****/
+#ifdef __PROFILE
+    glFinish();
+    MPI_Barrier(comm);
+    t00 = MPI_Wtime();
+#endif
+
+    glBindTexture(GL_TEXTURE_2D, depthTex);
+    glBindBuffer(GL_PIXEL_PACK_BUFFER, pbo_id[0]);
+    glGetTexImage(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT, GL_FLOAT, 0);
+    GLvoid *rptr = glMapBufferRange(GL_PIXEL_PACK_BUFFER, 0, w*h*sizeof(float), GL_MAP_READ_BIT);
+
+#ifdef __PROFILE
+    glFinish();
+    MPI_Barrier(comm);
+    t10 = MPI_Wtime();
+#endif
+
+    float dmin = +HUGE, dmax = -HUGE;
+#pragma omp parallel for schedule(static) reduction(min:dmin) reduction(max:dmax)
+    for (int i = 0; i < w*h; i++)
+    {
+      depth[i] = reinterpret_cast<float*>(rptr)[i];
+      dmin = std::min(dmin, depth[i]);
+      dmax = std::max(dmax, depth[i]);
+    }
+    //    fprintf(stderr, "rank= %d: dmin= %g  dmax= %g\n", rank, dmin,dmax);
+
+    glUnmapBuffer(GL_PIXEL_PACK_BUFFER);
+    glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
+    glBindTexture(GL_TEXTURE_2D,0);
+
+#ifdef __PROFILE
+    glFinish();
+    MPI_Barrier(comm);
+    t20 = MPI_Wtime();
+#endif
+
+    /* determine real bounds to which pixels are written */ 
+    { 
+      int xmin = w;
+      int ymin = h;
+      int xmax = 0;
+      int ymax = 0;
+
+#pragma omp parallel for schedule(static) collapse(2) reduction(min:xmin,ymin) reduction(max:xmax,ymax)
+      for (int j = 0; j < h; j++)
+        for (int i = 0; i < w; i++)
+          if (depth[j*w+i] < 1.0f)
+          {
+            xmin = std::min(xmin,i);
+            ymin = std::min(ymin,j);
+            xmax = std::max(xmax,i+1);
+            ymax = std::max(ymax,j+1);
+          }
+
+      if (xmin == w)
+        xmin = ymin = xmax = ymax = 0.0;
+
+      wCrd  = make_int2(xmin,ymin);
+      wSize = make_int2(xmax-xmin, ymax-ymin);
+    }
+  }
+
+#ifdef __PROFILE
+  glFinish();
+  MPI_Barrier(comm);
+  const double t30 = MPI_Wtime();
+#endif
+
+  /***** fetch image *****/
+
+  glBindTexture(GL_TEXTURE_2D, imgTex);
+  glBindBuffer(GL_PIXEL_PACK_BUFFER, pbo_id[0]);
+  if (wSize.x*wSize.y > 0)
+    glReadPixels(wCrd.x, wCrd.y, wSize.x, wSize.y, GL_RGBA, GL_FLOAT, 0);
+
+#ifdef __PROFILE
+  glFinish();
+  MPI_Barrier(comm);
+  const double t40 = MPI_Wtime();
+#endif
+
+  if (wSize.x*wSize.y > 0)
+    rptr = glMapBufferRange(GL_PIXEL_PACK_BUFFER, 0, wSize.x*wSize.y*sizeof(float4), GL_MAP_READ_BIT);
+
+  if (wSize.x*wSize.y > 0)
+  {
+    imgLoc.resize(wSize.x*wSize.y);
+    depthLoc.resize(wSize.x*wSize.y);
+  }
+  else
+  {
+    imgLoc.clear();
+    depthLoc.clear();
+  }
+
+#ifdef __PROFILE
+  glFinish();
+  MPI_Barrier(comm);
+  const double t50 = MPI_Wtime();
+#endif
+
+#pragma omp parallel for schedule(static)
+  for (int i = 0; i < wSize.x*wSize.y; i++)
+  {
+    imgLoc[i] = reinterpret_cast<float4*>(rptr)[i];
+    const int ix = i % wSize.x;
+    const int iy = i / wSize.x;
+    if (!depth.empty())
+      depthLoc[i] = depth[(iy+wCrd.y)*w+(ix+wCrd.x)];
+  }
+
+  if (wSize.x*wSize.y > 0)
+    glUnmapBuffer(GL_PIXEL_PACK_BUFFER);
+  glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
+  glBindTexture(GL_TEXTURE_2D,0);
+
+#ifdef __PROFILE
+  glFinish();
+  MPI_Barrier(comm);
+  const double t60 = MPI_Wtime();
+#endif
+
+  if (compositingOrder.empty() && !depth.empty())
+  {
+    lCompose(
+        &imgLoc[0], &depthLoc[0], &imgGlb[0], 
+        rank, nrank, comm,
+        wCrd, wSize, viewPort,
+        m_domainView ? m_domainViewIdx : -1,
+        compositingOrder);
+  }
+  else
+  {
+    /* if global visibility order is known, use this more efficienty compositor */
+    lCompose(
+        &imgLoc[0], &imgGlb[0], 
+        rank, nrank, comm,
+        wCrd, wSize, viewPort,
+        m_domainView ? m_domainViewIdx : -1,
+        compositingOrder);
+  }
+
+#ifdef __PROFILE
+  glFinish();
+  MPI_Barrier(comm);
+  const double t70 = MPI_Wtime();
+#endif
+
+  if (isMaster())
+  {
+    /***** place back to fbo *****/
+
+    glBindBuffer(GL_PIXEL_UNPACK_BUFFER, pbo_id[1]);
+    GLvoid *wptr = glMapBufferRange(GL_PIXEL_UNPACK_BUFFER, 0, w*h*sizeof(float4), GL_MAP_WRITE_BIT);
+
+#pragma omp parallel for schedule(static)
+    for (int i = 0; i < w*h; i++)
+      reinterpret_cast<float4*>(wptr)[i] = imgGlb[i];
+
+#ifdef __PROFILE
+    glFinish();
+    const double t80 = MPI_Wtime();
+#endif
+
+    glUnmapBuffer(GL_PIXEL_UNPACK_BUFFER);
+
+    glBindTexture(GL_TEXTURE_2D, imgTex);
+    glTexImage2D(GL_TEXTURE_2D, 0, internalformat, w,h,0,GL_RGBA,GL_FLOAT, 0);
+    glFinish();
+    glBindTexture(GL_TEXTURE_2D,0);
+    glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
+
+#ifdef __PROFILE
+    glFinish();
+    const double t90 = MPI_Wtime();
+
+    if (1)
+      fprintf(stderr, "total= %g: depth= [%g %g %g] img= [%g %g %g] mpi= %g  wb= [ %g %g ]\n", t90 - t00,
+          t10-t00, t20-t10, t30-t20,
+          t40-t30, t50-t40, t60-t50,
+          t70-t60,
+          t80-t70, t90-t80);
+#endif
+  }
+
+#ifdef __PROFILE
+#undef __PROFILE
+#endif
+  m_fbo->Disable();
 }
 
 /* some code samples and ideas are taken from IceT */
@@ -2443,102 +2685,11 @@ void SmokeRenderer::splotchDraw()
   glFinish();
 #endif
 
-#if 1
-  {
-    const double t0 = MPI_Wtime();
-    GLint w, h, internalformat;
-
-    glBindTexture(GL_TEXTURE_2D, m_imageTex[0]);
-    glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_WIDTH,  &w);
-    glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_HEIGHT, &h);
-    glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_INTERNAL_FORMAT, &internalformat);
-    glBindTexture(GL_TEXTURE_2D,0);
-
-    static std::vector<float4> imgLoc, imgGlb;
-    imgLoc.resize(2*w*h);
-    imgGlb.resize(2*w*h);
-    const int imgSize = w*h*4*sizeof(float);
-
-    const double t1 = MPI_Wtime();
-
-    static GLuint pbo_id[2];
-    if (!pbo_id[0])
-    {
-      const int pbo_size = 8*1920*1080*4*sizeof(float);
-      glGenBuffers(2, pbo_id);
-      glBindBuffer(GL_PIXEL_PACK_BUFFER, pbo_id[0]);
-      glBufferData(GL_PIXEL_PACK_BUFFER, pbo_size, 0, GL_STATIC_READ);
-      glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
-      glBindBuffer(GL_PIXEL_UNPACK_BUFFER, pbo_id[1]);
-      glBufferData(GL_PIXEL_UNPACK_BUFFER, pbo_size, 0, GL_STATIC_DRAW);
-      glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
-    }
-    assert(pbo_id[0] && pbo_id[1]);
-
-    /** fetch image ***/
-    glBindTexture(GL_TEXTURE_2D, m_imageTex[0]);
-    glBindBuffer(GL_PIXEL_PACK_BUFFER, pbo_id[0]);
-    glGetTexImage(GL_TEXTURE_2D, 0, GL_RGBA, GL_FLOAT, 0);
-    //      glReadPixels(0, 0, w, h, GL_RGBA, GL_FLOAT, 0);
-    glFinish();
-    const double t2 = MPI_Wtime();
-
-    GLvoid *rptr = glMapBufferRange(GL_PIXEL_PACK_BUFFER, 0, imgSize, GL_MAP_READ_BIT);
-
-#pragma omp parallel for schedule(static)
-    for (int i = 0; i < w*h; i++)
-      imgLoc[i] = reinterpret_cast<float4*>(rptr)[i];
-
-    //      memcpy(&imgLoc[0], rptr, imgSize);
-    glUnmapBuffer(GL_PIXEL_PACK_BUFFER);
-    glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
-    glBindTexture(GL_TEXTURE_2D,0);
-
-
-    glFinish();
-    const double t3 = MPI_Wtime();
-
-    lCompose(&imgLoc[0], &imgGlb[0], NULL, w*h, rank, nrank, comm,
-        m_domainView ? m_domainViewIdx : -1,
-        compositingOrder);
-    glFinish();
-    const double t4 = MPI_Wtime();
-
-    if (isMaster())
-    {
-      glBindBuffer(GL_PIXEL_UNPACK_BUFFER, pbo_id[1]);
-      GLvoid *wptr = glMapBufferRange(GL_PIXEL_UNPACK_BUFFER, 0, imgSize, GL_MAP_WRITE_BIT);
-
-#pragma omp parallel for schedule(static)
-      for (int i = 0; i < w*h; i++)
-        reinterpret_cast<float4*>(wptr)[i] = imgGlb[i];
-      glFinish();
-      const double t5 = MPI_Wtime();
-
-      glUnmapBuffer(GL_PIXEL_UNPACK_BUFFER);
-
-      glBindTexture(GL_TEXTURE_2D, m_imageTex[0]);
-      glTexImage2D(GL_TEXTURE_2D, 0, internalformat, w,h,0,GL_RGBA,GL_FLOAT, 0);
-      glFinish();
-      glBindTexture(GL_TEXTURE_2D,0);
-      glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
-      const double t6 = MPI_Wtime();
-
-      if (1)
-        fprintf(stderr, 
-            "total= %g: d2h= %g cpy= %g  mpi= %g  cpy= %g h2d= %g :: bwMPI= %g bwD2H= %g  bwH2D= %g\n", t6-t0,
-            t2-t1,   t3-t2,       t4-t3,   t5-t4,     t6-t5,
-            3.0*imgSize/(t4-t3)/1e6, imgSize/(t2-t1)/1e6, imgSize/(t6-t5)/1e6);
-    }
-
-  }
-#endif
-
   m_fbo->Disable();
 
+  composeImages(m_imageTex[0]);
 
 
-#if 1 
   glDisable(GL_BLEND);
   m_splotch2texProg->enable();
   m_splotch2texProg->bindTexture("tex", m_imageTex[0], GL_TEXTURE_2D, 0);
@@ -2549,74 +2700,20 @@ void SmokeRenderer::splotchDraw()
   m_splotch2texProg->setUniform1f("sorted", 0);
   drawQuad();
   m_splotch2texProg->disable();
-#else
-#error
-  {
-#if 0
-    m_fbo->Bind();
-    m_fbo->AttachTexture(GL_TEXTURE_2D, m_imageTex[0], GL_COLOR_ATTACHMENT0_EXT);
-    m_fbo->AttachTexture(GL_TEXTURE_2D, 0, GL_DEPTH_ATTACHMENT_EXT);
-    glViewport(0, 0, m_imageW, m_imageH);
-    glClearColor(0.0, 0.0, 0.0, 0.0); 
-    glClear(GL_COLOR_BUFFER_BIT);
-    /* run prog */
-    m_fbo->Disable();
-#endif
-
-    if (m_enableFilters) {
-      if (m_starBlurRadius > 0.0f && m_starIntensity > 0.0f) 
-      {
-        doStarFilter();
-      }
-
-      if (m_glowIntensity > 0.0f || m_flareIntensity > 0.0f) {
-        downSample();
-      }
-      if (m_flareIntensity > 0.0f) {
-        doFlare();
-      }
-      if (m_glowRadius > 0.0f && m_glowIntensity > 0.0f) {
-        doGlowFilter();
-      }
-    }
-
-    glViewport(0, 0, mWindowW, mWindowH);
-    glDisable(GL_DEPTH_TEST);
-    glDepthMask(GL_FALSE);
-    glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
-    glDisable(GL_BLEND);
-
-    if (m_enableFilters) {
-      m_compositeProg->enable();
-      m_compositeProg->bindTexture("tex", m_imageTex[0], GL_TEXTURE_2D, 0);
-      m_compositeProg->bindTexture("blurTexH", m_imageTex[1], GL_TEXTURE_2D, 1);
-      m_compositeProg->bindTexture("blurTexV", m_imageTex[2], GL_TEXTURE_2D, 2);
-      m_compositeProg->bindTexture("glowTex", m_downSampledTex[0], GL_TEXTURE_2D, 3);
-      m_compositeProg->bindTexture("flareTex", m_downSampledTex[2], GL_TEXTURE_2D, 4);
-      m_compositeProg->setUniform1f("scale", m_imageBrightness);
-      m_compositeProg->setUniform1f("sourceIntensity", m_sourceIntensity);
-      m_compositeProg->setUniform1f("glowIntensity", m_glowIntensity);
-      m_compositeProg->setUniform1f("starIntensity", m_starIntensity);
-      m_compositeProg->setUniform1f("flareIntensity", m_flareIntensity);
-      m_compositeProg->setUniform1f("gamma", m_gamma);
-      drawQuad();
-      m_compositeProg->disable();
-    } else {
-      displayTexture(m_imageTex[0], m_imageBrightness);
-      //displayTexture(m_downSampledTex[0], m_imageBrightness);
-    }
-
-    glDisable(GL_BLEND);
-    glDepthMask(GL_TRUE);
-  }
-#endif
 }
 
 void SmokeRenderer::splotchDrawSort()
 {
+  int depthTex = 0;
+#if 0  
+  /* render depth buffer */
+  depthTex = m_depthTex;
+#endif
+
   m_fbo->Bind();
   m_fbo->AttachTexture(GL_TEXTURE_2D, m_imageTex[0], GL_COLOR_ATTACHMENT0_EXT);
-  m_fbo->AttachTexture(GL_TEXTURE_2D, m_depthTex, GL_DEPTH_ATTACHMENT_EXT);
+  m_fbo->AttachTexture(GL_TEXTURE_2D, depthTex, GL_DEPTH_ATTACHMENT_EXT);
+
   glViewport(0, 0, m_imageW, m_imageH);
   glClearColor(0.0, 0.0, 0.0, 0.0); 
   glClearDepth(1.0f);
@@ -2655,21 +2752,66 @@ void SmokeRenderer::splotchDrawSort()
     glEnable(GL_CLIP_DISTANCE5);
   }
 
-
-
-  /******   depth buffer pass *****/
-  
-  glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);
-  glDepthFunc(GL_LEQUAL);
-  glDisable(GL_BLEND);
-  glEnable(GL_DEPTH_TEST);
-  glDepthMask(GL_TRUE);  // don't write depth
-
   prog->enable();
   glBindVertexArray(mSizeVao);
 
   GLint viewport[4];
   glGetIntegerv(GL_VIEWPORT, viewport);
+
+
+  if (depthTex)
+  {
+    /******   depth buffer pass *****/
+
+    glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);
+    glDepthFunc(GL_LEQUAL);
+    glDisable(GL_BLEND);
+    glEnable(GL_DEPTH_TEST);
+    glDepthMask(GL_TRUE);  // don't write depth
+
+    // VS
+    prog->setUniform1f("spriteScale", viewport[3] / mInvFocalLen);
+    prog->setUniform1f("starScale", powf(10.0f, m_starScaleLog));
+    prog->setUniform1f("starAlpha", m_starAlpha);
+    prog->setUniform1f("dmScale",  powf(10.0f, m_dmScaleLog));
+    prog->setUniform1f("dmAlpha",  m_dmAlpha);
+    prog->setUniform1f("spriteSizeMax", powf(10.0f, m_spriteSizeMaxLog));
+    // PS
+    prog->bindTexture("spriteTex",  m_sphTex, GL_TEXTURE_2D, 1);
+    prog->setUniform1f("alphaScale", m_spriteAlpha);
+    prog->setUniform1f("transmission", m_transmission);
+    prog->setUniform1f("resx", m_imageW);
+    prog->setUniform1f("resy", m_imageH);
+
+    prog->setUniformfv("p0o", (GLfloat*)&m_clippingPlane[0], 4, 1);
+    prog->setUniformfv("p1o", (GLfloat*)&m_clippingPlane[1], 4, 1);
+    prog->setUniformfv("p2o", (GLfloat*)&m_clippingPlane[2], 4, 1);
+    prog->setUniformfv("p3o", (GLfloat*)&m_clippingPlane[3], 4, 1);
+    prog->setUniformfv("p4o", (GLfloat*)&m_clippingPlane[4], 4, 1);
+    prog->setUniformfv("p5o", (GLfloat*)&m_clippingPlane[5], 4, 1);
+
+    prog->setUniform1f("sorted", 2.0);
+
+    //glClientActiveTexture(GL_TEXTURE0);
+    glActiveTexture(GL_TEXTURE0);
+    glTexEnvi(GL_POINT_SPRITE_ARB, GL_COORD_REPLACE_ARB, GL_TRUE);
+    glEnable(GL_VERTEX_PROGRAM_POINT_SIZE_ARB);
+    glEnable(GL_POINT_SPRITE_ARB);
+
+    drawPoints(start,count,true);
+
+    prog->disable();
+    m_fbo->AttachTexture(GL_TEXTURE_2D, 0, GL_DEPTH_ATTACHMENT_EXT);
+  }
+  /***** generate image pass *****/
+
+  glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+  glDisable(GL_DEPTH_TEST);
+  glDepthMask(GL_FALSE);  // don't write depth
+  glEnable(GL_BLEND);
+
+  prog->enable();
+
   // VS
   prog->setUniform1f("spriteScale", viewport[3] / mInvFocalLen);
   prog->setUniform1f("starScale", powf(10.0f, m_starScaleLog));
@@ -2703,42 +2845,6 @@ void SmokeRenderer::splotchDrawSort()
 
   prog->disable();
 
-  /***** generate image pass *****/
- 
-  glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
-  glDisable(GL_DEPTH_TEST);
-  glDepthMask(GL_FALSE);  // don't write depth
-  glEnable(GL_BLEND);
-  m_fbo->AttachTexture(GL_TEXTURE_2D, 0, GL_DEPTH_ATTACHMENT_EXT);
-
-  prog->enable();
-
-  // VS
-  prog->setUniform1f("spriteScale", viewport[3] / mInvFocalLen);
-  prog->setUniform1f("starScale", powf(10.0f, m_starScaleLog));
-  prog->setUniform1f("starAlpha", m_starAlpha);
-  prog->setUniform1f("dmScale",  powf(10.0f, m_dmScaleLog));
-  prog->setUniform1f("dmAlpha",  m_dmAlpha);
-  prog->setUniform1f("spriteSizeMax", powf(10.0f, m_spriteSizeMaxLog));
-  // PS
-  prog->bindTexture("spriteTex",  m_sphTex, GL_TEXTURE_2D, 1);
-  prog->setUniform1f("alphaScale", m_spriteAlpha);
-  prog->setUniform1f("transmission", m_transmission);
-  prog->setUniform1f("resx", m_imageW);
-  prog->setUniform1f("resy", m_imageH);
-
-  prog->setUniform1f("sorted", 1.0);
-
-  //glClientActiveTexture(GL_TEXTURE0);
-  glActiveTexture(GL_TEXTURE0);
-  glTexEnvi(GL_POINT_SPRITE_ARB, GL_COORD_REPLACE_ARB, GL_TRUE);
-  glEnable(GL_VERTEX_PROGRAM_POINT_SIZE_ARB);
-  glEnable(GL_POINT_SPRITE_ARB);
-
-  drawPoints(start,count,true);
-
-  prog->disable();
-
 
   glDisable(GL_CLIP_DISTANCE0);
   glDisable(GL_CLIP_DISTANCE1);
@@ -2753,228 +2859,11 @@ void SmokeRenderer::splotchDrawSort()
   glFlush();
   glFinish();
 #endif
-
-
-#if 1
-  {
-    GLint w, h, internalformat;
-
-    glBindTexture(GL_TEXTURE_2D, m_imageTex[0]);
-    glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_WIDTH,  &w);
-    glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_HEIGHT, &h);
-    glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_INTERNAL_FORMAT, &internalformat);
-    glBindTexture(GL_TEXTURE_2D,0);
-
-    static std::vector<float4> imgLoc, imgGlb;
-    static std::vector<float > depth, depthLoc;
-    imgLoc.resize(2*w*h);
-    imgGlb.resize(2*w*h);
-    depth.resize(2*w*h);
-
-
-    static GLuint pbo_id[2];
-    if (!pbo_id[0])
-    {
-      const int pbo_size = 8*4096*3072*sizeof(float4);
-      glGenBuffers(2, pbo_id);
-      glBindBuffer(GL_PIXEL_PACK_BUFFER, pbo_id[0]);
-      glBufferData(GL_PIXEL_PACK_BUFFER, pbo_size, 0, GL_STATIC_READ);
-      glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
-      glBindBuffer(GL_PIXEL_UNPACK_BUFFER, pbo_id[1]);
-      glBufferData(GL_PIXEL_UNPACK_BUFFER, pbo_size, 0, GL_STATIC_DRAW);
-      glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
-    }
-    assert(pbo_id[0] && pbo_id[1]);
-   
-    /* determine visible viewport bounds */ 
-
-    const auto &viewport = getVisibleViewport();
-    int2 wCrd  = make_int2(viewport[0], viewport[1]);
-    int2 wSize = make_int2(viewport[2], viewport[3]);
-    const int2 viewPort = make_int2(mWindowW,mWindowH);
-
-#if 0
-    /***** fetch depth buffer *****/
-    glFinish();
-    MPI_Barrier(comm);
-    const double t00 = MPI_Wtime();
-
-    glBindTexture(GL_TEXTURE_2D, m_depthTex);
-    glBindBuffer(GL_PIXEL_PACK_BUFFER, pbo_id[0]);
-    glGetTexImage(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT, GL_FLOAT, 0);
-    GLvoid *rptr = glMapBufferRange(GL_PIXEL_PACK_BUFFER, 0, w*h*sizeof(float), GL_MAP_READ_BIT);
-    
-    glFinish();
-    MPI_Barrier(comm);
-    const double t10 = MPI_Wtime();
-
-    float dmin = +HUGE, dmax = -HUGE;
-#pragma omp parallel for schedule(static) reduction(min:dmin) reduction(max:dmax)
-    for (int i = 0; i < w*h; i++)
-    {
-      depth[i] = reinterpret_cast<float*>(rptr)[i];
-      dmin = std::min(dmin, depth[i]);
-      dmax = std::max(dmax, depth[i]);
-    }
-//    fprintf(stderr, "rank= %d: dmin= %g  dmax= %g\n", rank, dmin,dmax);
-
-    glUnmapBuffer(GL_PIXEL_PACK_BUFFER);
-    glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
-    glBindTexture(GL_TEXTURE_2D,0);
-    
-    glFinish();
-    MPI_Barrier(comm);
-    const double t20 = MPI_Wtime();
-   
-    /* determine real bounds to which pixels are written */ 
-    { 
-      int xmin = w;
-      int ymin = h;
-      int xmax = 0;
-      int ymax = 0;
-
-#pragma omp parallel for schedule(static) collapse(2) reduction(min:xmin,ymin) reduction(max:xmax,ymax)
-      for (int j = 0; j < h; j++)
-        for (int i = 0; i < w; i++)
-          if (depth[j*w+i] < 1.0f)
-          {
-            xmin = std::min(xmin,i);
-            ymin = std::min(ymin,j);
-            xmax = std::max(xmax,i+1);
-            ymax = std::max(ymax,j+1);
-          }
-      
-      if (xmin == w)
-        xmin = ymin = xmax = ymax = 0.0;
-
-      wCrd  = make_int2(xmin,ymin);
-      wSize = make_int2(xmax-xmin, ymax-ymin);
-    }
-#else
-    const double t00 = MPI_Wtime();
-    const double t10 = MPI_Wtime();
-    const double t20 = MPI_Wtime();
-    GLvoid *rptr;
-    depth.clear();
-#endif
-
-    glFinish();
-    MPI_Barrier(comm);
-    const double t30 = MPI_Wtime();
-
-    /***** fetch image *****/
-
-    glBindTexture(GL_TEXTURE_2D, m_imageTex[0]);
-    glBindBuffer(GL_PIXEL_PACK_BUFFER, pbo_id[0]);
-    if (wSize.x*wSize.y > 0)
-      glReadPixels(wCrd.x, wCrd.y, wSize.x, wSize.y, GL_RGBA, GL_FLOAT, 0);
-
-    glFinish();
-    MPI_Barrier(comm);
-    const double t40 = MPI_Wtime();
-
-    if (wSize.x*wSize.y > 0)
-      rptr = glMapBufferRange(GL_PIXEL_PACK_BUFFER, 0, wSize.x*wSize.y*sizeof(float4), GL_MAP_READ_BIT);
-
-    if (wSize.x*wSize.y > 0)
-    {
-      imgLoc.resize(wSize.x*wSize.y);
-      depthLoc.resize(wSize.x*wSize.y);
-    }
-    else
-    {
-      imgLoc.clear();
-      depthLoc.clear();
-    }
-    
-    glFinish();
-    MPI_Barrier(comm);
-    const double t50 = MPI_Wtime();
-
-#pragma omp parallel for schedule(static)
-    for (int i = 0; i < wSize.x*wSize.y; i++)
-    {
-      imgLoc[i] = reinterpret_cast<float4*>(rptr)[i];
-      const int ix = i % wSize.x;
-      const int iy = i / wSize.x;
-      if (!depth.empty())
-        depthLoc[i] = depth[(iy+wCrd.y)*w+(ix+wCrd.x)];
-    }
-
-    if (wSize.x*wSize.y > 0)
-      glUnmapBuffer(GL_PIXEL_PACK_BUFFER);
-    glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
-    glBindTexture(GL_TEXTURE_2D,0);
-    
-    glFinish();
-    MPI_Barrier(comm);
-    const double t60 = MPI_Wtime();
-
-    if (compositingOrder.empty() && !depth.empty())
-      lCompose(
-          &imgLoc[0], &depthLoc[0], &imgGlb[0], 
-          rank, nrank, comm,
-          wCrd, wSize, viewPort,
-          m_domainView ? m_domainViewIdx : -1,
-          compositingOrder);
-    else
-      lCompose(
-          &imgLoc[0], &imgGlb[0], 
-          rank, nrank, comm,
-          wCrd, wSize, viewPort,
-          m_domainView ? m_domainViewIdx : -1,
-          compositingOrder);
-
-    glFinish();
-    MPI_Barrier(comm);
-    const double t70 = MPI_Wtime();
-
-    if (isMaster())
-    {
-      /***** place back to fbo *****/
-
-      glBindBuffer(GL_PIXEL_UNPACK_BUFFER, pbo_id[1]);
-      GLvoid *wptr = glMapBufferRange(GL_PIXEL_UNPACK_BUFFER, 0, w*h*sizeof(float4), GL_MAP_WRITE_BIT);
-
-#pragma omp parallel for schedule(static)
-      for (int i = 0; i < w*h; i++)
-        reinterpret_cast<float4*>(wptr)[i] = imgGlb[i];
-
-      glFinish();
-      const double t80 = MPI_Wtime();
-
-      glUnmapBuffer(GL_PIXEL_UNPACK_BUFFER);
-
-      glBindTexture(GL_TEXTURE_2D, m_imageTex[0]);
-      glTexImage2D(GL_TEXTURE_2D, 0, internalformat, w,h,0,GL_RGBA,GL_FLOAT, 0);
-      glFinish();
-      glBindTexture(GL_TEXTURE_2D,0);
-      glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
-
-      glFinish();
-      const double t90 = MPI_Wtime();
-
-#if 0
-      if (1)
-        fprintf(stderr, 
-            "total= %g: d2h= %g cpy= %g  mpi= %g  cpy= %g h2d= %g :: bwMPI= %g bwD2H= %g  bwH2D= %g\n", t6-t0,
-                          t2-t1, t3-t2,   t4-t3,   t5-t4,  t6-t5,
-            3.0*imgSize/(t4-t3)/1e6, imgSize/(t2-t1)/1e6, imgSize/(t6-t5)/1e6);
-#else
-      if (1)
-        fprintf(stderr, "total= %g: depth= [%g %g %g] img= [%g %g %g] mpi= %g  wb= [ %g %g ]\n", t90 - t00,
-            t10-t00, t20-t10, t30-t20,
-            t40-t30, t50-t40, t60-t50,
-            t70-t60,
-            t80-t70, t90-t80);
-#endif
-    }
-
-  }
-#endif
-
   m_fbo->Disable();
 
+
+
+  composeImages(m_imageTex[0], depthTex);
 
 
   glDisable(GL_BLEND);
@@ -3164,7 +3053,7 @@ void SmokeRenderer::createBuffers(int w, int h)
 
   // create texture for image buffer
   GLint format = GL_RGBA32F;
-  format = GL_RGBA16F;
+//  format = GL_RGBA16F_ARB;
   //GLint format = GL_LUMINANCE16F_ARB;
   //GLint format = GL_RGBA8;
   m_imageTex[0] = createTexture(GL_TEXTURE_2D, m_imageW, m_imageH, format, GL_RGBA);
