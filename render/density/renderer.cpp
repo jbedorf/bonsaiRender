@@ -1478,6 +1478,12 @@ void lCompose(
     srcMetaData[p] = imgMetaData_t{{x0,y0,x1,y1,totalSendCount,sendcount}};
     totalSendCount += sendcount;
   }
+  if (!(totalSendCount == (x1-x0)*(y1-y0)))
+    fprintf(stderr, "rank= %d: totalSendCount= %d  wSize= %d (%d,%d)-(%d,%d) --- (%d,%d)\n",
+        rank, totalSendCount, (x1-x0)*(y1-y0),
+        x0,x1, y0,y1,
+        viewportSize.x,
+        viewportSize.y);
   assert(totalSendCount == (x1-x0)*(y1-y0));
 
   /* exchange metadata info */
@@ -2545,7 +2551,12 @@ std::array<int,4> SmokeRenderer::getVisibleViewport() const
   viewportMatrix[15] = 2.0;
 
 
-  std::array<double,4> window{{+HUGE,+HUGE,-HUGE,-HUGE}};
+  std::array<double,4> window{
+    static_cast<double>(viewport[0]+viewport[2]),
+    static_cast<double>(viewport[1]+viewport[3]),
+    static_cast<double>(viewport[0]),
+    static_cast<double>(viewport[1])
+  };
 
   for (auto &v : bBoxVtx)
   {
@@ -2558,8 +2569,8 @@ std::array<int,4> SmokeRenderer::getVisibleViewport() const
   {
     window[0] = std::min(window[0], x);
     window[1] = std::min(window[1], y);
-    window[2] = std::max(window[2], x);
-    window[3] = std::max(window[3], y);
+    window[2] = std::max(window[2], x+1);
+    window[3] = std::max(window[3], y+1);
   };
 
 
@@ -2593,21 +2604,34 @@ std::array<int,4> SmokeRenderer::getVisibleViewport() const
       visibleViewport[3]);
 #endif
 
+  window[0] = std::max(window[0], static_cast<double>(viewport[0]));
+  window[1] = std::max(window[1], static_cast<double>(viewport[1]));
+  window[2] = std::min(window[2], static_cast<double>(viewport[0]+viewport[2]));
+  window[3] = std::min(window[3], static_cast<double>(viewport[1]+viewport[3]));
+
   std::array<int,4> vp;
   vp[0] = static_cast<int>(floor(window[0]));
   vp[1] = static_cast<int>(floor(window[1]));
-  vp[2] = static_cast<int>(ceil (window[2]))+1;
-  vp[3] = static_cast<int>(ceil (window[3]))+1;
-
-  vp[0] = std::max(vp[0], viewport[0]);
-  vp[1] = std::max(vp[1], viewport[1]);
-  vp[2] = std::min(vp[2], viewport[0]+viewport[2]);
-  vp[3] = std::min(vp[3], viewport[1]+viewport[3]);
+  vp[2] = static_cast<int>(ceil (window[2]));
+  vp[3] = static_cast<int>(ceil (window[3]));
 
 
   vp[2] -= vp[0];
   vp[3] -= vp[1];
 
+  if (vp[2] < 0 || vp[3] < 0)
+    vp = {0,0,0,0};
+
+  assert(vp[2] >= 0);
+  assert(vp[3] >= 0);
+
+  if(!(vp[0] >= viewport[0]))
+  {
+    fprintf(stderr, "rank= %d:  (%d %d %d %d)  (%d %d %d %d)\n",
+        rank, 
+        vp[0],vp[1],vp[2],vp[3],
+        viewport[0],viewport[1],viewport[2],viewport[3]);
+  }
   assert(vp[0] >= viewport[0]);
   assert(vp[1] >= viewport[1]);
   assert(vp[2] <= viewport[2]);
