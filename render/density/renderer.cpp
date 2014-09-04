@@ -47,9 +47,6 @@
 
 
 
-float4 *globalImgLoc = NULL;
-int  globalNPixels = 0;
-
 //#define NOCOPY
 
 //extern int renderDevID;
@@ -2286,19 +2283,33 @@ static void drawCallback(
 		const IceTInt *readback_viewport,
 		IceTImage result)
 {
+
+	 IceTSizeType width  = icetImageGetWidth(result);
+	 IceTSizeType height = icetImageGetHeight(result);
+	 GLint gl_viewport[4];
+	 glGetIntegerv(GL_VIEWPORT, gl_viewport);
+
+	 IceTSizeType x_offset = gl_viewport[0] + readback_viewport[0];
+	 IceTSizeType y_offset = gl_viewport[1] + readback_viewport[1]; 
+
 #if 0
-
-	IceTInt screen_width;
-	IceTInt screen_height;
-
-	icetGetIntegerv(ICET_PHYSICAL_RENDER_WIDTH, &screen_width);
-	icetGetIntegerv(ICET_PHYSICAL_RENDER_HEIGHT, &screen_height);
-	int2 wSize = make_int2(screen_width, screen_height);
-#endif	
+	 fprintf(stderr,"W,H: %d, %d  view: %d %d %d %d || %d %d %d %d \n", 
+			 width, height, 
+			 gl_viewport[0],
+			 gl_viewport[1],
+			 gl_viewport[2],
+			 gl_viewport[3],
+			 readback_viewport[0],
+			 readback_viewport[1],
+			 readback_viewport[2],
+			 readback_viewport[3]);
+#endif
 
 	IceTFloat *colors_float = NULL;
 	colors_float = icetImageGetColorf(result);
+#if 0
 	float4 *colorBuff = (float4*)colors_float;
+	int storeOffset = ( readback_viewport[0] + width*readback_viewport[1]);
 
 	if(globalImgLoc != NULL)
 	{
@@ -2306,12 +2317,21 @@ static void drawCallback(
 	  //for (int i = 0; i < wSize.x*wSize.y; i++)
 	  for (int i = 0; i < globalNPixels; i++)
 	  {
-	     colorBuff[i] = globalImgLoc[i];
+	     colorBuff[i+storeOffset] = globalImgLoc[i];
           }
 	}
+#else
+ glPixelStorei(GL_PACK_ROW_LENGTH, (GLint)icetImageGetWidth(result));
+ glReadPixels((GLint)x_offset,
+	      (GLint)y_offset,
+	      (GLsizei)readback_viewport[2],
+	      (GLsizei)readback_viewport[3],
+	       GL_RGBA,
+	       GL_FLOAT,
+	       colors_float + 4*( readback_viewport[0] + width*readback_viewport[1]));	
+ glPixelStorei(GL_PACK_ROW_LENGTH, 0);
+#endif
 }
-
-
 
 
 void SmokeRenderer::composeImages(const GLuint imgTex, const GLuint depthTex)
@@ -2495,21 +2515,13 @@ void SmokeRenderer::composeImages(const GLuint imgTex, const GLuint depthTex)
   const double t30 = MPI_Wtime();
 #endif
 
-
-#if 1
-//TODO hack untill IceT is setup properly
- wCrd.x = 0;
- wCrd.y = 0;
- wSize.x = w;
- wSize.y = h; 
-#endif
-
   /***** fetch image *****/
 
   glBindTexture(GL_TEXTURE_2D, imgTex);
   glBindBuffer(GL_PIXEL_PACK_BUFFER, pbo_id[0]);
-  if (wSize.x*wSize.y > 0)
-    glReadPixels(wCrd.x, wCrd.y, wSize.x, wSize.y, GL_RGBA, GL_FLOAT, 0);
+  if(!useIceT)
+    if (wSize.x*wSize.y > 0)
+      glReadPixels(wCrd.x, wCrd.y, wSize.x, wSize.y, GL_RGBA, GL_FLOAT, 0);
 
 #ifdef __PROFILE
   glFinish();
@@ -2517,8 +2529,9 @@ void SmokeRenderer::composeImages(const GLuint imgTex, const GLuint depthTex)
   const double t40 = MPI_Wtime();
 #endif
 
-  if (wSize.x*wSize.y > 0)
-    rptr = glMapBufferRange(GL_PIXEL_PACK_BUFFER, 0, wSize.x*wSize.y*sizeof(float4), GL_MAP_READ_BIT);
+  if(!useIceT)
+    if (wSize.x*wSize.y > 0)
+      rptr = glMapBufferRange(GL_PIXEL_PACK_BUFFER, 0, wSize.x*wSize.y*sizeof(float4), GL_MAP_READ_BIT);
 
   if (wSize.x*wSize.y > 0)
   {
@@ -2548,8 +2561,9 @@ void SmokeRenderer::composeImages(const GLuint imgTex, const GLuint depthTex)
       depthLoc[i] = depth[(iy+wCrd.y)*w+(ix+wCrd.x)];
   }
 
-  if (wSize.x*wSize.y > 0)
-    glUnmapBuffer(GL_PIXEL_PACK_BUFFER);
+  if(!useIceT)
+    if (wSize.x*wSize.y > 0)
+      glUnmapBuffer(GL_PIXEL_PACK_BUFFER);
   glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
   glBindTexture(GL_TEXTURE_2D,0);
 
@@ -2586,10 +2600,6 @@ if(useIceT)
  glGetDoublev(GL_PROJECTION_MATRIX, projection_matrix);
  glGetDoublev(GL_MODELVIEW_MATRIX, modelview_matrix);
  glGetFloatv(GL_COLOR_CLEAR_VALUE, background_color);
-
- globalImgLoc = (float4*)rptr;
-
- globalNPixels = wSize.x*wSize.y;
 
  //Launch the composing
  IceTImage image =  icetDrawFrame(projection_matrix, modelview_matrix, background_color);
@@ -2727,8 +2737,10 @@ std::array<int,4> SmokeRenderer::getVisibleViewport() const
   {
     window[0] = std::min(window[0], x);
     window[1] = std::min(window[1], y);
-    window[2] = std::max(window[2], x+1);
-    window[3] = std::max(window[3], y+1);
+    window[2] = std::max(window[2], x);
+    //window[2] = std::max(window[2], x+1);
+    window[3] = std::max(window[3], y);
+    //window[3] = std::max(window[3], y+1);
   };
 
 
