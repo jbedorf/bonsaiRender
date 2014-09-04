@@ -12,6 +12,13 @@
 #include "anyoption.h"
 #include "RendererData.h"
 
+#define USE_ICET
+
+#ifdef USE_ICET
+  #include <IceT.h>
+  #include <IceTGL.h>
+  #include <IceTMPI.h>
+#endif
 
 template<typename T>
 static T* readBonsai(
@@ -409,6 +416,13 @@ int main(int argc, char * argv[])
 //  rDataPtr->clamp(RendererData::VEL, 0.25, 0.25);
 //  rDataPtr->scaleExp(RendererData::VEL);
   
+#ifdef USE_ICET
+  //Setup the IceT context and communicators
+  IceTCommunicator icetComm    = icetCreateMPICommunicator(MPI_COMM_WORLD);
+  IceTContext      icetContext = icetCreateContext(icetComm);
+  icetDestroyMPICommunicator(icetComm); //Save since the comm is copied to the icetContext
+  icetDiagnostics(ICET_DIAG_FULL);
+#endif
 
 #if 1
   initAppRenderer(argc, argv, 

@@ -36,6 +36,20 @@
 #define USE_HALF_ANGLE 0
 #define MOTION_BLUR 0
 
+
+#define USE_ICET
+
+#ifdef USE_ICET
+  #include <IceT.h>
+  #include <IceTGL.h>
+  #include <IceTMPI.h>
+#endif
+
+
+
+float4 *globalImgLoc = NULL;
+int  globalNPixels = 0;
+
 //#define NOCOPY
 
 //extern int renderDevID;
@@ -2263,11 +2277,98 @@ static void lCompose(
 }
 #endif
 
+
+//This function is called by icet to draw stuff
+static void drawCallback(
+		const IceTDouble *projection_matrix, 
+		const IceTDouble *modelview_matrix,
+		const IceTFloat *background_color,
+		const IceTInt *readback_viewport,
+		IceTImage result)
+{
+#if 0
+
+	IceTInt screen_width;
+	IceTInt screen_height;
+
+	icetGetIntegerv(ICET_PHYSICAL_RENDER_WIDTH, &screen_width);
+	icetGetIntegerv(ICET_PHYSICAL_RENDER_HEIGHT, &screen_height);
+	int2 wSize = make_int2(screen_width, screen_height);
+#endif	
+
+	IceTFloat *colors_float = NULL;
+	colors_float = icetImageGetColorf(result);
+	float4 *colorBuff = (float4*)colors_float;
+
+	if(globalImgLoc != NULL)
+	{
+#pragma omp parallel for schedule(static)
+	  //for (int i = 0; i < wSize.x*wSize.y; i++)
+	  for (int i = 0; i < globalNPixels; i++)
+	  {
+	     colorBuff[i] = globalImgLoc[i];
+          }
+	}
+}
+
+
+
+
 void SmokeRenderer::composeImages(const GLuint imgTex, const GLuint depthTex)
 {
 #if 1
 #define __PROFILE
 #endif
+
+  bool useIceT = true;
+
+  if(useIceT)
+  {
+    //Setup the rendering configuration
+    //TODO we only have to do this if things have changed
+   //But Always set bunding boxes and composite order
+	  GLint physical_viewport[4];
+	  glGetIntegerv(GL_VIEWPORT, physical_viewport);
+	  icetPhysicalRenderSize(physical_viewport[2], physical_viewport[3]);
+
+	  icetDrawCallback(drawCallback); //Calls our display func
+
+	  IceTInt winX, winY;	
+	  icetGetIntegerv(ICET_PHYSICAL_RENDER_WIDTH,  &winX);
+	  icetGetIntegerv(ICET_PHYSICAL_RENDER_HEIGHT, &winY);
+	  
+	  //Setup a single tile
+	  icetResetTiles();
+	  icetAddTile(0, 0, winX, winY, 0);
+
+	  icetStrategy(ICET_STRATEGY_SEQUENTIAL);
+
+#if 1
+	  //Use the below if we use Volume rendering
+	  icetCompositeMode(ICET_COMPOSITE_MODE_BLEND);
+	  icetSetColorFormat(ICET_IMAGE_COLOR_RGBA_FLOAT);
+	  icetSetDepthFormat(ICET_IMAGE_DEPTH_NONE);
+	  
+	  icetEnable(ICET_ORDERED_COMPOSITE);
+	  icetCompositeOrder(&compositingOrder[0]);
+#endif
+
+   //set the bounding boxes, should already converted with projection matrix
+#if 1	
+  	  const float3 r0 = m_xlow;
+	  const float3 r1 = m_xhigh;
+	  icetBoundingBoxf(r0.x,
+			   r1.x,
+			   r0.y,
+			   r1.y,
+			   r0.z,
+			   r1.z);
+#endif
+
+
+  } //if useIceT
+
+
 
   m_fbo->Bind();
   m_fbo->AttachTexture(GL_TEXTURE_2D, imgTex, GL_COLOR_ATTACHMENT0_EXT);
@@ -2308,6 +2409,9 @@ void SmokeRenderer::composeImages(const GLuint imgTex, const GLuint depthTex)
   int2 wCrd  = make_int2(visibleViewport[0], visibleViewport[1]);
   int2 wSize = make_int2(visibleViewport[2], visibleViewport[3]);
   const int2 viewPort = make_int2(mWindowW,mWindowH);
+
+
+  fprintf(stderr,"VISIBLE viewport: %d %d %d %d \n", wCrd.x, wCrd.y, wSize.x, wSize.y);
 
 
   GLvoid *rptr;
@@ -2391,6 +2495,15 @@ void SmokeRenderer::composeImages(const GLuint imgTex, const GLuint depthTex)
   const double t30 = MPI_Wtime();
 #endif
 
+
+#if 1
+//TODO hack untill IceT is setup properly
+ wCrd.x = 0;
+ wCrd.y = 0;
+ wSize.x = w;
+ wSize.y = h; 
+#endif
+
   /***** fetch image *****/
 
   glBindTexture(GL_TEXTURE_2D, imgTex);
@@ -2427,7 +2540,8 @@ void SmokeRenderer::composeImages(const GLuint imgTex, const GLuint depthTex)
 #pragma omp parallel for schedule(static)
   for (int i = 0; i < wSize.x*wSize.y; i++)
   {
-    imgLoc[i] = reinterpret_cast<float4*>(rptr)[i];
+    if(!useIceT) //For iceT we do this in the drawCallback
+      imgLoc[i] = reinterpret_cast<float4*>(rptr)[i];
     const int ix = i % wSize.x;
     const int iy = i / wSize.x;
     if (!depth.empty())
@@ -2445,6 +2559,8 @@ void SmokeRenderer::composeImages(const GLuint imgTex, const GLuint depthTex)
   const double t60 = MPI_Wtime();
 #endif
 
+  float4 *finalResult = nullptr;
+
   if (compositingOrder.empty() && !depth.empty())
   {
     lCompose(
@@ -2453,16 +2569,53 @@ void SmokeRenderer::composeImages(const GLuint imgTex, const GLuint depthTex)
         wCrd, wSize, viewPort,
         m_domainView ? m_domainViewIdx : -1,
         compositingOrder);
+
+	finalResult = &imgGlb[0];
   }
   else
   {
     /* if global visibility order is known, use this more efficienty compositor */
+
+if(useIceT)
+{
+
+ IceTDouble projection_matrix[16];
+ IceTDouble modelview_matrix[16];
+ IceTFloat background_color[4];
+
+ glGetDoublev(GL_PROJECTION_MATRIX, projection_matrix);
+ glGetDoublev(GL_MODELVIEW_MATRIX, modelview_matrix);
+ glGetFloatv(GL_COLOR_CLEAR_VALUE, background_color);
+
+ globalImgLoc = (float4*)rptr;
+
+ globalNPixels = wSize.x*wSize.y;
+
+ //Launch the composing
+ IceTImage image =  icetDrawFrame(projection_matrix, modelview_matrix, background_color);
+ 
+
+// exit(0);
+
+ if(rank == 0)
+ {
+	 IceTFloat *colors_float = NULL;
+	 colors_float = icetImageGetColorf(image);
+	 float4 *colorBuff = (float4*)colors_float;
+
+	finalResult = &colorBuff[0];
+  }
+}
+else
+{
     lCompose(
         &imgLoc[0], &imgGlb[0], 
         rank, nrank, comm,
         wCrd, wSize, viewPort,
         m_domainView ? m_domainViewIdx : -1,
         compositingOrder);
+	finalResult = &imgGlb[0];
+}
   }
 
 #ifdef __PROFILE
@@ -2480,7 +2633,8 @@ void SmokeRenderer::composeImages(const GLuint imgTex, const GLuint depthTex)
 
 #pragma omp parallel for schedule(static)
     for (int i = 0; i < w*h; i++)
-      reinterpret_cast<float4*>(wptr)[i] = imgGlb[i];
+      reinterpret_cast<float4*>(wptr)[i] = finalResult[i];
+      //reinterpret_cast<float4*>(wptr)[i] = imgGlb[i];
 
 #ifdef __PROFILE
     glFinish();
