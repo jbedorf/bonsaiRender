@@ -220,7 +220,10 @@ SmokeRenderer::SmokeRenderer(int numParticles, int maxParticles, const int _rank
 #else
   m_particleProg = new GLSLProgram(particleVS, particlePS);
   m_particleAAProg = new GLSLProgram(particleVS, particleAAPS);
-  m_particleShadowProg = new GLSLProgram(particleVS, particleShadowPS);
+  //m_particleAAProg = new GLSLProgram(particleVS, splotchGS, particleAAPS, GL_POINTS, GL_TRIANGLE_STRIP);
+  //m_particleShadowProg = new GLSLProgram(particleVS, particleShadowPS);
+  m_particleShadowProg = new GLSLProgram(particleVS, splotchGS, particleShadowPS, GL_POINTS, GL_TRIANGLE_STRIP);
+
 #endif
 
   //m_blurProg = new GLSLProgram(passThruVS, blur2PS);
@@ -230,6 +233,7 @@ SmokeRenderer::SmokeRenderer(int numParticles, int maxParticles, const int _rank
 
   m_starFilterProg = new GLSLProgram(passThruVS, starFilterPS);
   m_volumeProg = new GLSLProgram(volumeVS, volumePS);
+  //m_volumeProg = new GLSLProgram(volumeVS, splotchGS, volumePS, GL_POINTS, GL_TRIANGLE_STRIP);
 
   //m_downSampleProg = new GLSLProgram(passThruVS, downSample4PS);
   m_downSampleProg = new GLSLProgram(passThruVS, downSample2PS);
@@ -679,8 +683,10 @@ void SmokeRenderer::drawPointSprites(GLSLProgram *prog, int start, int count, bo
   prog->enable();
   glBindVertexArray(mSizeVao);
   prog->setUniform1f("pointRadius", mParticleRadius);
-  prog->setUniform1f("ageScale", m_ageScale);
-  prog->setUniform1f("dustAlpha", m_dustAlpha);
+//  prog->setUniform1f("ageScale", m_ageScale);
+  prog->setUniform1f("ageScale", 0);
+  prog->setUniform1f("dustAlpha", 0);
+  //prog->setUniform1f("dustAlpha", m_dustAlpha);
   prog->setUniform1f("overBright", m_overBright);
   prog->setUniform1f("overBrightThreshold", m_overBrightThreshold);
   prog->setUniform1f("fogDist", m_fog);
@@ -717,6 +723,17 @@ void SmokeRenderer::drawPointSprites(GLSLProgram *prog, int start, int count, bo
   glEnable(GL_VERTEX_PROGRAM_POINT_SIZE_ARB);
   glEnable(GL_POINT_SPRITE_ARB);
 #endif
+  prog->setUniform1f("resx", m_imageW);
+  prog->setUniform1f("resy", m_imageH);
+
+  prog->setUniformfv("p0o", (GLfloat*)&m_clippingPlane[0], 4, 1);
+  prog->setUniformfv("p1o", (GLfloat*)&m_clippingPlane[1], 4, 1);
+  prog->setUniformfv("p2o", (GLfloat*)&m_clippingPlane[2], 4, 1);
+  prog->setUniformfv("p3o", (GLfloat*)&m_clippingPlane[3], 4, 1);
+  prog->setUniformfv("p4o", (GLfloat*)&m_clippingPlane[4], 4, 1);
+  prog->setUniformfv("p5o", (GLfloat*)&m_clippingPlane[5], 4, 1);
+
+  prog->setUniform1f("sorted", 0);
 
   // draw points
   drawPoints(start, count, sorted);
@@ -828,6 +845,7 @@ void SmokeRenderer::drawVolumeSlice(int i, bool shadowed)
 
   m_volumeProg->disable();
 
+
   //glPopMatrix();
   glDisable(GL_BLEND);
 }
@@ -847,6 +865,8 @@ void SmokeRenderer::drawSlice(int i)
   m_fbo->AttachTexture(GL_TEXTURE_2D, 0, GL_DEPTH_ATTACHMENT_EXT);
 #endif
   glViewport(0, 0, m_imageW, m_imageH);
+    
+		  
 
   if (m_enableVolume) {
     drawVolumeSlice(i, true);
@@ -1036,6 +1056,7 @@ void SmokeRenderer::drawSlices()
 
   // render slices
   if (m_numDisplayedSlices > m_numSlices) m_numDisplayedSlices = m_numSlices;
+
 
   for(int i=0; i<m_numDisplayedSlices; i++) {
 #if 0
@@ -1363,15 +1384,15 @@ void SmokeRenderer::render()
     case SPRITES_SORTED:
       renderSprites(true);
       break;
-
+#endif
     case VOLUMETRIC:
       calcVectors();
       depthSortCopy();
       drawSlices();
+      composeImages(m_imageTex[0]);
       compositeResult();
       //drawBounds();
       break;
-#endif
     
     case SPLOTCH:
       splotchDraw();
@@ -2340,7 +2361,7 @@ void SmokeRenderer::composeImages(const GLuint imgTex, const GLuint depthTex)
 #define __PROFILE
 #endif
 
-  bool useIceT = true;
+  bool useIceT = false;
 
   if(useIceT)
   {
@@ -3483,7 +3504,6 @@ void SmokeRenderer::initParams()
   m_params->AddParam(new Param<float>("gamma [pre]",       m_gammaPre,           0.0f, 2.0f, 0.001f, &m_gammaPre));
   m_params->AddParam(new Param<float>("brightness [post]", m_imageBrightnessPost, 0.0f, 1.0f, 0.001f, &m_imageBrightnessPost));
   m_params->AddParam(new Param<float>("gamma [post]",      m_gammaPost,           0.0f, 2.0f, 0.001f, &m_gammaPost));
- 
 #if 0 
   m_params->AddParam(new Param<int>("slices", m_numSlices, 1, 256, 1, &m_numSlices));
   m_params->AddParam(new Param<int>("displayed slices", m_numDisplayedSlices, 1, 256, 1, &m_numDisplayedSlices));

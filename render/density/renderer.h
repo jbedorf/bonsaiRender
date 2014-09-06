@@ -33,8 +33,8 @@ class SmokeRendererParams
 #if 0
       SPRITES,
       SPRITES_SORTED,
+#endif      
       VOLUMETRIC,
-#endif
       SPLOTCH,
       SPLOTCH_SORTED,
       NUM_MODES
