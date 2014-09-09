@@ -1040,6 +1040,7 @@ class Demo
 //      if (isMaster())
       {
         if (m_displaySliders) {
+          m_params = m_renderer.getParams();
           m_params->Render(0, 0);
         }
         drawStats(fps);

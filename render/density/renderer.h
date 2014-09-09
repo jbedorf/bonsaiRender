@@ -233,7 +233,7 @@ class SmokeRenderer : public SmokeRendererParams
     bool getCullDarkMatter() { return m_cullDarkMatter; }
     void setCullDarkMatter(bool b) { m_cullDarkMatter = b; }
 
-    ParamListGL *getParams() { return m_params; }
+    ParamListGL *getParams() { return m_params[(int)mDisplayMode]; }
 
     void render();
     void debugVectors();
@@ -409,7 +409,7 @@ class SmokeRenderer : public SmokeRendererParams
     } params;
 #endif
 
-    ParamListGL         *m_params;
+    ParamListGL         *m_params[NUM_MODES];
 
     // programs
     GLSLProgram         *m_simpleProg;
