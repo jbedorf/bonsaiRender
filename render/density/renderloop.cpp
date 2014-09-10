@@ -1502,7 +1502,8 @@ class Demo
         case 'T':
           //printf("%f %f %f %f %f %f\n", m_cameraTrans.x, m_cameraTrans.y, m_cameraTrans.z, m_cameraRot.x, m_cameraRot.y, m_cameraRot.z);
           writeCameras("cameras.txt");
-          writeParams(m_renderer.getParams(), "params.txt");
+          writeParams((ParamList**)m_renderer.getAllParams(), "params.txt");
+          //writeParams(m_renderer.getParams(), "params.txt");
           writeParams(m_colorParams, "colorparams.txt");
           glClearColor(0.0f, 1.0f, 0.0f, 1.0f); glClear(GL_COLOR_BUFFER_BIT); glClearColor(0.0f, 0.0f, 0.0f, 1.0f); glutSwapBuffers();
           break;
@@ -1537,17 +1538,26 @@ class Demo
       m_keyDown[key] = true;
     }
 
+    void writeParams(ParamList **params, char *filename)
+    {
+      std::ofstream stream;
+      stream.open(filename);
+      if (stream.is_open()) {
+	for(int i=0; i < SmokeRenderer::NUM_MODES; i++)
+	{
+	  params[i]->Write(stream);
+	}
+        printf("Wrote parameters '%s'\n", filename);
+      }
+      stream.close();
+    }
+    
     void writeParams(ParamList *params, char *filename)
     {
       std::ofstream stream;
       stream.open(filename);
       if (stream.is_open()) {
-
-  	ParamListGL **paramList = m_renderer.getAllParams();	      
-	for(int i=0; i < SmokeRenderer::NUM_MODES; i++)
-	{
-	  paramList[i]->Write(stream);
-	}
+	params->Write(stream);
         printf("Wrote parameters '%s'\n", filename);
       }
       stream.close();
