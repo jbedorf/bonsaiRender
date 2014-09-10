@@ -96,6 +96,7 @@ SmokeRendererParams::SmokeRendererParams() :
   m_dmScaleLog(-0.4f),
   m_dmAlpha(0.1f),
   m_spriteAlpha(0.02f),
+  m_spriteAlpha_volume(0.1f),
   m_transmission(0.001f),
   m_imageBrightnessPre(0.08f),
   m_gammaPre(0.4f),
@@ -704,7 +705,7 @@ void SmokeRenderer::drawPointSprites(GLSLProgram *prog, int start, int count, bo
     //prog->setUniform2f("shadowTexScale", 1.0f, 1.0f);
 #endif
     prog->setUniform1f("indirectAmount", m_indirectAmount);
-    prog->setUniform1f("alphaScale", m_spriteAlpha);
+    prog->setUniform1f("alphaScale", m_spriteAlpha_volume);
 
   } else {
     prog->setUniform1f("alphaScale", m_shadowAlpha);
@@ -872,7 +873,7 @@ void SmokeRenderer::drawSlice(int i)
     drawVolumeSlice(i, true);
   }
 
-  glColor4f(1.0, 1.0, 1.0, m_spriteAlpha);
+  glColor4f(1.0, 1.0, 1.0, m_spriteAlpha_volume);
   if (m_invertedView) {
     // front-to-back
     glBlendFunc(GL_ONE_MINUS_DST_ALPHA, GL_ONE);
@@ -1344,7 +1345,7 @@ void SmokeRenderer::renderSprites(bool sort)
   //    drawSkybox(m_cubemapTex);
 #endif
 
-  glColor4f(1.0, 1.0, 1.0, m_spriteAlpha);
+  glColor4f(1.0, 1.0, 1.0, m_spriteAlpha_volume);
   if (sort) {
     calcVectors();
     depthSortCopy();
@@ -3550,7 +3551,7 @@ void SmokeRenderer::initParams()
   m_params->AddParam(new Param<float>("color opacity b", m_colorOpacity[2], 0.0f, 1.0f, 0.01f, &m_colorOpacity[2]));
 #endif
 
-  m_params[VOLUMETRIC]->AddParam(new Param<float>("alpha", m_spriteAlpha, 0.0f, 1.0f, 0.001f, &m_spriteAlpha));
+  m_params[VOLUMETRIC]->AddParam(new Param<float>("alpha", m_spriteAlpha_volume, 0.0f, 1.0f, 0.001f, &m_spriteAlpha_volume));
   m_params[VOLUMETRIC]->AddParam(new Param<float>("shadow alpha", m_shadowAlpha, 0.0f, 1.0f, 0.001f, &m_shadowAlpha));
   m_params[VOLUMETRIC]->AddParam(new Param<float>("transmission", m_transmission, 0.0f, 0.1f, 0.001f, &m_transmission));
   m_params[VOLUMETRIC]->AddParam(new Param<float>("indirect lighting", m_indirectAmount, 0.0f, 1.0f, 0.001f, &m_indirectAmount));
