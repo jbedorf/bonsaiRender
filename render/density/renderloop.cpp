@@ -190,23 +190,42 @@ class StarSampler
     double C;
     Rand48 rnd;
 
+    int startIdx;
+    int endIdx;
+
   public:
 
-    StarSampler(const double _slope = -2.35, const long seed = 12345) : slope(_slope)
+    StarSampler(const double _slope = -2.35, 
+		const int _startIdx = 0,
+		const int _endIdx = StarSamplerData::N,
+		const long seed = 12345) : slope(_slope)
   {
     rnd.srand(seed);
     slope1    = slope + 1.0f;
     assert(slope1 != 0.0f);
     slope1inv	= 1.0f/slope1;
 
-    const double Mhi = StarSamplerData::Masses[0];
-    const double Mlo = StarSamplerData::Masses[StarSamplerData::N];
+    startIdx = _startIdx;
+    endIdx   = _endIdx;
+
+    assert(startIdx >= 0);
+    assert(startIdx < endIdx);
+    assert(endIdx <= StarSamplerData::N);
+
+    const double Mhi = StarSamplerData::Masses[startIdx];
+    const double Mlo = StarSamplerData::Masses[endIdx];
+    //const double Mhi = StarSamplerData::Masses[0];
+    //const double Mlo = StarSamplerData::Masses[StarSamplerData::N];
     Mu_lo = std::pow(Mlo, slope1);
     C = (std::pow(Mhi, slope1) - std::pow(Mlo, slope1));
   }
 
-    double sampleMass() 
+    double sampleMass(const int rndSeed = -1) 
     {
+      //To get unique color per particle, we need to specify
+      //the random number per particle
+      if(rndSeed >= 0) rnd.srand(rndSeed);
+       		    
       const double Mu = C*rnd.drand() + Mu_lo;
       assert(Mu > 0.0);
       const double M   = std::pow(Mu, slope1inv);
@@ -1767,6 +1786,18 @@ class Demo
 
 #pragma omp parallel
       {
+#if 0
+	const float MoL_bulge = 4.0; /* mass-to-light ratio */
+	const float MoL_disk = 3.5;
+	const float MoL_glow = 1.0;
+	const float slope_bulge = -1.35f + MoL_bulge;
+	const float slope_disk = -1.35f + MoL_disk; /* salpeter MF slope + MoL to get light distribution function*/
+	const float slope_glow = -1.35f + MoL_glow;	      
+	StarSampler sBulge(slope_bulge-1, 7, 7+10); /* only include old GKM stars */
+StarSampler sDisk (slope_disk-1, 2, 2+15); /* limit only to BAFGKM stars */
+StarSampler sGlow (slope_glow-1, 0, 0+ 6); /* only OBA stars */
+
+#endif
         StarSampler sSampler (slope-1);
 #pragma omp for schedule(guided,1000)
         for (int i = 0; i < n; i++)
@@ -1800,8 +1831,28 @@ class Demo
               colors[i] = darkMatterColor;
               colors[i].w = 0;
             }
-            else
-            {
+	      //TODO JB, this one should be extended to support glowing stars,dust,bulge,disk, etc 
+	      //from the original volumetric rendering method. See original code
+	      //https://github.com/treecode/Bonsai/blob/master/runtime/CUDAkernels/depthSort.cu#L261
+#if 0
+	     else if(type == 1)
+	     {
+		     //Bulge
+	     }
+	    else if(type == 2)
+	    {
+		    //Disk
+	    }
+	    else if(type == 3)
+	    {
+		//Dust
+	    }
+		   
+#endif		    
+
+
+            else            
+	    {
               const float  Mstar = sSampler.sampleMass();
               float4 Cstar = sSampler.getColour(Mstar);
               colors[i] = Cstar;
