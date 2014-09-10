@@ -3489,12 +3489,28 @@ void SmokeRenderer::initParams()
   //  -----------
   //  radius
   m_params[POINTS] = new ParamListGL("render_params_points");
-  m_params[VOLUMETRIC] = new ParamListGL("render_params_volumetric");
+  
+  //Paramters for the non-sorted Splotch rendering
   m_params[SPLOTCH] = new ParamListGL("render_params_splotch");
   
+  m_params[SPLOTCH]->AddParam(new Param<float>("star scale [log]", m_starScaleLog,     -1.0f, 1.0f, 0.001f, &m_starScaleLog));
+  m_params[SPLOTCH]->AddParam(new Param<float>("star alpha      ", m_starAlpha,         0.0f, 1.0f, 0.001f, &m_starAlpha));
+
+  m_params[SPLOTCH]->AddParam(new Param<float>("dm scale   [log]", m_dmScaleLog,       -1.0f, 1.0f, 0.001f, &m_dmScaleLog));
+  m_params[SPLOTCH]->AddParam(new Param<float>("dm alpha        ", m_dmAlpha,           0.0f, 1.0f, 0.001f, &m_dmAlpha));
+
+  m_params[SPLOTCH]->AddParam(new Param<float>("max size [log]  ", m_spriteSizeMaxLog, -1.0f, 1.0f, 0.001f, &m_spriteSizeMaxLog));
+  m_params[SPLOTCH]->AddParam(new Param<float>("alpha           ", m_spriteAlpha,       0.0f, 1.0f, 0.001f, &m_spriteAlpha));
+  m_params[SPLOTCH]->AddParam(new Param<float>("transmission    ", m_transmission,      0.0f, 0.1f, 0.001f, &m_transmission));
+  m_params[SPLOTCH]->AddParam(new Param<float>("brightness [pre]",  m_imageBrightnessPre, 0.0f, 1.0f, 0.001f, &m_imageBrightnessPre));
+  m_params[SPLOTCH]->AddParam(new Param<float>("gamma [pre]",       m_gammaPre,           0.0f, 2.0f, 0.001f, &m_gammaPre));
+  m_params[SPLOTCH]->AddParam(new Param<float>("brightness [post]", m_imageBrightnessPost, 0.0f, 1.0f, 0.001f, &m_imageBrightnessPost));
+  m_params[SPLOTCH]->AddParam(new Param<float>("gamma [post]",      m_gammaPost,           0.0f, 2.0f, 0.001f, &m_gammaPost));
+
+  //Splotch sorted parameters (note they are similar to splotch non-sorted parameters)
   
   
-  m_params[SPLOTCH_SORTED] = new ParamListGL("render_params");
+  m_params[SPLOTCH_SORTED] = new ParamListGL("render_params_splotch_sorted");
 
   m_params[SPLOTCH_SORTED]->AddParam(new Param<float>("star scale [log]", m_starScaleLog,     -1.0f, 1.0f, 0.001f, &m_starScaleLog));
   m_params[SPLOTCH_SORTED]->AddParam(new Param<float>("star alpha      ", m_starAlpha,         0.0f, 1.0f, 0.001f, &m_starAlpha));
@@ -3512,6 +3528,7 @@ void SmokeRenderer::initParams()
   m_params[SPLOTCH_SORTED]->AddParam(new Param<float>("gamma [post]",      m_gammaPost,           0.0f, 2.0f, 0.001f, &m_gammaPost));
 
 
+  m_params[VOLUMETRIC] = new ParamListGL("render_params_volumetric");
 #if 1 
   m_params[VOLUMETRIC]->AddParam(new Param<int>("slices", m_numSlices, 1, 256, 1, &m_numSlices));
   m_params[VOLUMETRIC]->AddParam(new Param<int>("displayed slices", m_numDisplayedSlices, 1, 256, 1, &m_numDisplayedSlices));

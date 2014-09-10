@@ -531,7 +531,8 @@ class Demo
     initColors();
 
     readCameras("cameras.txt");
-    readParams(m_renderer.getParams(), "params.txt");
+    readParams((ParamList**)(m_renderer.getAllParams()), "params.txt");
+    //readParams(m_renderer.getParams(), "params.txt");
     readParams(m_colorParams, "colorparams.txt");
 
     //    cudaEventCreate(&startEvent, 0);
@@ -1040,7 +1041,7 @@ class Demo
 //      if (isMaster())
       {
         if (m_displaySliders) {
-          m_params = m_renderer.getParams();
+          //m_params = m_renderer.getParams();
           m_params->Render(0, 0);
         }
         drawStats(fps);
@@ -1392,9 +1393,13 @@ class Demo
           break;
         case 'p':
           cycleDisplayMode();
+	  if(m_params != m_colorParams)
+	    m_params = m_renderer.getParams();
           break;
         case 'P':
           cycleDisplayMode(-1);
+	  if(m_params != m_colorParams)
+	    m_params = m_renderer.getParams();
           break;
         case 'b':
         case 'B':
@@ -1429,6 +1434,7 @@ class Demo
           break;
         case '`':
         case 'h':
+          m_params = m_renderer.getParams();
           toggleSliders();
           m_enableStats = !m_displaySliders;
           break;
@@ -1492,8 +1498,8 @@ class Demo
           m_renderer.setNumSlices(m_renderer.getNumSlices()/2);
           m_renderer.setNumDisplayedSlices(m_renderer.getNumSlices());
           break;
-#if 0
-        case 'D':
+#if 1
+        case 'T':
           //printf("%f %f %f %f %f %f\n", m_cameraTrans.x, m_cameraTrans.y, m_cameraTrans.z, m_cameraRot.x, m_cameraRot.y, m_cameraRot.z);
           writeCameras("cameras.txt");
           writeParams(m_renderer.getParams(), "params.txt");
@@ -1502,11 +1508,13 @@ class Demo
           break;
 #endif
         case 'j':
-          if (m_params == m_colorParams) {
-            m_params = m_renderer.getParams();
-          } else {
-            m_params = m_colorParams;
-          }
+          //if (m_params == m_colorParams) {
+         //   m_params = m_renderer.getParams();
+          //} else {
+          m_params = m_colorParams;
+          toggleSliders();
+          m_enableStats = !m_displaySliders;
+          //}
           break;
         case 'm':
           m_renderer.setCullDarkMatter(!m_renderer.getCullDarkMatter());
@@ -1534,7 +1542,12 @@ class Demo
       std::ofstream stream;
       stream.open(filename);
       if (stream.is_open()) {
-        params->Write(stream);
+
+  	ParamListGL **paramList = m_renderer.getAllParams();	      
+	for(int i=0; i < SmokeRenderer::NUM_MODES; i++)
+	{
+	  paramList[i]->Write(stream);
+	}
         printf("Wrote parameters '%s'\n", filename);
       }
       stream.close();
@@ -1545,7 +1558,21 @@ class Demo
       std::ifstream stream;
       stream.open(filename);
       if (stream.is_open()) {
-        params->Read(stream);
+	params->Read(stream);
+        stream.close();
+        printf("Read parameters '%s'\n", filename);
+      }
+    }
+    
+    void readParams(ParamList **params, char *filename)
+    {
+      std::ifstream stream;
+      stream.open(filename);
+      if (stream.is_open()) {
+	for(int i=0; i < SmokeRenderer::NUM_MODES; i++)
+	{
+	  params[i]->Read(stream);
+	}
         stream.close();
         printf("Read parameters '%s'\n", filename);
       }

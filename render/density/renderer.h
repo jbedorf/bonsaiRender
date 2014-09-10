@@ -234,6 +234,7 @@ class SmokeRenderer : public SmokeRendererParams
     void setCullDarkMatter(bool b) { m_cullDarkMatter = b; }
 
     ParamListGL *getParams() { return m_params[(int)mDisplayMode]; }
+    ParamListGL **getAllParams() { return m_params; }
 
     void render();
     void debugVectors();
